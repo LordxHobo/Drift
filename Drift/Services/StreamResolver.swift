@@ -6,6 +6,8 @@ struct ResolvedStream {
     let label: String   // e.g. "AAC · 128 kbps"
 }
 
+struct TimeoutError: Error {}
+
 enum StreamError: LocalizedError {
     case noAudio
     var errorDescription: String? { "No playable audio stream for this song." }
@@ -44,6 +46,23 @@ actor StreamResolver {
         // Stream URLs expire after ~6 hours; refresh well before that.
         cache[key] = (resolved, Date().addingTimeInterval(3 * 3600))
         return resolved
+    }
+
+    /// Plain-language reason for a failed load.
+    nonisolated static func describe(_ error: Error, episode: Bool) -> String {
+        switch error as? YouTubeKitError {
+        case .videoUnavailable?: return "This video isn't available. It may be a premiere that hasn't started yet."
+        case .liveStreamError?: return "Live streams can't be played."
+        case .videoAgeRestricted?: return "Age-restricted videos can't be played."
+        case .videoPrivate?: return "This video is private."
+        case .membersOnly?: return "This video is for channel members only."
+        case .videoRegionBlocked?: return "This video isn't available in your country."
+        default: break
+        }
+        if error is StreamError { return "YouTube didn't offer audio the iPhone can play." }
+        if let e = error as? URLError, e.code == .notConnectedToInternet { return "No internet connection." }
+        if error is TimeoutError { return "The audio didn't start in time." }
+        return episode ? "Couldn't load this episode." : "Couldn't load this song."
     }
 
     func invalidate(_ videoID: String) {

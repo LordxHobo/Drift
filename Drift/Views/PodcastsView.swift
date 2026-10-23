@@ -81,7 +81,11 @@ struct PodcastsView: View {
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await store.refresh(force: true) }
-        .task { await store.refresh(force: false) }
+        .task {
+            await store.refresh(force: false)
+            // Get the first few ready so they start the moment they're tapped.
+            player.prefetch(Array(store.continueListening.prefix(2).map(\.track)) + Array(store.newEpisodes.prefix(3)))
+        }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -142,7 +146,10 @@ struct ChannelView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
         .refreshable { await store.loadChannel(channel) }
-        .task { await store.loadChannel(channel) }
+        .task {
+            await store.loadChannel(channel)
+            player.prefetch(Array((store.feeds[channel.id] ?? []).prefix(2)))
+        }
     }
 }
 

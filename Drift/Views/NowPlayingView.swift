@@ -165,9 +165,11 @@ struct NowPlayingView: View {
                         scrub = nil
                     })
                     HStack {
-                        Text(formatTime((scrub ?? player.progress) * player.duration))
+                        Text(player.duration > 0
+                             ? formatTime((scrub ?? player.progress) * player.duration)
+                             : (player.isBuffering ? "Loading…" : "0:00"))
                         Spacer()
-                        Text(formatTime(player.duration))
+                        Text(player.duration > 0 ? formatTime(player.duration) : "--:--")
                     }
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(Color(hex: 0xD4D4D8))
@@ -229,14 +231,14 @@ struct NowPlayingView: View {
                 // Skip / error toast
                 Group {
                     if let msg = player.errorMessage {
-                        toast(msg, icon: "exclamationmark.triangle.fill")
+                        errorBanner(msg)
                     } else if let msg = player.skipMessage {
                         toast(msg, icon: "forward.frame.fill")
                     } else {
                         Color.clear
                     }
                 }
-                .frame(height: 30)
+                .frame(minHeight: 30)
                 .animation(.easeOut(duration: 0.25), value: player.skipMessage)
                 .animation(.easeOut(duration: 0.25), value: player.errorMessage)
 
@@ -371,6 +373,27 @@ struct NowPlayingView: View {
         case .all: "Repeat all"
         case .one: "Repeat one"
         }
+    }
+
+    private func errorBanner(_ text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0xFF6B5B))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0xE4E4E7))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button("Try again") { player.retry() }
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(minHeight: 44)
+        }
+        .padding(.horizontal, 12)
+        .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .transition(.opacity)
     }
 
     private func toast(_ text: String, icon: String) -> some View {

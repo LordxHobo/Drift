@@ -55,6 +55,7 @@ final class Player {
     @ObservationIgnored private var segments: [SkipSegment] = []
     @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var lastChapterIndex: Int?
+    @ObservationIgnored private var watchdog: Task<Void, Never>?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
 
@@ -249,6 +250,7 @@ final class Player {
         loadTask?.cancel()
         av.pause()
         errorMessage = nil
+        watchdog?.cancel()
         currentTime = 0
         duration = track.duration ?? 0
         segments = []
@@ -273,7 +275,9 @@ final class Player {
                     url = Library.shared.fileURL(for: track.id)
                     self.qualityLabel = "Downloaded"
                 } else {
-                    let s = try await StreamResolver.shared.resolve(track.id, dataSaver: AppSettings.shared.dataSaver)
+                    let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
+                        try await StreamResolver.shared.resolve(track.id, dataSaver: low)
+                    }
                     self.qualityLabel = s.label
                     url = s.url
                 }
@@ -297,7 +301,7 @@ final class Player {
                 if self.current?.id == track.id { self.segments = segs }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
-                self.fail(track)
+                self.fail(track, error)
             }
         }
     }
@@ -329,9 +333,24 @@ final class Player {
         }
         if autoplay {
             configureAudioSession()
-            av.play()
+            // Start as soon as there's audio instead of waiting for a big buffer.
+            av.playImmediately(atRate: effectiveRate)
         } else {
             isBuffering = false
+        }
+
+        // If the audio hasn't started after 12 s, try a fresh link once, then give up with a message.
+        watchdog?.cancel()
+        let id = current?.id
+        watchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard !Task.isCancelled, let self, self.current?.id == id, item === self.av.currentItem,
+                  item.status != .readyToPlay else { return }
+            if self.retried, let t = self.current {
+                self.fail(t, TimeoutError())
+            } else {
+                self.recover()
+            }
         }
     }
 
@@ -339,6 +358,7 @@ final class Player {
         guard item === av.currentItem else { return }
         switch status {
         case .readyToPlay:
+            watchdog?.cancel()
             let d = item.duration.seconds
             if d.isFinite, d > 0 { duration = d }
             updateNowPlaying()
@@ -364,30 +384,53 @@ final class Player {
             await StreamResolver.shared.invalidate(track.id)
             guard let self else { return }
             do {
-                let s = try await StreamResolver.shared.resolve(track.id, dataSaver: AppSettings.shared.dataSaver)
+                let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
+                        try await StreamResolver.shared.resolve(track.id, dataSaver: low)
+                    }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
                 self.qualityLabel = s.label
                 self.start(s.url, autoplay: wasPlaying, at: resumeAt)
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
-                self.fail(track)
+                self.fail(track, error)
             }
         }
     }
 
-    private func fail(_ track: Track) {
+    /// Shows why it failed (stays until the next song or Try again); songs move on to the next one.
+    private func fail(_ track: Track, _ error: Error? = nil) {
         isBuffering = false
-        errorMessage = "Couldn't play “\(track.title)”"
-        let message = errorMessage
+        watchdog?.cancel()
+        av.pause()
+        errorMessage = error.map { StreamResolver.describe($0, episode: track.isEpisode) }
+            ?? (track.isEpisode ? "Couldn't load this episode." : "Couldn't load this song.")
+        guard !track.isEpisode else { return }
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(3))
             guard let self, self.current?.id == track.id else { return }
             if self.index + 1 < self.queue.count {
                 self.index += 1
                 self.load()
             }
-            try? await Task.sleep(for: .seconds(2))
-            if self.errorMessage == message { self.errorMessage = nil }
+        }
+    }
+
+    /// Load the current song/episode again with a fresh stream link.
+    func retry() {
+        guard let t = current else { return }
+        Task {
+            await StreamResolver.shared.invalidate(t.id)
+            load()
+        }
+    }
+
+    /// Resolve stream links ahead of time so tapping play starts right away.
+    func prefetch(_ tracks: [Track]) {
+        let low = AppSettings.shared.dataSaver
+        let ids = tracks.filter { !Library.shared.isDownloaded($0.id) }.map(\.id)
+        guard !ids.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            for id in ids { _ = try? await StreamResolver.shared.resolve(id, dataSaver: low) }
         }
     }
 
@@ -584,5 +627,18 @@ final class Player {
         case .carAudio: routeName = "CarPlay"
         default: routeName = out.portName
         }
+    }
+}
+
+/// Runs `op`, throwing TimeoutError if it takes longer than `seconds`.
+func withTimeout<T: Sendable>(_ seconds: Double, _ op: @escaping @Sendable () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await op() }
+        group.addTask {
+            try await Task.sleep(for: .seconds(seconds))
+            throw TimeoutError()
+        }
+        defer { group.cancelAll() }
+        return try await group.next()!
     }
 }

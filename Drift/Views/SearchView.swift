@@ -222,6 +222,7 @@ struct SearchView: View {
                     guard !Task.isCancelled else { return }
                     channels = found.channels
                     episodes = found.episodes
+                    player.prefetch(Array(found.episodes.prefix(2)))
                 }
             }
             error = nil
