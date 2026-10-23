@@ -115,7 +115,9 @@ struct ImportSpotifyView: View {
                     .font(.system(size: 13).monospacedDigit())
                     .foregroundStyle(Theme.muted)
             }
-            Text("Each song is looked up on YouTube Music. Keep Drift open until it's done.")
+            Text(importer.total > 150
+                 ? "Each song is looked up on YouTube Music, which takes a few minutes for a playlist this size. Keep Drift open; the screen stays on, and songs are saved as they're found."
+                 : "Each song is looked up on YouTube Music. Keep Drift open until it's done.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.muted)
         }
@@ -135,7 +137,7 @@ struct ImportSpotifyView: View {
                 .foregroundStyle(Theme.muted)
 
             if importer.hitLimit {
-                Text("Spotify only shares the first \(SpotifyReader.embedLimit) songs of a playlist this way, so longer playlists stop there.")
+                Text("Only the first \(SpotifyReader.embedLimit) songs could be read this time. Try the import again in a moment to get the rest.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
             }

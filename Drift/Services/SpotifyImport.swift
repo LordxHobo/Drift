@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Observation
 
 /// A song as listed on a Spotify playlist or album page.
@@ -51,6 +52,11 @@ enum SpotifyReader {
         let parts = text[match].split(whereSeparator: { $0 == "/" || $0 == ":" })
         guard parts.count == 2 else { throw SpotifyImportError.badLink }
         let kind = String(parts[0]), id = String(parts[1])
+
+        // Playlists: read the whole thing through Spotify's web page; the embed below stops at 100.
+        if kind == "playlist", let full = try? await SpotifyWebReader.read(playlistID: id), !full.tracks.isEmpty {
+            return full
+        }
 
         var req = URLRequest(url: URL(string: "https://open.spotify.com/embed/\(kind)/\(id)")!)
         req.setValue(YTMusic.userAgent, forHTTPHeaderField: "User-Agent")
@@ -110,8 +116,14 @@ enum SpotifyReader {
 enum SongMatcher {
     static func match(_ s: SpotifyTrack) async -> Track? {
         let artist = LyricsService.mainArtist(s.artist)
-        guard let results = try? await YTMusic.search("\(s.title) \(artist)", songsOnly: true),
-              !results.isEmpty else { return nil }
+        let query = "\(s.title) \(artist)"
+        var results = try? await YTMusic.search(query, songsOnly: true)
+        if results == nil {
+            // Big imports can hit YouTube's rate limit: wait and try once more.
+            try? await Task.sleep(for: .seconds(2))
+            results = try? await YTMusic.search(query, songsOnly: true)
+        }
+        guard let results, !results.isEmpty else { return nil }
 
         let wantTitle = normalize(s.title)
         let wantArtist = normalize(artist)
@@ -167,20 +179,26 @@ final class SpotifyImporter {
                 let list = try await SpotifyReader.read(link: link)
                 listName = list.name
                 total = list.tracks.count
-                hitLimit = list.tracks.count >= SpotifyReader.embedLimit
+                hitLimit = list.tracks.count == SpotifyReader.embedLimit
                 phase = .matching
-                let matched = await matchAll(list.tracks)
+                // Keep the screen on: iOS pauses Drift when the phone locks and nothing is playing.
+                UIApplication.shared.isIdleTimerDisabled = true
+                defer { UIApplication.shared.isIdleTimerDisabled = false }
 
-                var found: [Track] = []
-                var seen = Set<String>()
-                for (i, t) in matched.enumerated() {
-                    if let t {
-                        if seen.insert(t.id).inserted { found.append(t) }
-                    } else {
-                        unmatched.append(list.tracks[i])
+                // Saved in batches of 30, so a big import keeps what it found if interrupted.
+                let id = Library.shared.createPlaylist(list.name).id
+                playlistID = id
+                var start = 0
+                while start < list.tracks.count {
+                    let slice = Array(list.tracks[start..<min(start + 30, list.tracks.count)])
+                    let matched = await matchAll(slice)
+                    var found: [Track] = []
+                    for (i, t) in matched.enumerated() {
+                        if let t { found.append(t) } else { unmatched.append(slice[i]) }
                     }
+                    Library.shared.appendTracks(found, to: id)
+                    start += 30
                 }
-                playlistID = Library.shared.createPlaylist(list.name, tracks: found).id
                 phase = .done
             } catch {
                 phase = .failed(error.localizedDescription)
@@ -188,7 +206,7 @@ final class SpotifyImporter {
         }
     }
 
-    /// Matches in parallel (4 at a time) and keeps the original order.
+    /// Matches in parallel (6 at a time) and keeps the original order.
     private func matchAll(_ tracks: [SpotifyTrack]) async -> [Track?] {
         var results = [Track?](repeating: nil, count: tracks.count)
         await withTaskGroup(of: (Int, Track?).self) { group in
@@ -199,7 +217,7 @@ final class SpotifyImporter {
                 next += 1
                 group.addTask { (i, await SongMatcher.match(t)) }
             }
-            for _ in 0..<4 { add() }
+            for _ in 0..<6 { add() }
             while let result = await group.next() {
                 results[result.0] = result.1
                 processed += 1

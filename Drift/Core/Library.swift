@@ -94,6 +94,14 @@ final class Library {
         return p
     }
 
+    /// Adds songs to the end of a playlist, skipping ones already in it (big imports save as they go).
+    func appendTracks(_ tracks: [Track], to id: UUID) {
+        guard !tracks.isEmpty, let i = playlists.firstIndex(where: { $0.id == id }) else { return }
+        var seen = Set(playlists[i].tracks.map(\.id))
+        playlists[i].tracks += tracks.filter { seen.insert($0.id).inserted }
+        save()
+    }
+
     func rename(_ id: UUID, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let i = playlists.firstIndex(where: { $0.id == id }) else { return }
