@@ -1,0 +1,216 @@
+import SwiftUI
+
+struct PlaylistView: View {
+    enum Kind: Hashable {
+        case liked, downloads, playlist(UUID)
+    }
+
+    let kind: Kind
+    @Environment(\.dismiss) private var dismiss
+    @State private var headerColor: Color = Color(hex: 0x3A1A0B)
+    private var library: Library { .shared }
+    private var player: Player { .shared }
+    private var downloads: DownloadManager { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    private var title: String {
+        switch kind {
+        case .liked: "Liked songs"
+        case .downloads: "Downloaded"
+        case .playlist(let id): library.playlist(id)?.name ?? "Playlist"
+        }
+    }
+
+    private var tracks: [Track] {
+        switch kind {
+        case .liked: library.liked
+        case .downloads: library.downloaded
+        case .playlist(let id): library.playlist(id)?.tracks ?? []
+        }
+    }
+
+    private var tileColor: Color {
+        switch kind {
+        case .liked: Color(hex: 0x4338CA)
+        case .downloads: Theme.line
+        case .playlist(let id): Theme.tile(library.playlist(id)?.colorIndex ?? 0)
+        }
+    }
+
+    private var symbol: String {
+        switch kind {
+        case .liked: "heart.fill"
+        case .downloads: "arrow.down"
+        case .playlist: "music.note.list"
+        }
+    }
+
+    var body: some View {
+        let tracks = self.tracks
+        List {
+            header(tracks)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            if tracks.isEmpty {
+                Text(emptyText)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 32)
+                    .listRowBackground(Theme.bg)
+                    .listRowSeparator(.hidden)
+            }
+
+            ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
+                TrackRow(track: t) {
+                    player.play(tracks, startAt: i, from: title)
+                }
+                .listRowBackground(Theme.bg)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
+                .listRowSeparator(.hidden)
+            }
+            .onDelete(perform: delete)
+            .onMove(perform: move)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.bg)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.bg, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(title).font(.system(size: 15, weight: .bold))
+            }
+        }
+        .task(id: tracks.first?.id) {
+            if let first = tracks.first, let c = await ArtworkPalette.color(for: first.artwork(size: 200)) {
+                headerColor = c
+            } else {
+                headerColor = tileColor.opacity(0.45)
+            }
+        }
+    }
+
+    private var emptyText: String {
+        switch kind {
+        case .liked: "Songs you like will appear here. Tap ⋯ on any song and choose Like."
+        case .downloads: "Download songs or whole playlists to play them without a connection."
+        case .playlist: "Add songs from Search with ⋯ → Add to playlist."
+        }
+    }
+
+    private func header(_ tracks: [Track]) -> some View {
+        let downloadedCount = tracks.filter { library.isDownloaded($0.id) }.count
+        let allDownloaded = !tracks.isEmpty && downloadedCount == tracks.count
+        let downloading = tracks.contains { downloads.isActive($0.id) }
+
+        return VStack(alignment: .leading, spacing: 16) {
+            PlaylistCover(tracks: tracks, size: 200, color: tileColor, symbol: symbol, corner: 6)
+                .shadow(color: .black.opacity(0.5), radius: 20, y: 12)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.5)
+                Text(subtitle(tracks, downloadedCount))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: 0xD4D4D8))
+            }
+
+            HStack(spacing: 4) {
+                if kind != .downloads {
+                    Button {
+                        if allDownloaded {
+                            tracks.forEach { library.removeDownload($0.id) }
+                        } else {
+                            downloads.download(tracks)
+                        }
+                    } label: {
+                        Group {
+                            if downloading {
+                                ProgressView().tint(accent)
+                            } else {
+                                Image(systemName: allDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                    .font(.system(size: 26))
+                                    .foregroundStyle(allDownloaded ? accent : Color(hex: 0xD4D4D8))
+                            }
+                        }
+                        .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(tracks.isEmpty)
+                    .accessibilityLabel(allDownloaded ? "Remove downloads" : "Download all")
+                }
+                Spacer()
+                Button {
+                    player.toggleShuffle()
+                } label: {
+                    Image(systemName: "shuffle")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(player.shuffle ? accent : Color(hex: 0xD4D4D8))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(player.shuffle ? "Shuffle on" : "Shuffle off")
+
+                Button {
+                    if isPlayingThis {
+                        player.togglePlay()
+                    } else if player.shuffle {
+                        player.shufflePlay(tracks, from: title)
+                    } else {
+                        player.play(tracks, from: title)
+                    }
+                } label: {
+                    Image(systemName: isPlayingThis && player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(width: 56, height: 56)
+                        .background(accent, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(tracks.isEmpty)
+                .accessibilityLabel(isPlayingThis && player.isPlaying ? "Pause" : "Play")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .background(
+            LinearGradient(colors: [headerColor, Theme.bg], startPoint: .top, endPoint: .bottom)
+                .padding(.top, -400)
+        )
+    }
+
+    private var isPlayingThis: Bool {
+        player.playingFrom == title && tracks.contains { $0.id == player.current?.id }
+    }
+
+    private func subtitle(_ tracks: [Track], _ downloaded: Int) -> String {
+        var s = "\(tracks.count) songs"
+        if !tracks.isEmpty { s += " · \(formatTotal(tracks))" }
+        if kind != .downloads, downloaded > 0 { s += " · \(downloaded) downloaded" }
+        return s
+    }
+
+    private func delete(_ offsets: IndexSet) {
+        switch kind {
+        case .liked: library.removeLiked(at: offsets)
+        case .downloads:
+            let ids = offsets.map { library.downloaded[$0].id }
+            ids.forEach { library.removeDownload($0) }
+        case .playlist(let id): library.removeTracks(at: offsets, from: id)
+        }
+    }
+
+    private func move(_ from: IndexSet, _ to: Int) {
+        switch kind {
+        case .liked: library.moveLiked(from: from, to: to)
+        case .downloads: break
+        case .playlist(let id): library.moveTracks(from: from, to: to, in: id)
+        }
+    }
+}
