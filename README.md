@@ -8,6 +8,7 @@ A personal Spotify-style music player for iPhone. Music comes from YouTube Music
 - Background playback, lock screen and Control Center controls
 - CarPlay and Bluetooth playback with steering-wheel controls; AirPlay picker in the player
 - Live synced lyrics (LRCLIB), with Genius as the unsynced fallback
+- Current lyric line as a Live Activity: lock screen, Dynamic Island and the CarPlay screen (iOS 26)
 - No ads: audio is streamed directly; non-music parts of music videos are skipped (SponsorBlock)
 - Best stream the iPhone can play natively (AAC); "Data saver" option for mobile data
 
@@ -34,4 +35,9 @@ Drift/
   Services/   YouTube Music search, stream extraction (YouTubeKit), lyrics, SponsorBlock
   Views/      SwiftUI screens
   CarPlay/    CarPlay scene
+DriftLyrics/  widget extension with the lyrics Live Activity
+Shared/       code used by both the app and the extension
 ```
+
+The Live Activity can only be started while Drift is open on screen (an iOS rule). After that it keeps
+updating in the background, across songs, including on CarPlay.

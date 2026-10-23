@@ -7,6 +7,7 @@ enum AppTab: Hashable {
 struct RootView: View {
     @State private var tab: AppTab = .home
     @State private var ui = UIState.shared
+    @Environment(\.scenePhase) private var scenePhase
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
 
@@ -43,6 +44,9 @@ struct RootView: View {
             AddToPlaylistSheet(track: track)
         }
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { LyricsActivity.shared.appBecameActive() }
+        }
     }
 }
 

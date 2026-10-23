@@ -15,6 +15,8 @@ final class AppSettings {
     /// Search YouTube Music "songs" (album audio) instead of all results incl. music videos.
     var preferOfficialAudio: Bool { didSet { defaults.set(preferOfficialAudio, forKey: "preferOfficialAudio") } }
     var downloadOverCellular: Bool { didSet { defaults.set(downloadOverCellular, forKey: "downloadOverCellular") } }
+    /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
+    var lyricsLiveActivity: Bool { didSet { defaults.set(lyricsLiveActivity, forKey: "lyricsLiveActivity") } }
 
     private init() {
         let d = UserDefaults.standard
@@ -23,6 +25,7 @@ final class AppSettings {
         skipNonMusic = d.object(forKey: "skipNonMusic") as? Bool ?? true
         preferOfficialAudio = d.object(forKey: "preferOfficialAudio") as? Bool ?? true
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")
+        lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
     }
 
     var accentHex: UInt32 {

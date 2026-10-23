@@ -57,6 +57,12 @@ struct SettingsView: View {
                 }
 
                 section("Lyrics") {
+                    toggle("Lyrics on CarPlay & Lock Screen",
+                           "Shows the current line as a Live Activity. On CarPlay it needs iOS 26; it starts when you play something with Drift open.",
+                           $settings.lyricsLiveActivity)
+                        .onChange(of: settings.lyricsLiveActivity) { _, _ in
+                            LyricsActivity.shared.settingChanged()
+                        }
                     row("Synced source", "LRCLIB")
                     row("Fallback (unsynced)", "Genius")
                 }

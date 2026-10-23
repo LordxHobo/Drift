@@ -55,6 +55,7 @@ final class Player {
                 self.isPlaying = status != .paused
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
                 self.updateNowPlaying()
+                LyricsActivity.shared.playingChanged(self.isPlaying)
             }
         })
         setupRemoteCommands()
@@ -191,6 +192,7 @@ final class Player {
         isBuffering = true
         updateNowPlaying()
         loadArtwork(for: track)
+        LyricsActivity.shared.trackChanged(track)
         if autoplay { Library.shared.addRecent(track) }
 
         loadTask = Task { [weak self] in
@@ -317,6 +319,7 @@ final class Player {
     private func tick(_ t: Double) {
         guard t.isFinite, av.currentItem != nil else { return }
         currentTime = t
+        LyricsActivity.shared.tick(t)
         if let d = av.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duration) > 0.5 {
             duration = d
             updateNowPlaying()

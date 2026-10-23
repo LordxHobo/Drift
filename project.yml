@@ -16,8 +16,10 @@ targets:
       - path: Drift
         excludes:
           - Info.plist
+      - path: Shared
     dependencies:
       - package: YouTubeKit
+      - target: DriftLyrics
     settings:
       base:
         PRODUCT_NAME: Drift
@@ -31,3 +33,26 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: NO
     scheme: {}
+
+  # Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26) with the current lyric line.
+  DriftLyrics:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: DriftLyrics
+        excludes:
+          - Info.plist
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_NAME: DriftLyrics
+        PRODUCT_BUNDLE_IDENTIFIER: com.lordxhobo.drift.lyrics
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_FILE: DriftLyrics/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
