@@ -211,6 +211,7 @@ struct SearchView: View {
                 let found = try await YTMusic.search(q, songsOnly: settings.preferOfficialAudio)
                 guard !Task.isCancelled else { return }
                 results = found
+                player.prefetch(Array(found.prefix(2)))
             case .podcasts:
                 if isLink {
                     let t = try await YouTubeSearch.resolve(link: q)

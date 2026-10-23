@@ -103,6 +103,7 @@ struct PlaylistView: View {
             if case .playlist(let id) = kind, library.playlist(id) == nil { dismiss() }
         }
         .task(id: tracks.first?.id) {
+            player.prefetch(Array(tracks.prefix(2)))
             if let first = tracks.first, let c = await ArtworkPalette.color(for: first.artwork(size: 200)) {
                 headerColor = c
             } else {

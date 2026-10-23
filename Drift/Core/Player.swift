@@ -56,6 +56,8 @@ final class Player {
     @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var lastChapterIndex: Int?
     @ObservationIgnored private var watchdog: Task<Void, Never>?
+    /// Keeps the current stream loader alive (AVFoundation only holds it weakly).
+    @ObservationIgnored private var loader: StreamLoader?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
 
@@ -311,7 +313,15 @@ final class Player {
         itemNotifications.forEach { NotificationCenter.default.removeObserver($0) }
         itemNotifications.removeAll()
 
-        let item = AVPlayerItem(url: url)
+        let item: AVPlayerItem
+        if url.isFileURL {
+            loader = nil
+            item = AVPlayerItem(url: url)
+        } else {
+            let l = StreamLoader(url: url)
+            loader = l
+            item = AVPlayerItem(asset: l.asset)
+        }
         item.preferredForwardBufferDuration = 30
         item.audioTimePitchAlgorithm = .spectral
         itemObservers.append(item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -427,21 +437,22 @@ final class Player {
     /// Resolve stream links ahead of time so tapping play starts right away.
     func prefetch(_ tracks: [Track]) {
         let low = AppSettings.shared.dataSaver
-        let ids = tracks.filter { !Library.shared.isDownloaded($0.id) }.map(\.id)
+        let ids = tracks.filter { !Library.shared.isDownloaded($0.id) && $0.id != current?.id }.map(\.id)
         guard !ids.isEmpty else { return }
-        Task.detached(priority: .utility) {
-            for id in ids { _ = try? await StreamResolver.shared.resolve(id, dataSaver: low) }
+        // In parallel: each one is ready to start instantly (link found, opening seconds downloaded).
+        for id in ids {
+            Task.detached(priority: .utility) {
+                if let s = try? await StreamResolver.shared.resolve(id, dataSaver: low) {
+                    await StreamCache.shared.warm(s.url)
+                }
+            }
         }
     }
 
+    /// Gets the next two songs ready while this one plays.
     private func prefetchNext() {
-        guard index + 1 < queue.count else { return }
-        let next = queue[index + 1]
-        guard !Library.shared.isDownloaded(next.id) else { return }
-        let low = AppSettings.shared.dataSaver
-        Task.detached(priority: .utility) {
-            _ = try? await StreamResolver.shared.resolve(next.id, dataSaver: low)
-        }
+        let upcoming = queue.dropFirst(index + 1).prefix(2)
+        prefetch(Array(upcoming))
     }
 
     // MARK: Time & skipping

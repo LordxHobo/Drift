@@ -96,6 +96,7 @@ struct HomeView: View {
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .task { player.prefetch(Array(library.recent.prefix(2))) }
     }
 }
 
