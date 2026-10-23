@@ -12,7 +12,7 @@ enum YouTubeSearch {
         return "2.\(f.string(from: Date().addingTimeInterval(-86400))).00.00"
     }
 
-    private static func post(_ path: String, _ body: [String: Any]) async throws -> Any {
+    static func post(_ path: String, _ body: [String: Any]) async throws -> Any {
         var req = URLRequest(url: URL(string: api + path + "?prettyPrint=false")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -284,5 +284,96 @@ private final class FeedParser: NSObject, XMLParserDelegate {
         default: break
         }
         text = ""
+    }
+}
+
+// MARK: Chapters
+
+struct Chapter: Hashable {
+    let start: Double
+    let title: String
+}
+
+extension YouTubeSearch {
+    /// Chapters of a video: YouTube's own chapter data, or timestamps in the description.
+    static func chapters(for videoID: String, duration: Double) async -> [Chapter] {
+        if let json = try? await post("next", ["videoId": videoID]) {
+            let fromPlayerBar = (dig(json, ["playerOverlays", "playerOverlayRenderer", "decoratedPlayerBarRenderer",
+                                            "decoratedPlayerBarRenderer", "playerBar", "chapteredPlayerBarRenderer",
+                                            "chapters"]) as? [[String: Any]] ?? [])
+                .compactMap { c -> Chapter? in
+                    guard let r = c["chapterRenderer"] as? [String: Any],
+                          let ms = (r["timeRangeStartMillis"] as? NSNumber)?.doubleValue,
+                          let title = text(r["title"]) else { return nil }
+                    return Chapter(start: ms / 1000, title: title)
+                }
+            if let valid = clean(fromPlayerBar, duration: duration) { return valid }
+
+            // Chapter list in the side panel ("In this video").
+            var fromPanel: [Chapter] = []
+            collect(json, key: "macroMarkersListItemRenderer") { r in
+                guard let title = text(r["title"]), let time = text(r["timeDescription"]),
+                      let start = YTMusic.parseDuration(time) ?? (time.hasPrefix("0:") ? 0 : nil) else { return }
+                fromPanel.append(Chapter(start: start, title: title))
+            }
+            if let valid = clean(fromPanel, duration: duration) { return valid }
+        }
+
+        // Timestamps in the description ("12:34 Topic" or "Topic - 12:34").
+        if let player = try? await post("player", ["videoId": videoID]),
+           let description = dig(player, ["videoDetails", "shortDescription"]) as? String {
+            return clean(parseDescription(description), duration: duration) ?? []
+        }
+        return []
+    }
+
+    private static func collect(_ node: Any, key: String, _ found: ([String: Any]) -> Void) {
+        if let d = node as? [String: Any] {
+            for k in d.keys.sorted() {
+                if k == key, let r = d[k] as? [String: Any] { found(r) } else { collect(d[k]!, key: key, found) }
+            }
+        } else if let a = node as? [Any] {
+            for v in a { collect(v, key: key, found) }
+        }
+    }
+
+    static func parseDescription(_ text: String) -> [Chapter] {
+        let time = "((?:\\d{1,2}:)?\\d{1,2}:\\d{2})"
+        let leading = try! NSRegularExpression(pattern: "^\\W*\\(?\(time)\\)?\\W*\\s+(.+?)\\s*$")
+        let trailing = try! NSRegularExpression(pattern: "^\\s*(.+?)\\W*\\s+\\(?\(time)\\)?\\s*$")
+        var a: [Chapter] = [], b: [Chapter] = []
+        for line in text.components(separatedBy: .newlines) {
+            let ns = line as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            if let m = leading.firstMatch(in: line, range: range),
+               let start = parseTimestamp(ns.substring(with: m.range(at: 1))) {
+                a.append(Chapter(start: start, title: ns.substring(with: m.range(at: 2))))
+            } else if let m = trailing.firstMatch(in: line, range: range),
+                      let start = parseTimestamp(ns.substring(with: m.range(at: 2))) {
+                b.append(Chapter(start: start, title: ns.substring(with: m.range(at: 1))))
+            }
+        }
+        return a.count >= b.count ? a : b
+    }
+
+    private static func parseTimestamp(_ s: String) -> Double? {
+        let parts = s.split(separator: ":").compactMap { Double($0) }
+        guard parts.count >= 2 else { return nil }
+        return parts.reduce(0) { $0 * 60 + $1 }
+    }
+
+    /// At least 2 chapters, starting near 0:00, in order, within the episode.
+    private static func clean(_ list: [Chapter], duration: Double) -> [Chapter]? {
+        var out: [Chapter] = []
+        for c in list {
+            let title = c.title.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "-–—|:•")))
+            guard !title.isEmpty else { continue }
+            if let last = out.last, c.start <= last.start { continue }
+            if duration > 0, c.start >= duration { continue }
+            out.append(Chapter(start: c.start, title: title))
+        }
+        guard out.count >= 2, let first = out.first, first.start <= 10 else { return nil }
+        if first.start > 0 { out[0] = Chapter(start: 0, title: first.title) }
+        return out
     }
 }

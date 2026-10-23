@@ -7,6 +7,7 @@ struct NowPlayingView: View {
     @State private var scrub: Double?
     @State private var dragDown: CGFloat = 0
     @State private var showLyrics = false
+    @State private var showChapters = false
     private var player: Player { .shared }
     private var library: Library { .shared }
     private var accent: Color { AppSettings.shared.accent }
@@ -39,6 +40,9 @@ struct NowPlayingView: View {
         }
         .fullScreenCover(isPresented: $showLyrics) {
             LyricsView(background: bg)
+        }
+        .sheet(isPresented: $showChapters) {
+            ChaptersSheet()
         }
     }
 
@@ -126,9 +130,37 @@ struct NowPlayingView: View {
                     }
                 }
 
+                // Current chapter
+                if t.isEpisode, let i = player.chapterIndex, let ch = player.currentChapter {
+                    Button { showChapters = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(accent)
+                            Text("\(i + 1)/\(player.chapters.count)")
+                                .font(.system(size: 12, weight: .bold).monospacedDigit())
+                                .foregroundStyle(Color(hex: 0xD4D4D8))
+                            Text(ch.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(hex: 0xD4D4D8))
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Chapter \(i + 1) of \(player.chapters.count): \(ch.title). Show all chapters")
+                }
+
                 // Progress
                 VStack(spacing: 6) {
-                    ScrubBar(progress: scrub ?? player.progress, onChange: { scrub = $0 }, onEnd: { p in
+                    ScrubBar(progress: scrub ?? player.progress,
+                             markers: chapterMarkers,
+                             onChange: { scrub = $0 }, onEnd: { p in
                         player.seek(to: p * player.duration)
                         scrub = nil
                     })
@@ -310,9 +342,23 @@ struct NowPlayingView: View {
             }
             .accessibilityLabel("Forward 30 seconds")
             Spacer()
-            Color.clear.frame(width: 52, height: 44)
+            if player.chapters.isEmpty {
+                Color.clear.frame(width: 52, height: 44)
+            } else {
+                Button { showChapters = true } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 22, weight: .semibold))
+                        .frame(width: 52, height: 44)
+                }
+                .accessibilityLabel("Chapters")
+            }
         }
         .buttonStyle(.plain)
+    }
+
+    private var chapterMarkers: [Double] {
+        guard player.isEpisode, player.duration > 0 else { return [] }
+        return player.chapters.dropFirst().map { $0.start / player.duration }
     }
 
     private func speedText(_ s: Double) -> String {
@@ -346,6 +392,8 @@ struct NowPlayingView: View {
 
 struct ScrubBar: View {
     var progress: Double
+    /// Positions (0...1) of chapter starts, drawn as small gaps in the bar.
+    var markers: [Double] = []
     var onChange: (Double) -> Void
     var onEnd: (Double) -> Void
     @State private var dragging = false
@@ -357,6 +405,12 @@ struct ScrubBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.25)).frame(height: dragging ? 6 : 4)
                 Capsule().fill(Theme.text).frame(width: x, height: dragging ? 6 : 4)
+                ForEach(Array(markers.enumerated()), id: \.offset) { _, m in
+                    Rectangle()
+                        .fill(Color.black.opacity(0.55))
+                        .frame(width: 2, height: dragging ? 6 : 4)
+                        .offset(x: w * min(max(m, 0), 1) - 1)
+                }
                 Circle().fill(Theme.text)
                     .frame(width: dragging ? 16 : 12, height: dragging ? 16 : 12)
                     .offset(x: x - (dragging ? 8 : 6))
@@ -394,5 +448,65 @@ struct RoutePicker: UIViewRepresentable {
     func updateUIView(_ v: AVRoutePickerView, context: Context) {
         v.tintColor = tint
         v.activeTintColor = tint
+    }
+}
+
+/// Every chapter of the current episode; tap one to jump there.
+struct ChaptersSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    private var player: Player { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(Array(player.chapters.enumerated()), id: \.offset) { i, ch in
+                        let isCurrent = i == player.chapterIndex
+                        Button {
+                            player.seekToChapter(i)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(formatTime(ch.start))
+                                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(isCurrent ? accent : Theme.muted)
+                                    .frame(width: 64, alignment: .leading)
+                                Text(ch.title)
+                                    .font(.system(size: 15, weight: isCurrent ? .bold : .medium))
+                                    .foregroundStyle(isCurrent ? accent : Theme.text)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                                if isCurrent {
+                                    Image(systemName: "waveform")
+                                        .foregroundStyle(accent)
+                                        .accessibilityLabel("Playing")
+                                }
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Theme.bg)
+                        .id(i)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .onAppear {
+                    if let i = player.chapterIndex { proxy.scrollTo(i, anchor: .center) }
+                }
+            }
+            .background(Theme.bg)
+            .foregroundStyle(Theme.text)
+            .navigationTitle("Chapters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.bg, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .tint(accent)
     }
 }

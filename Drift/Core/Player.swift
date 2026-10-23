@@ -33,6 +33,16 @@ final class Player {
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var isEpisode: Bool { current?.isEpisode == true }
+
+    /// Chapters of the current episode (empty when it has none).
+    private(set) var chapters: [Chapter] = []
+    var chapterIndex: Int? { Self.chapterIndex(in: chapters, at: currentTime) }
+    var currentChapter: Chapter? { chapterIndex.map { chapters[$0] } }
+
+    static func chapterIndex(in chapters: [Chapter], at t: Double) -> Int? {
+        guard !chapters.isEmpty else { return nil }
+        return chapters.lastIndex { $0.start <= t + 0.5 } ?? 0
+    }
     var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
 
     @ObservationIgnored private let av = AVPlayer()
@@ -44,6 +54,7 @@ final class Player {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var segments: [SkipSegment] = []
     @ObservationIgnored private var lastProgressReport: Double = -10
+    @ObservationIgnored private var lastChapterIndex: Int?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
 
@@ -147,7 +158,31 @@ final class Player {
         av.pause()
     }
 
-    func next() { advance(auto: false) }
+    func next() {
+        if isEpisode, !chapters.isEmpty { nextChapter(); return }
+        advance(auto: false)
+    }
+
+    func seekToChapter(_ i: Int) {
+        guard chapters.indices.contains(i) else { return }
+        seek(to: chapters[i].start)
+        if !isPlaying { resume() }
+    }
+
+    func nextChapter() {
+        guard let i = chapterIndex, i + 1 < chapters.count else { return }
+        seekToChapter(i + 1)
+    }
+
+    /// Back to the start of this chapter, or the previous one if it just started.
+    func previousChapter() {
+        guard let i = chapterIndex else { return }
+        if currentTime - chapters[i].start > 3 || i == 0 {
+            seekToChapter(i)
+        } else {
+            seekToChapter(i - 1)
+        }
+    }
 
     func skip(by delta: Double) {
         seek(to: currentTime + delta)
@@ -169,6 +204,7 @@ final class Player {
 
     func previous() {
         guard !queue.isEmpty else { return }
+        if isEpisode, !chapters.isEmpty { previousChapter(); return }
         if currentTime > 3 || index == 0 {
             seek(to: 0)
         } else {
@@ -221,6 +257,8 @@ final class Player {
         updateNowPlaying()
         loadArtwork(for: track)
         LyricsActivity.shared.trackChanged(track)
+        chapters = []
+        lastChapterIndex = nil
         updateCommands()
         lastProgressReport = -10
         if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
@@ -243,9 +281,19 @@ final class Player {
                 self.start(url, autoplay: autoplay, at: resumeAt)
                 self.prefetchNext()
 
-                let segs = await SponsorBlock.segments(
+                async let segsTask = SponsorBlock.segments(
                     for: track.id,
                     categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
+                if track.isEpisode {
+                    let ch = await YouTubeSearch.chapters(for: track.id, duration: self.duration)
+                    if self.current?.id == track.id, !ch.isEmpty {
+                        self.chapters = ch
+                        self.lastChapterIndex = nil
+                        self.updateCommands()
+                        self.chapterTick()
+                    }
+                }
+                let segs = await segsTask
                 if self.current?.id == track.id { self.segments = segs }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -363,6 +411,7 @@ final class Player {
             duration = d
             updateNowPlaying()
         }
+        chapterTick()
         if let cur = current, cur.isEpisode, duration > 0, abs(t - lastProgressReport) >= 5 {
             lastProgressReport = t
             PodcastStore.shared.update(cur, position: t, duration: duration)
@@ -378,6 +427,19 @@ final class Player {
             advance(auto: true)
         } else {
             seek(to: seg.range.upperBound)
+        }
+    }
+
+    /// Chapter changed: refresh lock screen / CarPlay info and the Live Activity.
+    private func chapterTick() {
+        guard !chapters.isEmpty else { return }
+        let i = chapterIndex
+        guard i != lastChapterIndex else { return }
+        lastChapterIndex = i
+        updateNowPlaying()
+        if let i {
+            LyricsActivity.shared.chapterChanged(current: chapters[i].title,
+                                                 next: i + 1 < chapters.count ? chapters[i + 1].title : "")
         }
     }
 
@@ -446,8 +508,9 @@ final class Player {
         c.skipForwardCommand.isEnabled = ep
         c.skipBackwardCommand.isEnabled = ep
         c.changePlaybackRateCommand.isEnabled = ep
-        c.nextTrackCommand.isEnabled = !ep
-        c.previousTrackCommand.isEnabled = !ep
+        // With chapters, next/previous (steering wheel, CarPlay) jump between chapters.
+        c.nextTrackCommand.isEnabled = !ep || !chapters.isEmpty
+        c.previousTrackCommand.isEnabled = !ep || !chapters.isEmpty
     }
 
     private func updateNowPlaying() {
@@ -465,6 +528,11 @@ final class Player {
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let album = t.album { info[MPMediaItemPropertyAlbumTitle] = album }
+        if let i = chapterIndex, t.isEpisode {
+            info[MPMediaItemPropertyAlbumTitle] = chapters[i].title
+            info[MPNowPlayingInfoPropertyChapterNumber] = i
+            info[MPNowPlayingInfoPropertyChapterCount] = chapters.count
+        }
         if let artwork, artwork.id == t.id { info[MPMediaItemPropertyArtwork] = artwork.art }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }

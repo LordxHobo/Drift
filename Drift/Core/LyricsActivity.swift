@@ -19,6 +19,8 @@ final class LyricsActivity {
     private var kind = "none"
     private var lineIndex = -2
     private var isPlaying = false
+    private var chapterTitle = ""
+    private var nextChapterTitle = ""
     private var lyricsTask: Task<Void, Never>?
     private var lastSent: State?
     private var pending: State?
@@ -47,6 +49,8 @@ final class LyricsActivity {
     func trackChanged(_ t: Track) {
         track = t
         lines = []
+        chapterTitle = ""
+        nextChapterTitle = ""
         kind = "none"
         lineIndex = -2
         lyricsTask?.cancel()
@@ -71,6 +75,14 @@ final class LyricsActivity {
             self.tick(Player.shared.currentTime)
             self.push()
         }
+    }
+
+    /// Podcasts show the current chapter where songs show the lyric line.
+    func chapterChanged(current: String, next: String) {
+        chapterTitle = current
+        nextChapterTitle = next
+        guard enabled else { return }
+        push()
     }
 
     func playingChanged(_ playing: Bool) {
@@ -128,7 +140,10 @@ final class LyricsActivity {
     private func currentState() -> State? {
         guard let t = track else { return nil }
         var line = "", next = ""
-        if !lines.isEmpty {
+        if t.isEpisode {
+            line = chapterTitle
+            next = nextChapterTitle
+        } else if !lines.isEmpty {
             if lineIndex >= 0, lineIndex < lines.count { line = lines[lineIndex].text }
             let n = lineIndex + 1
             if n >= 0, n < lines.count { next = lines[n].text }

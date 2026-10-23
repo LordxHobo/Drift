@@ -6,7 +6,8 @@ A personal Spotify-style music player for iPhone. Music comes from YouTube Music
 - Playlists (rename, custom cover photo or color + icon), Liked songs with one-tap hearts, Recently played
 - Import public Spotify playlists and albums from a link (first 100 songs, matched on YouTube Music)
 - Podcasts from YouTube: search shows and channels, paste any YouTube link, follow channels for new episodes,
-  resume where you stopped, 0.75–2× speed, 15/30 s skip, sponsor segments skipped (SponsorBlock)
+  resume where you stopped, 0.75–2× speed, 15/30 s skip, sponsor segments skipped (SponsorBlock),
+  chapters (list, marks on the progress bar, next/previous chapter from the steering wheel)
 - Downloads for offline playback (whole playlists in one tap)
 - Background playback, lock screen and Control Center controls
 - CarPlay and Bluetooth playback with steering-wheel controls; AirPlay picker in the player
