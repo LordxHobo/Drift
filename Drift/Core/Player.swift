@@ -27,7 +27,12 @@ final class Player {
     private(set) var routeName = "This iPhone"
     private(set) var isCarRoute = false
 
+    /// Podcast playback speed (songs always play at 1×).
+    private(set) var speed: Double = AppSettings.shared.podcastSpeed
+    static let speeds: [Double] = [0.75, 1, 1.25, 1.5, 1.75, 2]
+
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
+    var isEpisode: Bool { current?.isEpisode == true }
     var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
 
     @ObservationIgnored private let av = AVPlayer()
@@ -37,7 +42,8 @@ final class Player {
     @ObservationIgnored private var itemNotifications: [NSObjectProtocol] = []
     @ObservationIgnored private var playerObservers: [NSKeyValueObservation] = []
     @ObservationIgnored private var loadTask: Task<Void, Never>?
-    @ObservationIgnored private var segments: [ClosedRange<Double>] = []
+    @ObservationIgnored private var segments: [SkipSegment] = []
+    @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
 
@@ -56,6 +62,9 @@ final class Player {
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
+                if status == .paused, let t = self.current, t.isEpisode, self.currentTime > 0 {
+                    PodcastStore.shared.update(t, position: self.currentTime, duration: self.duration, force: true)
+                }
             }
         })
         setupRemoteCommands()
@@ -140,6 +149,24 @@ final class Player {
 
     func next() { advance(auto: false) }
 
+    func skip(by delta: Double) {
+        seek(to: currentTime + delta)
+    }
+
+    func setSpeed(_ s: Double) {
+        speed = s
+        AppSettings.shared.podcastSpeed = s
+        applyRate()
+        updateNowPlaying()
+    }
+
+    private var effectiveRate: Float { isEpisode ? Float(speed) : 1 }
+
+    private func applyRate() {
+        av.defaultRate = effectiveRate
+        if av.timeControlStatus != .paused { av.rate = effectiveRate }
+    }
+
     func previous() {
         guard !queue.isEmpty else { return }
         if currentTime > 3 || index == 0 {
@@ -160,6 +187,7 @@ final class Player {
 
     private func advance(auto: Bool) {
         guard !queue.isEmpty else { return }
+        if auto, let t = current, t.isEpisode { PodcastStore.shared.markFinished(t) }
         if auto && repeatMode == .one {
             seek(to: 0)
             av.play()
@@ -193,7 +221,11 @@ final class Player {
         updateNowPlaying()
         loadArtwork(for: track)
         LyricsActivity.shared.trackChanged(track)
-        if autoplay { Library.shared.addRecent(track) }
+        updateCommands()
+        lastProgressReport = -10
+        if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
+        let resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
+        currentTime = resumeAt
 
         loadTask = Task { [weak self] in
             guard let self else { return }
@@ -208,10 +240,12 @@ final class Player {
                     url = s.url
                 }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
-                self.start(url, autoplay: autoplay)
+                self.start(url, autoplay: autoplay, at: resumeAt)
                 self.prefetchNext()
 
-                let segs = await SponsorBlock.segments(for: track.id)
+                let segs = await SponsorBlock.segments(
+                    for: track.id,
+                    categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
                 if self.current?.id == track.id { self.segments = segs }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -227,6 +261,7 @@ final class Player {
 
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = 30
+        item.audioTimePitchAlgorithm = .spectral
         itemObservers.append(item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             Task { @MainActor in self?.itemStatusChanged(item, status: status) }
@@ -240,6 +275,7 @@ final class Player {
         })
 
         av.replaceCurrentItem(with: item)
+        av.defaultRate = effectiveRate
         if time > 0 {
             av.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         }
@@ -298,7 +334,10 @@ final class Player {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self, self.current?.id == track.id else { return }
-            if self.index + 1 < self.queue.count { self.advance(auto: true) }
+            if self.index + 1 < self.queue.count {
+                self.index += 1
+                self.load()
+            }
             try? await Task.sleep(for: .seconds(2))
             if self.errorMessage == message { self.errorMessage = nil }
         }
@@ -324,16 +363,21 @@ final class Player {
             duration = d
             updateNowPlaying()
         }
-        guard AppSettings.shared.skipNonMusic, isPlaying,
-              let seg = segments.first(where: { $0.contains(t) && $0.upperBound - t > 0.75 }) else { return }
+        if let cur = current, cur.isEpisode, duration > 0, abs(t - lastProgressReport) >= 5 {
+            lastProgressReport = t
+            PodcastStore.shared.update(cur, position: t, duration: duration)
+        }
+        let skipOn = isEpisode ? AppSettings.shared.skipSponsors : AppSettings.shared.skipNonMusic
+        guard skipOn, isPlaying,
+              let seg = segments.first(where: { $0.range.contains(t) && $0.range.upperBound - t > 0.75 }) else { return }
         segments.removeAll { $0 == seg }
-        let length = formatTime(seg.upperBound - seg.lowerBound)
-        if duration > 0, seg.upperBound >= duration - 1.5 {
-            showSkip("Skipped non-music outro · \(length)")
+        let length = formatTime(seg.range.upperBound - seg.range.lowerBound)
+        let atEnd = duration > 0 && seg.range.upperBound >= duration - 1.5
+        showSkip("Skipped \(seg.label(atStart: seg.range.lowerBound < 2, atEnd: atEnd)) · \(length)")
+        if atEnd {
             advance(auto: true)
         } else {
-            showSkip(seg.lowerBound < 2 ? "Skipped non-music intro · \(length)" : "Skipped non-music part · \(length)")
-            seek(to: seg.upperBound)
+            seek(to: seg.range.upperBound)
         }
     }
 
@@ -369,12 +413,41 @@ final class Player {
             Task { @MainActor in self?.previous() }
             return .success
         }
+        c.skipForwardCommand.preferredIntervals = [30]
+        c.skipBackwardCommand.preferredIntervals = [15]
+        c.skipForwardCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.skip(by: 30) }
+            return .success
+        }
+        c.skipBackwardCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.skip(by: -15) }
+            return .success
+        }
+        c.changePlaybackRateCommand.supportedPlaybackRates = Self.speeds.map { NSNumber(value: $0) }
+        c.changePlaybackRateCommand.addTarget { [weak self] event in
+            guard let e = event as? MPChangePlaybackRateCommandEvent else { return .commandFailed }
+            let rate = Double(e.playbackRate)
+            Task { @MainActor in self?.setSpeed(rate) }
+            return .success
+        }
+        updateCommands()
         c.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let e = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             let t = e.positionTime
             Task { @MainActor in self?.seek(to: t) }
             return .success
         }
+    }
+
+    /// Episodes get ±15/30 s buttons (lock screen, CarPlay, steering wheel); songs get previous/next.
+    private func updateCommands() {
+        let c = MPRemoteCommandCenter.shared()
+        let ep = isEpisode
+        c.skipForwardCommand.isEnabled = ep
+        c.skipBackwardCommand.isEnabled = ep
+        c.changePlaybackRateCommand.isEnabled = ep
+        c.nextTrackCommand.isEnabled = !ep
+        c.previousTrackCommand.isEnabled = !ep
     }
 
     private func updateNowPlaying() {
@@ -387,7 +460,8 @@ final class Player {
             MPMediaItemPropertyArtist: t.artist,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying && !isBuffering ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying && !isBuffering ? Double(effectiveRate) : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(effectiveRate),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let album = t.album { info[MPMediaItemPropertyAlbumTitle] = album }

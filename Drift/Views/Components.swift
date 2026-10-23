@@ -5,6 +5,7 @@ enum Route: Hashable {
     case downloads
     case playlist(UUID)
     case settings
+    case channel(PodcastChannel)
 }
 
 extension View {
@@ -15,6 +16,7 @@ extension View {
             case .liked: PlaylistView(kind: .liked)
             case .downloads: PlaylistView(kind: .downloads)
             case .playlist(let id): PlaylistView(kind: .playlist(id))
+            case .channel(let c): ChannelView(channel: c)
             }
         }
     }
@@ -188,7 +190,9 @@ struct TrackRow: View {
             }
             .buttonStyle(.plain)
 
-            LikeButton(track: track, size: 17)
+            if !track.isEpisode {
+                LikeButton(track: track, size: 17)
+            }
 
             Menu {
                 TrackMenuItems(track: track)

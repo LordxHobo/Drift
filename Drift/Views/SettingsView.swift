@@ -35,6 +35,15 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                 }
 
+                section("Podcasts") {
+                    toggle("Skip sponsors",
+                           "Skips sponsor reads, self-promotion and “like and subscribe” reminders that the SponsorBlock community has marked.",
+                           $settings.skipSponsors)
+                    Text("Episodes remember where you stopped. Speed is set from the player.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+
                 section("Downloads") {
                     toggle("Download over mobile data", "When off, downloads wait for Wi-Fi.", $settings.downloadOverCellular)
                     HStack {

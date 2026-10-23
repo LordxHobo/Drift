@@ -8,6 +8,13 @@ struct Track: Codable, Hashable, Identifiable {
     var album: String?
     var duration: Double?   // seconds
     var artworkURL: URL?
+    /// Podcast episode (any YouTube video played as a podcast) rather than a song.
+    var podcast: Bool?
+    var channelID: String?
+    var channelAvatar: URL?
+    var published: Date?
+
+    var isEpisode: Bool { podcast == true }
 
     var durationText: String {
         guard let duration else { return "" }
@@ -62,4 +69,39 @@ func formatTotal(_ tracks: [Track]) -> String {
     let total = Int(tracks.compactMap(\.duration).reduce(0, +))
     let h = total / 3600, m = (total % 3600) / 60
     return h > 0 ? "\(h) h \(m) min" : "\(m) min"
+}
+
+/// A YouTube channel followed as a podcast.
+struct PodcastChannel: Codable, Hashable, Identifiable {
+    var id: String          // "UC…" channel ID
+    var name: String
+    var avatarURL: URL?
+    var subtitle: String?   // e.g. "1.2M subscribers"
+}
+
+/// Where someone stopped in an episode.
+struct EpisodeProgress: Codable, Hashable {
+    var track: Track
+    var position: Double
+    var duration: Double
+    var updated: Date
+    var finished: Bool
+}
+
+/// "1 hr 23 min" / "45 min".
+func formatLength(_ seconds: Double) -> String {
+    let m = max(1, Int((seconds / 60).rounded()))
+    return m >= 60 ? "\(m / 60) hr \(m % 60) min" : "\(m) min"
+}
+
+func formatPublished(_ date: Date?) -> String? {
+    guard let date else { return nil }
+    if Date().timeIntervalSince(date) < 7 * 86400 {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: date, relativeTo: Date())
+    }
+    let f = DateFormatter()
+    f.setLocalizedDateFormatFromTemplate(Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year) ? "d MMM" : "d MMM yyyy")
+    return f.string(from: date)
 }

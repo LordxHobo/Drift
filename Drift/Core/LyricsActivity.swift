@@ -53,6 +53,8 @@ final class LyricsActivity {
         guard enabled else { return }
         startIfPossible()
         push()
+        // Podcasts have no lyrics; the activity just shows the episode and channel.
+        if t.isEpisode { return }
         lyricsTask = Task { [weak self] in
             let result = await LyricsService.shared.lyrics(for: t)
             guard let self, !Task.isCancelled, self.track?.id == t.id else { return }

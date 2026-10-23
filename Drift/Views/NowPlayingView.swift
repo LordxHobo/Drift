@@ -77,8 +77,14 @@ struct NowPlayingView: View {
                 }
                 .padding(.horizontal, -10)
 
-                // Artwork
-                ArtworkView(url: t.artwork(size: 800), size: artSize, corner: 8, seed: t.id)
+                // Artwork (16:9 for podcast episodes)
+                Group {
+                    if t.isEpisode {
+                        EpisodeArtwork(url: t.artworkURL ?? t.artwork(size: 800), width: geo.size.width - 48, corner: 8)
+                    } else {
+                        ArtworkView(url: t.artwork(size: 800), size: artSize, corner: 8, seed: t.id)
+                    }
+                }
                     .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
                     .frame(maxWidth: .infinity)
                     .id(t.id)
@@ -103,6 +109,11 @@ struct NowPlayingView: View {
                             .lineLimit(1)
                     }
                     Spacer()
+                    if t.isEpisode {
+                        if let c = PodcastStore.shared.channel(for: t) {
+                            FollowButton(channel: c, compact: true)
+                        }
+                    } else {
                     Button {
                         library.toggleLike(t)
                     } label: {
@@ -112,6 +123,7 @@ struct NowPlayingView: View {
                             .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel(library.isLiked(t.id) ? "Remove from Liked songs" : "Like")
+                    }
                 }
 
                 // Progress
@@ -130,6 +142,9 @@ struct NowPlayingView: View {
                 }
 
                 // Controls
+                if t.isEpisode {
+                    episodeControls
+                } else {
                 HStack {
                     Button { player.toggleShuffle() } label: {
                         Image(systemName: "shuffle")
@@ -177,6 +192,7 @@ struct NowPlayingView: View {
                     .accessibilityLabel(repeatLabel)
                 }
                 .buttonStyle(.plain)
+                }
 
                 // Skip / error toast
                 Group {
@@ -215,6 +231,9 @@ struct NowPlayingView: View {
                             .fixedSize()
                     }
 
+                    if t.isEpisode {
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 44)
+                    } else {
                     Button { showLyrics = true } label: {
                         HStack(spacing: 6) {
                             Text("Lyrics").font(.system(size: 12, weight: .bold))
@@ -225,6 +244,7 @@ struct NowPlayingView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityLabel("Show lyrics")
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -232,6 +252,71 @@ struct NowPlayingView: View {
             .padding(.top, 8)
             .padding(.bottom, 12)
         }
+    }
+
+    private var playButton: some View {
+        Button { player.togglePlay() } label: {
+            ZStack {
+                Circle().fill(Theme.text)
+                if player.isBuffering && !player.isPlaying {
+                    ProgressView().tint(Theme.bg)
+                } else {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Theme.bg)
+                }
+            }
+            .frame(width: 72, height: 72)
+        }
+        .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+    }
+
+    /// Speed · back 15 · play · forward 30.
+    private var episodeControls: some View {
+        HStack {
+            Menu {
+                ForEach(Player.speeds, id: \.self) { s in
+                    Button {
+                        player.setSpeed(s)
+                    } label: {
+                        if s == player.speed {
+                            Label(speedText(s), systemImage: "checkmark")
+                        } else {
+                            Text(speedText(s))
+                        }
+                    }
+                }
+            } label: {
+                Text(speedText(player.speed))
+                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    .foregroundStyle(player.speed == 1 ? Color(hex: 0xD4D4D8) : accent)
+                    .frame(width: 52, height: 44)
+            }
+            .accessibilityLabel("Playback speed \(speedText(player.speed))")
+            Spacer()
+            Button { player.skip(by: -15) } label: {
+                Image(systemName: "gobackward.15")
+                    .font(.system(size: 30))
+                    .frame(width: 52, height: 52)
+            }
+            .accessibilityLabel("Back 15 seconds")
+            Spacer()
+            playButton
+            Spacer()
+            Button { player.skip(by: 30) } label: {
+                Image(systemName: "goforward.30")
+                    .font(.system(size: 30))
+                    .frame(width: 52, height: 52)
+            }
+            .accessibilityLabel("Forward 30 seconds")
+            Spacer()
+            Color.clear.frame(width: 52, height: 44)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func speedText(_ s: Double) -> String {
+        s == s.rounded() ? "\(Int(s))×" : String(format: "%g×", s)
     }
 
     private var repeatLabel: String {

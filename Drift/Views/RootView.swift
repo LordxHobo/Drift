@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case home, search, library
+    case home, search, podcasts, library
 }
 
 struct RootView: View {
@@ -20,6 +20,9 @@ struct RootView: View {
                 NavigationStack { SearchView().withRoutes() }
                     .opacity(tab == .search ? 1 : 0)
                     .allowsHitTesting(tab == .search)
+                NavigationStack { PodcastsView().withRoutes() }
+                    .opacity(tab == .podcasts ? 1 : 0)
+                    .allowsHitTesting(tab == .podcasts)
                 NavigationStack { LibraryView().withRoutes() }
                     .opacity(tab == .library ? 1 : 0)
                     .allowsHitTesting(tab == .library)
@@ -46,6 +49,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { LyricsActivity.shared.appBecameActive() }
+            if phase == .background { PodcastStore.shared.flush() }
         }
     }
 }
@@ -57,6 +61,7 @@ struct TabBar: View {
         HStack {
             item(.home, "Home", "house", "house.fill")
             item(.search, "Search", "magnifyingglass", "magnifyingglass")
+            item(.podcasts, "Podcasts", "mic", "mic.fill")
             item(.library, "Library", "books.vertical", "books.vertical.fill")
         }
         .padding(.top, 8)
@@ -116,7 +121,20 @@ struct MiniPlayer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open player, \(t.title) by \(t.artist)")
 
-                LikeButton(track: t, size: 20, inactive: Theme.text)
+                if t.isEpisode {
+                    Button {
+                        player.skip(by: 30)
+                    } label: {
+                        Image(systemName: "goforward.30")
+                            .font(.system(size: 19, weight: .semibold))
+                            .frame(width: 36, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Skip forward 30 seconds")
+                } else {
+                    LikeButton(track: t, size: 20, inactive: Theme.text)
+                }
 
                 Button {
                     player.togglePlay()

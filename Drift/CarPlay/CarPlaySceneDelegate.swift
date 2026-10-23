@@ -9,6 +9,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private let home = CPListTemplate(title: "Home", sections: [])
     private let playlists = CPListTemplate(title: "Playlists", sections: [])
     private let downloads = CPListTemplate(title: "Downloads", sections: [])
+    private let podcasts = CPListTemplate(title: "Podcasts", sections: [])
     private var imageCache: [URL: UIImage] = [:]
 
     nonisolated func templateApplicationScene(_ scene: CPTemplateApplicationScene,
@@ -33,9 +34,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         playlists.tabImage = UIImage(systemName: "music.note.list")
         downloads.tabTitle = "Downloads"
         downloads.tabImage = UIImage(systemName: "arrow.down.circle.fill")
+        podcasts.tabTitle = "Podcasts"
+        podcasts.tabImage = UIImage(systemName: "mic.fill")
         refresh()
 
-        let tabs = CPTabBarTemplate(templates: [home, playlists, downloads])
+        let tabs = CPTabBarTemplate(templates: [home, playlists, podcasts, downloads])
         tabs.delegate = self
         interfaceController.setRootTemplate(tabs, animated: false, completion: nil)
     }
@@ -83,6 +86,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         playlists.emptyViewSubtitleVariants = ["Create playlists on your iPhone"]
 
         downloads.updateSections([CPListSection(items: trackItems(Array(lib.downloaded.prefix(maxItems)), source: "Downloaded"))])
+
+        let store = PodcastStore.shared
+        var podcastSections: [CPListSection] = []
+        let resume = store.continueListening.map(\.track)
+        if !resume.isEmpty {
+            podcastSections.append(CPListSection(items: episodeItems(resume), header: "Continue listening", sectionIndexTitle: nil))
+        }
+        let fresh = Array(store.newEpisodes.prefix(maxItems - resume.count))
+        if !fresh.isEmpty {
+            podcastSections.append(CPListSection(items: episodeItems(fresh), header: "New episodes", sectionIndexTitle: nil))
+        }
+        podcasts.updateSections(podcastSections)
+        podcasts.emptyViewTitleVariants = ["No podcasts"]
+        podcasts.emptyViewSubtitleVariants = ["Follow podcasts on your iPhone"]
         downloads.emptyViewTitleVariants = ["No downloads"]
         downloads.emptyViewSubtitleVariants = ["Download songs on your iPhone to play them offline"]
     }
@@ -98,6 +115,26 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 done()
             }
             loadImage(t.artwork(size: 200), into: item)
+            return item
+        }
+    }
+
+    /// Episodes play on their own (no queue), like in the app.
+    private func episodeItems(_ episodes: [Track]) -> [CPListItem] {
+        let store = PodcastStore.shared
+        let currentID = Player.shared.current?.id
+        return episodes.map { t in
+            var detail = t.artist
+            if let left = store.remaining(t.id) { detail += " · \(formatLength(left)) left" }
+            let item = CPListItem(text: t.title, detailText: detail, image: placeholder())
+            item.isPlaying = t.id == currentID
+            if let f = store.fraction(t.id) { item.playbackProgress = CGFloat(f) }
+            item.handler = { [weak self] _, done in
+                Player.shared.play([t], from: t.artist)
+                self?.showNowPlaying()
+                done()
+            }
+            loadImage(t.artworkURL ?? t.artwork(size: 200), into: item)
             return item
         }
     }
