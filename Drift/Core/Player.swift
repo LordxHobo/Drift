@@ -216,11 +216,13 @@ final class Player {
         }
     }
 
-    func seek(to t: Double) {
+    /// `precise: false` lets AVPlayer land up to half a second later, which starts noticeably sooner.
+    func seek(to t: Double, precise: Bool = true) {
         let target = max(0, duration > 0 ? min(t, duration - 0.5) : t)
         currentTime = target
+        let tolerance = precise ? CMTime.zero : CMTime(seconds: 0.5, preferredTimescale: 600)
         av.seek(to: CMTime(seconds: target, preferredTimescale: 600),
-                toleranceBefore: .zero, toleranceAfter: .zero)
+                toleranceBefore: .zero, toleranceAfter: tolerance)
         updateNowPlaying()
     }
 
@@ -269,6 +271,13 @@ final class Player {
         let resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
         currentTime = resumeAt
 
+        // Skip segments are looked up while the audio link is being found.
+        let segsTask = Task {
+            await SponsorBlock.segments(
+                for: track.id,
+                categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
+        }
+
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -284,12 +293,24 @@ final class Player {
                     url = s.url
                 }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
-                self.start(url, autoplay: autoplay, at: resumeAt)
+
+                // Episode opening with an ad: start right after it instead of playing it and jumping.
+                var startAt = resumeAt
+                var skippedEarly: SkipSegment?
+                if track.isEpisode, AppSettings.shared.skipSponsors,
+                   let early = try? await withTimeout(1.5, { await segsTask.value }),
+                   let seg = early.first(where: { $0.range.lowerBound <= startAt + 2 && $0.range.upperBound > startAt + 1 }) {
+                    startAt = seg.range.upperBound
+                    skippedEarly = seg
+                }
+                guard !Task.isCancelled, self.current?.id == track.id else { return }
+                self.currentTime = startAt
+                self.start(url, autoplay: autoplay, at: startAt)
+                if let seg = skippedEarly {
+                    self.showSkip("Skipped \(seg.label(atStart: true, atEnd: false)) · \(formatTime(seg.range.upperBound - seg.range.lowerBound))")
+                }
                 self.prefetchNext()
 
-                async let segsTask = SponsorBlock.segments(
-                    for: track.id,
-                    categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
                 if track.isEpisode {
                     let ch = await YouTubeSearch.chapters(for: track.id, duration: self.duration)
                     if self.current?.id == track.id, !ch.isEmpty {
@@ -299,8 +320,10 @@ final class Player {
                         self.chapterTick()
                     }
                 }
-                let segs = await segsTask
-                if self.current?.id == track.id { self.segments = segs }
+                let segs = await segsTask.value
+                if self.current?.id == track.id {
+                    self.segments = segs.filter { $0 != skippedEarly && $0.range.upperBound > startAt + 0.5 }
+                }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
                 self.fail(track, error)
@@ -480,7 +503,7 @@ final class Player {
         if atEnd {
             advance(auto: true)
         } else {
-            seek(to: seg.range.upperBound)
+            seek(to: seg.range.upperBound, precise: false)
         }
     }
 

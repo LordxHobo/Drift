@@ -34,9 +34,10 @@ final class LyricsActivity {
                 await a.end(nil, dismissalPolicy: .immediate)
             }
         }
+        // Swiping Drift away: iOS gives only a moment, so wait (briefly) until the activity is really gone.
         NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification,
                                                object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { LyricsActivity.shared.endNow() }
+            LyricsActivity.endAllBlocking()
         }
     }
 
@@ -123,7 +124,29 @@ final class LyricsActivity {
         guard let a = activity else { return }
         activity = nil
         lastSent = nil
-        Task { await a.end(nil, dismissalPolicy: .immediate) }
+        // Keep running long enough to finish, even if Drift is going to the background.
+        var bg = UIBackgroundTaskIdentifier.invalid
+        bg = UIApplication.shared.beginBackgroundTask { UIApplication.shared.endBackgroundTask(bg) }
+        Task {
+            await a.end(nil, dismissalPolicy: .immediate)
+            UIApplication.shared.endBackgroundTask(bg)
+        }
+    }
+
+    /// Drift went to the background with nothing playing: nothing to show on the lock screen.
+    func appWentToBackground(playing: Bool) {
+        if !playing { endNow() }
+    }
+
+    nonisolated static func endAllBlocking() {
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            for a in Activity<LyricsActivityAttributes>.activities {
+                await a.end(nil, dismissalPolicy: .immediate)
+            }
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 2)
     }
 
     // MARK: Internals

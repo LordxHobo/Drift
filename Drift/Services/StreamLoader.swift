@@ -66,9 +66,12 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Se
                     offset = upto
                 }
 
+                // Small first piece so playback (and jumps) start fast, then bigger ones.
+                var size: Int64 = 256_000
                 while offset < end {
                     try Task.checkCancellation()
-                    let last = min(offset + Self.chunk, end) - 1
+                    let last = min(offset + size, end) - 1
+                    size = min(size * 2, Self.chunk)
                     let bytes = try await StreamCache.fetch(realURL, from: offset, to: last)
                     guard !bytes.isEmpty else { break }
                     try Task.checkCancellation()

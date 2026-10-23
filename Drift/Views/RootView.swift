@@ -49,7 +49,10 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { LyricsActivity.shared.appBecameActive() }
-            if phase == .background { PodcastStore.shared.flush() }
+            if phase == .background {
+                PodcastStore.shared.flush()
+                LyricsActivity.shared.appWentToBackground(playing: player.isPlaying)
+            }
         }
     }
 }
