@@ -5,6 +5,8 @@ struct LibraryView: View {
     @State private var newName = ""
     @State private var renaming: Playlist?
     @State private var renameText = ""
+    @State private var showImport = false
+    @State private var openPlaylist: UUID?
     private var library: Library { .shared }
 
     var body: some View {
@@ -14,15 +16,20 @@ struct LibraryView: View {
                     .font(.system(size: 26, weight: .heavy))
                     .tracking(-0.5)
                 Spacer()
-                Button {
-                    newName = ""
-                    showNew = true
+                Menu {
+                    Button {
+                        newName = ""
+                        showNew = true
+                    } label: { Label("New playlist", systemImage: "music.note.list") }
+                    Button {
+                        showImport = true
+                    } label: { Label("Import from Spotify", systemImage: "square.and.arrow.down") }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 20, weight: .semibold))
                         .frame(width: 44, height: 44)
                 }
-                .accessibilityLabel("New playlist")
+                .accessibilityLabel("Add playlist")
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -70,6 +77,12 @@ struct LibraryView: View {
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showImport) {
+            ImportSpotifyView { id in openPlaylist = id }
+        }
+        .navigationDestination(item: $openPlaylist) { id in
+            PlaylistView(kind: .playlist(id))
+        }
         .alert("New playlist", isPresented: $showNew) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) {}

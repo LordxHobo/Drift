@@ -82,6 +82,17 @@ final class Library {
         return p
     }
 
+    /// New playlist with songs already in it (used by the Spotify import).
+    @discardableResult
+    func createPlaylist(_ name: String, tracks: [Track]) -> Playlist {
+        var p = createPlaylist(name)
+        guard let i = playlists.firstIndex(where: { $0.id == p.id }) else { return p }
+        playlists[i].tracks = tracks
+        p = playlists[i]
+        save()
+        return p
+    }
+
     func rename(_ id: UUID, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let i = playlists.firstIndex(where: { $0.id == id }) else { return }

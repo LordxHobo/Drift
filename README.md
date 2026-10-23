@@ -4,6 +4,7 @@ A personal Spotify-style music player for iPhone. Music comes from YouTube Music
 
 - Search YouTube Music (album audio by default, or music videos too)
 - Playlists, Liked songs, Recently played
+- Import public Spotify playlists and albums from a link (first 100 songs, matched on YouTube Music)
 - Downloads for offline playback (whole playlists in one tap)
 - Background playback, lock screen and Control Center controls
 - CarPlay and Bluetooth playback with steering-wheel controls; AirPlay picker in the player
