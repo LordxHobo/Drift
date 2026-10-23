@@ -62,7 +62,7 @@ struct SettingsView: View {
                 }
 
                 section("Accent color") {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 10) {
                         ForEach(Theme.accents.indices, id: \.self) { i in
                             Button {
                                 settings.accentIndex = i
@@ -73,7 +73,7 @@ struct SettingsView: View {
                                     .overlay(Circle().stroke(Theme.text, lineWidth: settings.accentIndex == i ? 3 : 0).padding(-4))
                                     .frame(width: 44, height: 44)
                             }
-                            .accessibilityLabel(["Amber", "Violet", "Coral", "Teal"][i])
+                            .accessibilityLabel(Theme.accentNames[i])
                             .accessibilityAddTraits(settings.accentIndex == i ? .isSelected : [])
                         }
                     }

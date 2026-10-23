@@ -27,12 +27,13 @@ enum Theme {
     static let line = Color(hex: 0x3F3F46)
     static let text = Color(hex: 0xF4F4F5)
     static let muted = Color(hex: 0xA1A1AA)
-    static let onAccent = Color(hex: 0x1A1205)
-    static let miniPlayer = Color(hex: 0x2A1F12)
-    static let playerFallback = Color(hex: 0x2B1408)
+    static let onAccent = Color(hex: 0x0E0E10)
+    static let miniPlayer = Color(hex: 0x16241B)
+    static let playerFallback = Color(hex: 0x1A2B21)
 
-    /// Amber, violet, coral, teal.
-    static let accents: [UInt32] = [0xF5A524, 0x8B7CFF, 0xFF6B5B, 0x2DD4BF]
+    /// Green (matches the icon), amber, violet, coral, teal.
+    static let accents: [UInt32] = [0x1ED760, 0xF5A524, 0x8B7CFF, 0xFF6B5B, 0x2DD4BF]
+    static let accentNames = ["Green", "Amber", "Violet", "Coral", "Teal"]
 
     /// Tile colors for playlists without artwork.
     static let tiles: [UInt32] = [0xC2410C, 0x0F766E, 0x6D28D9, 0xBE185D, 0x1E3A8A, 0x854D0E, 0x14532D, 0x9F1239]

@@ -7,7 +7,7 @@ struct PlaylistView: View {
 
     let kind: Kind
     @Environment(\.dismiss) private var dismiss
-    @State private var headerColor: Color = Color(hex: 0x3A1A0B)
+    @State private var headerColor: Color = Color(hex: 0x1A2B21)
     private var library: Library { .shared }
     private var player: Player { .shared }
     private var downloads: DownloadManager { .shared }
