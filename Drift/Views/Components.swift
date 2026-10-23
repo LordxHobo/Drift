@@ -47,17 +47,42 @@ struct ArtworkView: View {
     }
 }
 
-/// Cover for a playlist: a 2×2 mosaic of its first songs, or a colored tile.
+/// Cover of one of the user's playlists, following its cover settings.
+struct PlaylistArt: View {
+    let playlist: Playlist
+    var size: CGFloat
+    var corner: CGFloat = 4
+
+    var body: some View {
+        PlaylistCover(tracks: playlist.tracks, size: size, color: Theme.tile(playlist.colorIndex),
+                      symbol: playlist.symbol, corner: corner,
+                      forceTile: playlist.style == .color,
+                      photo: Library.shared.coverImage(playlist))
+    }
+}
+
+/// Cover for a playlist: a custom photo, a 2×2 mosaic of its first songs, or a colored tile.
 struct PlaylistCover: View {
     let tracks: [Track]
     var size: CGFloat
     var color: Color
     var symbol: String = "music.note.list"
     var corner: CGFloat = 4
+    var forceTile = false
+    var photo: UIImage? = nil
 
     var body: some View {
         Group {
-            if tracks.count >= 4 {
+            if let photo {
+                Image(uiImage: photo).resizable().scaledToFill()
+            } else if forceTile {
+                ZStack {
+                    color
+                    Image(systemName: symbol)
+                        .font(.system(size: size * 0.38, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+            } else if tracks.count >= 4 {
                 let half = size / 2
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
@@ -163,6 +188,8 @@ struct TrackRow: View {
             }
             .buttonStyle(.plain)
 
+            LikeButton(track: track, size: 17)
+
             Menu {
                 TrackMenuItems(track: track)
             } label: {
@@ -176,6 +203,31 @@ struct TrackRow: View {
         }
         .frame(minHeight: 60)
         .contextMenu { TrackMenuItems(track: track) }
+    }
+}
+
+/// Heart that adds or removes a song from Liked songs in one tap.
+struct LikeButton: View {
+    let track: Track
+    var size: CGFloat = 17
+    var inactive: Color = Theme.muted
+    private var library: Library { .shared }
+
+    var body: some View {
+        let liked = library.isLiked(track.id)
+        Button {
+            library.toggleLike(track)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Image(systemName: liked ? "heart.fill" : "heart")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(liked ? AppSettings.shared.accent : inactive)
+                .frame(width: 36, height: 44)
+                .contentShape(Rectangle())
+                .symbolEffect(.bounce, value: liked)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(liked ? "Remove \(track.title) from Liked songs" : "Like \(track.title)")
     }
 }
 
@@ -242,7 +294,7 @@ struct AddToPlaylistSheet: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            PlaylistCover(tracks: p.tracks, size: 48, color: Theme.tile(p.colorIndex))
+                            PlaylistArt(playlist: p, size: 48)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(p.name).font(.system(size: 15, weight: .semibold))
                                 Text("\(p.tracks.count) songs").font(.system(size: 12)).foregroundStyle(Theme.muted)

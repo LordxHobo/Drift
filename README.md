@@ -3,7 +3,7 @@
 A personal Spotify-style music player for iPhone. Music comes from YouTube Music, played on-device with no server.
 
 - Search YouTube Music (album audio by default, or music videos too)
-- Playlists, Liked songs, Recently played
+- Playlists (rename, custom cover photo or color + icon), Liked songs with one-tap hearts, Recently played
 - Import public Spotify playlists and albums from a link (first 100 songs, matched on YouTube Music)
 - Downloads for offline playback (whole playlists in one tap)
 - Background playback, lock screen and Control Center controls

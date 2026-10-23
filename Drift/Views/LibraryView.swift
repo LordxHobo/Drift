@@ -3,8 +3,7 @@ import SwiftUI
 struct LibraryView: View {
     @State private var showNew = false
     @State private var newName = ""
-    @State private var renaming: Playlist?
-    @State private var renameText = ""
+    @State private var editing: Playlist?
     @State private var showImport = false
     @State private var openPlaylist: UUID?
     private var library: Library { .shared }
@@ -52,15 +51,14 @@ struct LibraryView: View {
                 ForEach(library.playlists) { p in
                     NavigationLink(value: Route.playlist(p.id)) {
                         row(title: p.name, subtitle: "Playlist · \(p.tracks.count) songs") {
-                            PlaylistCover(tracks: p.tracks, size: 64, color: Theme.tile(p.colorIndex), corner: 0)
+                            PlaylistArt(playlist: p, size: 64, corner: 0)
                         }
                     }
                     .listRowBackground(Theme.bg)
                     .contextMenu {
                         Button {
-                            renameText = p.name
-                            renaming = p
-                        } label: { Label("Rename", systemImage: "pencil") }
+                            editing = p
+                        } label: { Label("Edit playlist", systemImage: "pencil") }
                         Button(role: .destructive) {
                             library.deletePlaylist(p.id)
                         } label: { Label("Delete playlist", systemImage: "trash") }
@@ -88,12 +86,8 @@ struct LibraryView: View {
             Button("Cancel", role: .cancel) {}
             Button("Create") { library.createPlaylist(newName) }
         }
-        .alert("Rename playlist", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $renameText)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                if let p = renaming { library.rename(p.id, to: renameText) }
-            }
+        .sheet(item: $editing) { p in
+            EditPlaylistView(playlist: p)
         }
     }
 

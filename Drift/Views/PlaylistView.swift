@@ -8,6 +8,7 @@ struct PlaylistView: View {
     let kind: Kind
     @Environment(\.dismiss) private var dismiss
     @State private var headerColor: Color = Color(hex: 0x1A2B21)
+    @State private var editing: Playlist?
     private var library: Library { .shared }
     private var player: Player { .shared }
     private var downloads: DownloadManager { .shared }
@@ -83,6 +84,23 @@ struct PlaylistView: View {
             ToolbarItem(placement: .principal) {
                 Text(title).font(.system(size: 15, weight: .bold))
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                if case .playlist(let id) = kind {
+                    Button {
+                        editing = library.playlist(id)
+                    } label: {
+                        Text("Edit").font(.system(size: 15, weight: .semibold))
+                    }
+                    .accessibilityLabel("Edit playlist")
+                }
+            }
+        }
+        .sheet(item: $editing) { p in
+            EditPlaylistView(playlist: p)
+        }
+        .onChange(of: library.playlists.count) { _, _ in
+            // Playlist deleted from the edit sheet: go back to the library.
+            if case .playlist(let id) = kind, library.playlist(id) == nil { dismiss() }
         }
         .task(id: tracks.first?.id) {
             if let first = tracks.first, let c = await ArtworkPalette.color(for: first.artwork(size: 200)) {
@@ -107,7 +125,13 @@ struct PlaylistView: View {
         let downloading = tracks.contains { downloads.isActive($0.id) }
 
         return VStack(alignment: .leading, spacing: 16) {
-            PlaylistCover(tracks: tracks, size: 200, color: tileColor, symbol: symbol, corner: 6)
+            Group {
+                if case .playlist(let id) = kind, let p = library.playlist(id) {
+                    PlaylistArt(playlist: p, size: 200, corner: 6)
+                } else {
+                    PlaylistCover(tracks: tracks, size: 200, color: tileColor, symbol: symbol, corner: 6)
+                }
+            }
                 .shadow(color: .black.opacity(0.5), radius: 20, y: 12)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 12)

@@ -116,6 +116,8 @@ struct MiniPlayer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open player, \(t.title) by \(t.artist)")
 
+                LikeButton(track: t, size: 20, inactive: Theme.text)
+
                 Button {
                     player.togglePlay()
                 } label: {

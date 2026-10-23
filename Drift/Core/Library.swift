@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Observation
 
 /// Playlists, liked songs, recently played and downloads, saved as JSON on the phone.
@@ -101,8 +102,74 @@ final class Library {
     }
 
     func deletePlaylist(_ id: UUID) {
+        if let file = playlist(id)?.coverFile { try? FileManager.default.removeItem(at: coversDirectory.appending(path: file)) }
         playlists.removeAll { $0.id == id }
         save()
+    }
+
+    // MARK: Playlist covers
+
+    @ObservationIgnored let coversDirectory = URL.documentsDirectory.appending(path: "Covers", directoryHint: .isDirectory)
+    @ObservationIgnored private var coverCache: [String: UIImage] = [:]
+
+    /// The custom photo for a playlist, if it uses one.
+    func coverImage(_ p: Playlist) -> UIImage? {
+        guard p.style == .photo, let file = p.coverFile else { return nil }
+        if let cached = coverCache[file] { return cached }
+        guard let image = UIImage(contentsOfFile: coversDirectory.appending(path: file).path) else { return nil }
+        coverCache[file] = image
+        return image
+    }
+
+    /// Saves name and cover in one go. `photo` replaces the custom photo when given.
+    func updatePlaylist(_ id: UUID, name: String, style: Playlist.CoverStyle, colorIndex: Int,
+                        symbol: String, photo: UIImage?) {
+        guard let i = playlists.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { playlists[i].name = trimmed }
+        playlists[i].colorIndex = colorIndex
+        playlists[i].coverSymbol = symbol
+
+        if let photo, let data = Self.squareJPEG(photo) {
+            try? FileManager.default.createDirectory(at: coversDirectory, withIntermediateDirectories: true)
+            // New file name every time so every screen picks up the new photo.
+            let file = "\(id.uuidString)-\(Int(Date().timeIntervalSince1970)).jpg"
+            if (try? data.write(to: coversDirectory.appending(path: file), options: .atomic)) != nil {
+                if let old = playlists[i].coverFile {
+                    try? FileManager.default.removeItem(at: coversDirectory.appending(path: old))
+                    coverCache[old] = nil
+                }
+                playlists[i].coverFile = file
+            }
+        }
+        if style == .photo && playlists[i].coverFile == nil {
+            playlists[i].coverStyle = .auto
+        } else {
+            playlists[i].coverStyle = style
+        }
+        // Drop a photo that's no longer used.
+        if playlists[i].coverStyle != .photo, let old = playlists[i].coverFile {
+            try? FileManager.default.removeItem(at: coversDirectory.appending(path: old))
+            coverCache[old] = nil
+            playlists[i].coverFile = nil
+        }
+        save()
+    }
+
+    /// Center-cropped 600×600 JPEG.
+    private static func squareJPEG(_ image: UIImage) -> Data? {
+        let side = min(image.size.width, image.size.height)
+        guard side > 0 else { return nil }
+        let target = CGSize(width: 600, height: 600)
+        let scale = target.width / side
+        let drawSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let out = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(x: (target.width - drawSize.width) / 2, y: (target.height - drawSize.height) / 2,
+                                  width: drawSize.width, height: drawSize.height))
+        }
+        return out.jpegData(compressionQuality: 0.85)
     }
 
     func add(_ t: Track, to id: UUID) {

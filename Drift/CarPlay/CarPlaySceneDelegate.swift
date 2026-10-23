@@ -64,9 +64,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         let playlistItems: [CPListItem] = lib.playlists.prefix(maxItems).map { p in
             let item = CPListItem(text: p.name, detailText: "\(p.tracks.count) songs",
-                                  image: symbolImage("music.note.list", UIColor(hex: Theme.tiles[p.colorIndex % Theme.tiles.count])))
+                                  image: symbolImage(p.symbol, UIColor(hex: Theme.tiles[abs(p.colorIndex) % Theme.tiles.count])))
             item.accessoryType = .disclosureIndicator
-            if let first = p.tracks.first { loadImage(first.artwork(size: 200), into: item) }
+            if let photo = lib.coverImage(p) {
+                item.setImage(photo)
+            } else if p.style != .color, let first = p.tracks.first {
+                loadImage(first.artwork(size: 200), into: item)
+            }
             let id = p.id
             item.handler = { [weak self] _, done in
                 if let p = Library.shared.playlist(id) { self?.pushTracks(title: p.name, tracks: p.tracks) }

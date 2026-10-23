@@ -34,6 +34,19 @@ struct Playlist: Codable, Hashable, Identifiable {
     var name: String
     var tracks: [Track] = []
     var colorIndex: Int = 0
+    /// How the cover is drawn. nil = automatic (artwork of the first songs).
+    var coverStyle: CoverStyle?
+    /// SF Symbol shown on a color cover.
+    var coverSymbol: String?
+    /// File name of a custom photo in Documents/Covers.
+    var coverFile: String?
+
+    enum CoverStyle: String, Codable {
+        case auto, color, photo
+    }
+
+    var style: CoverStyle { coverStyle ?? .auto }
+    var symbol: String { coverSymbol ?? "music.note.list" }
 }
 
 func formatTime(_ t: Double) -> String {

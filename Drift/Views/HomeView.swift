@@ -42,7 +42,7 @@ struct HomeView: View {
                     ForEach(library.playlists.prefix(4)) { p in
                         NavigationLink(value: Route.playlist(p.id)) {
                             QuickTile(title: p.name) {
-                                PlaylistCover(tracks: p.tracks, size: 56, color: Theme.tile(p.colorIndex), corner: 0)
+                                PlaylistArt(playlist: p, size: 56, corner: 0)
                             }
                         }
                     }
