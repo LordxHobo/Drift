@@ -1,4 +1,4 @@
-# Nightjar
+# Drift
 
 A personal Spotify-style music player for iPhone. Music comes from YouTube Music, played on-device with no server.
 
@@ -14,21 +14,21 @@ A personal Spotify-style music player for iPhone. Music comes from YouTube Music
 ## Build
 
 GitHub Actions builds an unsigned IPA on every push to `main` (`.github/workflows/build.yml`).
-Download the **nightjar-ios** artifact from the run and install `nightjar-unsigned.ipa` with Sideloadly or AltStore.
+Download the **drift-ios** artifact from the run and install `drift-unsigned.ipa` with Sideloadly or AltStore.
 
 The Xcode project is generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen) from `project.yml`.
 
 ## CarPlay
 
-Audio always plays through CarPlay with Now Playing info and controls. Nightjar's own CarPlay screens
+Audio always plays through CarPlay with Now Playing info and controls. Drift's own CarPlay screens
 (Home / Playlists / Downloads) need Apple's `com.apple.developer.carplay-audio` entitlement, which a free
 or sideloading Apple ID can't sign. If you ever get that entitlement on a paid developer account, add it
-to an entitlements file and the CarPlay screens in `Nightjar/CarPlay` start working.
+to an entitlements file and the CarPlay screens in `Drift/CarPlay` start working.
 
 ## Layout
 
 ```
-Nightjar/
+Drift/
   App/        app entry
   Core/       models, library storage, player, downloads, settings, theme
   Services/   YouTube Music search, stream extraction (YouTubeKit), lyrics, SponsorBlock

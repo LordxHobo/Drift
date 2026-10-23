@@ -79,7 +79,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Nightjar \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+                Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)

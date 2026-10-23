@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct NightjarApp: App {
+struct DriftApp: App {
     init() {
         Player.shared.configureAudioSession()
         // Make sure the library is loaded before the first screen.

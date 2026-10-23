@@ -18,7 +18,7 @@ actor LyricsService {
     private var cache: [String: LyricsResult] = [:]
     private let session: URLSession = {
         let c = URLSessionConfiguration.default
-        c.httpAdditionalHeaders = ["User-Agent": "Nightjar/1.0 (personal iOS music player)"]
+        c.httpAdditionalHeaders = ["User-Agent": "Drift/1.0 (personal iOS music player)"]
         c.timeoutIntervalForRequest = 15
         return URLSession(configuration: c)
     }()
