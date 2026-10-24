@@ -1,0 +1,47 @@
+# Free alternative builder: Codemagic (500 macOS minutes/month for personal accounts).
+# Builds the same unsigned IPA as the GitHub workflow on every push to main.
+workflows:
+  drift-ios:
+    name: Drift iOS (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Generate Xcode project
+        script: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build
+        script: |
+          set -eo pipefail
+          # +1000 so these build numbers are always higher than the GitHub ones (SideStore updates properly).
+          xcodebuild \
+            -project Drift.xcodeproj \
+            -scheme Drift \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=$((BUILD_NUMBER + 1000)) \
+            build > build.log 2>&1 || { grep -E "error:" -A3 build.log | head -120; exit 1; }
+          test -f build/Build/Products/Release-iphoneos/Drift.app/Info.plist
+          test -f build/Build/Products/Release-iphoneos/Drift.app/Drift
+      - name: Package IPA
+        script: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Drift.app Payload/
+          zip -qry drift-unsigned.ipa Payload
+    artifacts:
+      - drift-unsigned.ipa
