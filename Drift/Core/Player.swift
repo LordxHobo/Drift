@@ -76,6 +76,7 @@ final class Player {
                 guard let self else { return }
                 self.isPlaying = status != .paused
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
+                if status == .playing { self.watchdog?.cancel() }
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
                 if status == .paused, let t = self.current, t.isEpisode, self.currentTime > 0 {
@@ -389,13 +390,17 @@ final class Player {
             isBuffering = false
         }
 
-        // If the audio hasn't started after 12 s, try a fresh link once, then give up with a message.
+        // Audio not playing 6 s after asking: switch to a fresh link (full extraction).
+        // The second link gets 15 s before Drift gives up with a message.
         watchdog?.cancel()
+        guard autoplay else { return }
         let id = current?.id
+        let wait: Double = retried ? 15 : 6
         watchdog = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(12))
+            try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled, let self, self.current?.id == id, item === self.av.currentItem,
-                  item.status != .readyToPlay else { return }
+                  self.av.timeControlStatus != .playing, self.av.rate != 0 || item.status != .readyToPlay
+            else { return }
             if self.retried, let t = self.current {
                 self.fail(t, TimeoutError())
             } else {
@@ -408,7 +413,6 @@ final class Player {
         guard item === av.currentItem else { return }
         switch status {
         case .readyToPlay:
-            watchdog?.cancel()
             let d = item.duration.seconds
             if d.isFinite, d > 0 { duration = d }
             updateNowPlaying()

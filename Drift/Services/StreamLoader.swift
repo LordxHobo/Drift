@@ -142,14 +142,9 @@ actor StreamCache {
         return total
     }
 
+    /// Only what's already downloaded: playback never waits on a pre-load still in progress.
     func head(of url: URL) async -> Data? {
-        if let h = heads[url] { return h }
-        // Being fetched right now: wait for it rather than downloading it twice.
-        if let w = warming[url] {
-            await w.value
-            return heads[url]
-        }
-        return nil
+        heads[url]
     }
 
     /// Fetch the opening bytes so playback can start the moment it's asked to.
@@ -158,7 +153,9 @@ actor StreamCache {
         warming[url] = Task {
             do {
                 let total = try await self.length(of: url)
-                let data = try await Self.fetch(url, from: 0, to: min(Self.headSize, total) - 1)
+                let data = try await withTimeout(8) {
+                    try await Self.fetch(url, from: 0, to: min(Self.headSize, total) - 1)
+                }
                 self.store(url, data)
             } catch {}
             self.doneWarming(url)

@@ -21,10 +21,30 @@ actor StreamResolver {
     /// Videos whose quick link didn't work: always use the full extraction for these.
     private var quickFailed: Set<String> = []
     private var visitorData: String?
+    private var warmUpTask: Task<Void, Never>?
+
+    /// Called at launch: get a YouTube visitor ID so even the first song gets a proper link.
+    func warmUp() {
+        guard visitorData == nil, warmUpTask == nil else { return }
+        warmUpTask = Task {
+            // Any public video works; YouTube's very first upload.
+            if let r = try? await withTimeout(5, { try await Self.quickResolve("jNQXAC9IVRw", dataSaver: true, visitorData: nil) }) {
+                self.setVisitor(r.visitorData)
+            }
+        }
+    }
+
+    private func setVisitor(_ v: String?) {
+        if let v { visitorData = v }
+    }
 
     func resolve(_ videoID: String, dataSaver: Bool) async throws -> ResolvedStream {
         let key = videoID + (dataSaver ? "#low" : "#best")
         if let entry = cache[key], entry.1 > Date() { return entry.0 }
+        if visitorData == nil {
+            warmUp()
+            await warmUpTask?.value
+        }
 
         // Quick path: one request, no web page or decoding (about 0.3 s instead of 1.5–2 s).
         if !quickFailed.contains(videoID),
