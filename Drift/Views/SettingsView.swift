@@ -27,6 +27,9 @@ struct SettingsView: View {
                     toggle("Skip non-music segments",
                            "Jumps past intros, outros and talking in music videos using community-marked timestamps (SponsorBlock).",
                            $settings.skipNonMusic)
+                    toggle("Skip silence at the end",
+                           "Moves to the next song when a song goes silent for several seconds in its second half (hidden tracks, long dead air).",
+                           $settings.skipSilence)
                     toggle("Prefer official audio",
                            "Search returns album versions instead of music videos.",
                            $settings.preferOfficialAudio)

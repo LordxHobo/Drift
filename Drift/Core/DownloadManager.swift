@@ -40,7 +40,13 @@ final class DownloadManager {
         let t = queue.removeFirst()
         Task {
             do {
-                try await fetch(t)
+                do {
+                    try await fetch(t)
+                } catch {
+                    // Link may have stopped working: get a fresh one and try once more.
+                    await StreamResolver.shared.invalidate(t.id)
+                    try await fetch(t)
+                }
                 Library.shared.markDownloaded(t)
             } catch {
                 failed.insert(t.id)

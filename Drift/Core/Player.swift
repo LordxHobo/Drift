@@ -58,6 +58,8 @@ final class Player {
     @ObservationIgnored private var watchdog: Task<Void, Never>?
     /// Keeps the current stream loader alive (AVFoundation only holds it weakly).
     @ObservationIgnored private var loader: StreamLoader?
+    @ObservationIgnored private var meter: LevelMeter?
+    @ObservationIgnored private var silentSince: Double?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
 
@@ -361,6 +363,21 @@ final class Player {
 
         av.replaceCurrentItem(with: item)
         av.defaultRate = effectiveRate
+
+        // Songs: listen for dead air at the end (hidden tracks, long silences).
+        meter = nil
+        silentSince = nil
+        if let t = current, !t.isEpisode {
+            Task { [weak self] in
+                guard let audio = try? await item.asset.loadTracks(withMediaType: .audio).first,
+                      let self, item === self.av.currentItem else { return }
+                let m = LevelMeter()
+                if let mix = SilenceDetector.audioMix(for: audio, meter: m) {
+                    item.audioMix = mix
+                    self.meter = m
+                }
+            }
+        }
         if time > 0 {
             av.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         }
@@ -489,6 +506,7 @@ final class Player {
             updateNowPlaying()
         }
         chapterTick()
+        if checkSilence(at: t) { return }
         if let cur = current, cur.isEpisode, duration > 0, abs(t - lastProgressReport) >= 5 {
             lastProgressReport = t
             PodcastStore.shared.update(cur, position: t, duration: duration)
@@ -505,6 +523,29 @@ final class Player {
         } else {
             seek(to: seg.range.upperBound, precise: false)
         }
+    }
+
+    /// 6 s of near-total silence in the second half of a song (with more left): move on.
+    private func checkSilence(at t: Double) -> Bool {
+        guard let m = meter, !isEpisode, AppSettings.shared.skipSilence, isPlaying, !isBuffering,
+              duration > 60, t > duration * 0.5, duration - t > 8 else {
+            silentSince = nil
+            return false
+        }
+        guard m.peak < 0.002 else {
+            silentSince = nil
+            return false
+        }
+        guard let since = silentSince else {
+            silentSince = t
+            return false
+        }
+        guard t - since >= 6 else { return false }
+        silentSince = nil
+        meter = nil
+        showSkip("Skipped \(formatTime(duration - since)) of silence")
+        advance(auto: true)
+        return true
     }
 
     /// Chapter changed: refresh lock screen / CarPlay info and the Live Activity.

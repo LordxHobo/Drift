@@ -16,6 +16,8 @@ final class AppSettings {
     var preferOfficialAudio: Bool { didSet { defaults.set(preferOfficialAudio, forKey: "preferOfficialAudio") } }
     var downloadOverCellular: Bool { didSet { defaults.set(downloadOverCellular, forKey: "downloadOverCellular") } }
     /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
+    /// Move on when a song ends in a long stretch of silence.
+    var skipSilence: Bool { didSet { defaults.set(skipSilence, forKey: "skipSilence") } }
     var lyricsLiveActivity: Bool { didSet { defaults.set(lyricsLiveActivity, forKey: "lyricsLiveActivity") } }
     /// Skip sponsor reads, self-promotion and subscribe reminders in podcasts (SponsorBlock).
     var skipSponsors: Bool { didSet { defaults.set(skipSponsors, forKey: "skipSponsors") } }
@@ -29,6 +31,7 @@ final class AppSettings {
         preferOfficialAudio = d.object(forKey: "preferOfficialAudio") as? Bool ?? true
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")
         lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
+        skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
     }
