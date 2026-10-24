@@ -59,6 +59,8 @@ final class Player {
     /// Keeps the current stream loader alive (AVFoundation only holds it weakly).
     @ObservationIgnored private var loader: StreamLoader?
     @ObservationIgnored private var meter: LevelMeter?
+    /// Real length from YouTube. Wins over what iOS reads from the file, which is often minutes too long.
+    @ObservationIgnored private var knownDuration: Double?
     @ObservationIgnored private var silentSince: Double?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
@@ -260,6 +262,8 @@ final class Player {
         watchdog?.cancel()
         currentTime = 0
         duration = track.duration ?? 0
+        // Search results give whole seconds: allow a moment so the last note isn't cut.
+        knownDuration = track.duration.map { $0 + 1 }
         segments = []
         retried = false
         isBuffering = true
@@ -293,6 +297,10 @@ final class Player {
                         try await StreamResolver.shared.resolve(track.id, dataSaver: low)
                     }
                     self.qualityLabel = s.label
+                    if let d = s.duration, d > 0 {
+                        self.knownDuration = d
+                        self.duration = d
+                    }
                     url = s.url
                 }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -414,7 +422,7 @@ final class Player {
         switch status {
         case .readyToPlay:
             let d = item.duration.seconds
-            if d.isFinite, d > 0 { duration = d }
+            if knownDuration == nil, d.isFinite, d > 0 { duration = d }
             updateNowPlaying()
         case .failed:
             recover()
@@ -443,6 +451,10 @@ final class Player {
                     }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
                 self.qualityLabel = s.label
+                    if let d = s.duration, d > 0 {
+                        self.knownDuration = d
+                        self.duration = d
+                    }
                 self.start(s.url, autoplay: wasPlaying, at: resumeAt)
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -505,9 +517,15 @@ final class Player {
         guard t.isFinite, av.currentItem != nil else { return }
         currentTime = t
         LyricsActivity.shared.tick(t)
-        if let d = av.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duration) > 0.5 {
+        if knownDuration == nil, let d = av.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duration) > 0.5 {
             duration = d
             updateNowPlaying()
+        }
+        // Song is over at its real length, even if iOS thinks the file runs longer.
+        if let k = knownDuration, t >= k - 0.15, isPlaying {
+            knownDuration = nil
+            advance(auto: true)
+            return
         }
         chapterTick()
         if checkSilence(at: t) { return }

@@ -4,6 +4,8 @@ import YouTubeKit
 struct ResolvedStream {
     let url: URL
     let label: String   // e.g. "AAC · 128 kbps"
+    /// Exact length from YouTube, when known (iOS can misread it from these files).
+    var duration: Double? = nil
 }
 
 struct TimeoutError: Error {}
@@ -155,7 +157,10 @@ actor StreamResolver {
               let s = pick["url"] as? String, let url = URL(string: s) else { throw StreamError.noAudio }
         let kbps = rate(pick) / 1000
         let visitor = (json["responseContext"] as? [String: Any])?["visitorData"] as? String
-        return QuickResult(stream: ResolvedStream(url: url, label: kbps > 0 ? "AAC · \(kbps) kbps" : "AAC"),
+        var length = (pick["approxDurationMs"] as? String).flatMap(Double.init).map { $0 / 1000 }
+        if length == nil, let secs = (details["lengthSeconds"] as? String).flatMap(Double.init), secs > 0 { length = secs }
+        return QuickResult(stream: ResolvedStream(url: url, label: kbps > 0 ? "AAC · \(kbps) kbps" : "AAC",
+                                                  duration: length),
                            visitorData: visitor)
     }
 
