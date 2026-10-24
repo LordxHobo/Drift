@@ -20,7 +20,7 @@ jobs:
 
       - name: Build (unsigned)
         run: |
-          set -o pipefail
+          status=0
           xcodebuild \
             -project Drift.xcodeproj \
             -scheme Drift \
@@ -33,12 +33,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build | tee build.log | grep -E "error:|warning: .*Drift/|\*\* BUILD" || true
-          test -d build/Build/Products/Release-iphoneos/Drift.app
+            build > build.log 2>&1 || status=$?
+          grep -E "\*\* BUILD" build.log || true
+          # Fail (red) on any compile error, and never package a half-built app.
+          if [ "$status" -ne 0 ] || ! grep -q "BUILD SUCCEEDED" build.log; then
+            echo "Build failed"
+            exit 1
+          fi
+          test -f build/Build/Products/Release-iphoneos/Drift.app/Info.plist
+          test -f build/Build/Products/Release-iphoneos/Drift.app/Drift
 
       - name: Show errors
         if: failure()
-        run: grep -E "error:" -A3 build.log | head -100 || true
+        run: grep -E "error:" -A3 build.log | grep -v "^--$" | head -120 || true
 
       - name: Package IPA
         run: |
