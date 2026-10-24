@@ -349,6 +349,7 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             } else {
@@ -363,11 +364,13 @@ struct ProfileView: View {
                         .frame(minHeight: 46)
                         .background(accent, in: Capsule())
                 }
+                .frame(maxWidth: .infinity)
                 .padding(32)
                 .padding(.top, 60)
             }
         }
-        .background(Theme.bg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
@@ -596,10 +599,12 @@ struct UserView: View {
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .background(Theme.bg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
         .task {

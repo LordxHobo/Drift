@@ -2,7 +2,6 @@ import Foundation
 
 /// Search through YouTube Music's own web API (the one music.youtube.com uses).
 enum YTMusic {
-    private static let endpoint = URL(string: "https://music.youtube.com/youtubei/v1/search?prettyPrint=false")!
     static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
 
     /// "Songs" filter: album/official audio only.
@@ -17,29 +16,31 @@ enum YTMusic {
         return "1.\(f.string(from: Date())).01.00"
     }
 
-    static func search(_ query: String, songsOnly: Bool) async throws -> [Track] {
-        var req = URLRequest(url: endpoint)
+    /// "Artists" filter.
+    private static let artistsParams = "EgWKAQIgAWoMEA4QChADEAQQCRAF"
+
+    /// Calls one of YouTube Music's endpoints ("search", "browse").
+    static func post(_ endpoint: String, _ fields: [String: Any]) async throws -> Any {
+        var req = URLRequest(url: URL(string: "https://music.youtube.com/youtubei/v1/\(endpoint)?prettyPrint=false")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("https://music.youtube.com", forHTTPHeaderField: "Origin")
         req.setValue("https://music.youtube.com/", forHTTPHeaderField: "Referer")
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        var body: [String: Any] = [
-            "context": ["client": [
-                "clientName": "WEB_REMIX",
-                "clientVersion": clientVersion,
-                "hl": "en",
-            ]],
-            "query": query,
-        ]
-        if songsOnly { body["params"] = songsParams }
+        var body = fields
+        body["context"] = ["client": ["clientName": "WEB_REMIX", "clientVersion": clientVersion, "hl": "en"]]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
-        let json = try JSONSerialization.jsonObject(with: data)
+        return try JSONSerialization.jsonObject(with: data)
+    }
+
+    static func search(_ query: String, songsOnly: Bool) async throws -> [Track] {
+        var fields: [String: Any] = ["query": query]
+        if songsOnly { fields["params"] = songsParams }
+        let json = try await post("search", fields)
 
         var out: [Track] = []
         var seen = Set<String>()
@@ -51,7 +52,7 @@ enum YTMusic {
 
     // MARK: JSON walking
 
-    private static func collect(_ node: Any, _ found: ([String: Any]) -> Void) {
+    static func collect(_ node: Any, _ found: ([String: Any]) -> Void) {
         if let d = node as? [String: Any] {
             if let r = d["musicResponsiveListItemRenderer"] as? [String: Any] {
                 found(r)
@@ -73,7 +74,7 @@ enum YTMusic {
         return nil
     }
 
-    private static func texts(_ column: Any?, renderer: String) -> [String] {
+    static func texts(_ column: Any?, renderer: String) -> [String] {
         guard let c = column as? [String: Any],
               let r = c[renderer] as? [String: Any],
               let text = r["text"] as? [String: Any],
@@ -81,7 +82,8 @@ enum YTMusic {
         return runs.compactMap { $0["text"] as? String }
     }
 
-    private static func parse(_ r: [String: Any]) -> Track? {
+    /// `requireDuration: false` for artist and album pages, where songs can come without a length.
+    static func parse(_ r: [String: Any], requireDuration: Bool = true) -> Track? {
         guard let cols = r["flexColumns"] as? [Any], let first = cols.first else { return nil }
         let videoID = ((r["playlistItemData"] as? [String: Any])?["videoId"] as? String) ?? firstVideoID(first)
         guard let videoID else { return nil }
@@ -104,7 +106,7 @@ enum YTMusic {
             duration = parseDuration(texts(fixed, renderer: "musicResponsiveListItemFixedColumnRenderer").joined())
         }
         // Artists, albums and playlists have no duration; only keep playable songs/videos.
-        guard duration != nil else { return nil }
+        guard duration != nil || !requireDuration else { return nil }
 
         let artist = parts.first ?? ""
         let album = parts.count > 1 && !parts[1].lowercased().contains("view") && !parts[1].lowercased().contains("play")

@@ -8,6 +8,7 @@ struct SearchView: View {
     @State private var query = ""
     @State private var mode: Mode = .songs
     @State private var results: [Track] = []
+    @State private var topArtist: ArtistRef?
     @State private var channels: [PodcastChannel] = []
     @State private var episodes: [Track] = []
     @State private var loading = false
@@ -119,6 +120,26 @@ struct SearchView: View {
 
     private var songList: some View {
         List {
+            if let a = topArtist {
+                NavigationLink(value: Route.artist(a)) {
+                    HStack(spacing: 14) {
+                        AsyncImage(url: resizedImage(a.thumbnail, size: 200)) { phase in
+                            if let img = phase.image { img.resizable().scaledToFill() } else { Theme.tile(seed: a.name) }
+                        }
+                        .frame(width: 64, height: 64)
+                        .clipShape(Circle())
+                        .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(a.name).font(.system(size: 17, weight: .bold)).lineLimit(1)
+                            Text("Artist").font(.system(size: 13)).foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .listRowBackground(Theme.bg)
+                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 16))
+                .listRowSeparator(.hidden)
+            }
             ForEach(Array(results.enumerated()), id: \.element.id) { i, t in
                 TrackRow(track: t) {
                     focused = false
@@ -194,7 +215,7 @@ struct SearchView: View {
     private func search() async {
         let q = trimmed
         guard q.count >= 2 else {
-            results = []; channels = []; episodes = []
+            results = []; channels = []; episodes = []; topArtist = nil
             error = nil
             return
         }
@@ -208,9 +229,13 @@ struct SearchView: View {
         do {
             switch mode {
             case .songs:
+                // Songs and artists at the same time; an artist whose name matches goes on top.
+                async let artistsTask = try? Artists.search(q)
                 let found = try await YTMusic.search(q, songsOnly: settings.preferOfficialAudio)
+                let artists = await artistsTask ?? []
                 guard !Task.isCancelled else { return }
                 results = found
+                topArtist = Artists.bestMatch(artists, for: q)
                 player.prefetch(Array(found.prefix(2)))
             case .podcasts:
                 if isLink {
