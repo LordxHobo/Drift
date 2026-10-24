@@ -270,9 +270,8 @@ final class Player {
     private func load(autoplay: Bool = true) {
         guard let track = current else { return }
         loadTask?.cancel()
-        av.pause()
+        detachItem()
         errorMessage = nil
-        watchdog?.cancel()
         currentTime = 0
         duration = track.duration ?? 0
         // Search results give whole seconds: allow a moment so the last note isn't cut.
@@ -355,6 +354,20 @@ final class Player {
         }
     }
 
+    /// Fully unloads the previous song: it can't play another note, and its events
+    /// (finished, failed, time updates) can no longer affect the song that's loading.
+    private func detachItem() {
+        watchdog?.cancel()
+        itemObservers.removeAll()
+        itemNotifications.forEach { NotificationCenter.default.removeObserver($0) }
+        itemNotifications.removeAll()
+        av.pause()
+        av.replaceCurrentItem(with: nil)
+        loader = nil
+        meter = nil
+        silentSince = nil
+    }
+
     private func start(_ url: URL, autoplay: Bool, at time: Double = 0) {
         itemObservers.removeAll()
         itemNotifications.forEach { NotificationCenter.default.removeObserver($0) }
@@ -376,11 +389,17 @@ final class Player {
             Task { @MainActor in self?.itemStatusChanged(item, status: status) }
         })
         let center = NotificationCenter.default
-        itemNotifications.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.advance(auto: true) }
+        itemNotifications.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self, weak item] _ in
+            MainActor.assumeIsolated {
+                guard let self, let item, item === self.av.currentItem else { return }
+                self.advance(auto: true)
+            }
         })
-        itemNotifications.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.recover() }
+        itemNotifications.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self, weak item] _ in
+            MainActor.assumeIsolated {
+                guard let self, let item, item === self.av.currentItem else { return }
+                self.recover()
+            }
         })
 
         av.replaceCurrentItem(with: item)
