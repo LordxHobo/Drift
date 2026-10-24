@@ -38,12 +38,12 @@ enum SilenceDetector {
                 meter.peak = peak
             }
         )
-        var tap: MTAudioProcessingTap?
+        var tap: Unmanaged<MTAudioProcessingTap>?
         guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
                                          kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr,
               let tap else { return nil }
         let params = AVMutableAudioMixInputParameters(track: track)
-        params.audioTapProcessor = tap
+        params.audioTapProcessor = tap.takeRetainedValue()
         let mix = AVMutableAudioMix()
         mix.inputParameters = [params]
         return mix
