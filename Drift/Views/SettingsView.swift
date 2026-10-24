@@ -111,7 +111,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+                Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)
