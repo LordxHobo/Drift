@@ -38,12 +38,22 @@ enum SilenceDetector {
                 meter.peak = peak
             }
         )
+        // Xcode 26 (Codemagic) and Xcode 16 (GitHub) declare this function differently.
+        #if compiler(>=6.2)
+        var tap: MTAudioProcessingTap?
+        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
+                                         kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr,
+              let tap else { return nil }
+        let processor = tap
+        #else
         var tap: Unmanaged<MTAudioProcessingTap>?
         guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
                                          kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr,
               let tap else { return nil }
+        let processor = tap.takeRetainedValue()
+        #endif
         let params = AVMutableAudioMixInputParameters(track: track)
-        params.audioTapProcessor = tap.takeRetainedValue()
+        params.audioTapProcessor = processor
         let mix = AVMutableAudioMix()
         mix.inputParameters = [params]
         return mix
