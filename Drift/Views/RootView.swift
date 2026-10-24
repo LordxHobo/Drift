@@ -94,6 +94,18 @@ struct TabBar: View {
 
 struct MiniPlayer: View {
     var open: () -> Void
+    @State private var swipe: CGFloat = 0
+
+    /// Current song slides out one side, the new one slides in from the other.
+    private func slide(out x: CGFloat, change: @escaping () -> Void) {
+        withAnimation(.easeIn(duration: 0.15)) { swipe = x } completion: {
+            change()
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) { swipe = -x }
+            withAnimation(.easeOut(duration: 0.2)) { swipe = 0 }
+        }
+    }
     private var player: Player { .shared }
     private var accent: Color { AppSettings.shared.accent }
 
@@ -103,6 +115,7 @@ struct MiniPlayer: View {
                 Button(action: open) {
                     HStack(spacing: 10) {
                         ArtworkView(url: t.artwork(size: 120), size: 44, corner: 5, seed: t.id)
+                            .offset(x: swipe)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(t.title)
                                 .font(.system(size: 13, weight: .bold))
@@ -117,9 +130,11 @@ struct MiniPlayer: View {
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.muted)
                         }
+                        .offset(x: swipe)
                         Spacer(minLength: 0)
                     }
                     .contentShape(Rectangle())
+                    .clipped()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open player, \(t.title) by \(t.artist)")
@@ -168,10 +183,18 @@ struct MiniPlayer: View {
                 .frame(height: 2)
                 .padding(.horizontal, 8)
             }
-            .gesture(DragGesture(minimumDistance: 30).onEnded { v in
-                if v.translation.width < -60 { player.next() }
-                else if v.translation.width > 60 { player.previous() }
-                else if v.translation.height < -30 { open() }
+            .gesture(DragGesture(minimumDistance: 12).onChanged { v in
+                if abs(v.translation.width) > abs(v.translation.height) { swipe = v.translation.width }
+            }.onEnded { v in
+                let x = v.predictedEndTranslation.width
+                if x < -80, player.nextInQueue != nil {
+                    slide(out: -360) { player.next() }
+                } else if x > 80, player.previousInQueue != nil {
+                    slide(out: 360) { player.skipToPrevious() }
+                } else {
+                    withAnimation(.spring(duration: 0.3)) { swipe = 0 }
+                    if v.translation.height < -30 { open() }
+                }
             })
         }
     }

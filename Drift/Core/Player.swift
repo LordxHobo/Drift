@@ -32,6 +32,12 @@ final class Player {
     static let speeds: [Double] = [0.75, 1, 1.25, 1.5, 1.75, 2]
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
+    /// Neighbours in the queue, shown beside the artwork while swiping.
+    var nextInQueue: Track? {
+        if index + 1 < queue.count { return queue[index + 1] }
+        return repeatMode == .all && queue.count > 1 ? queue.first : nil
+    }
+    var previousInQueue: Track? { index > 0 ? queue[index - 1] : nil }
     var isEpisode: Bool { current?.isEpisode == true }
 
     /// Chapters of the current episode (empty when it has none).
@@ -169,6 +175,13 @@ final class Player {
     func next() {
         if isEpisode, !chapters.isEmpty { nextChapter(); return }
         advance(auto: false)
+    }
+
+    /// Always the previous song (swiping back), unlike the ⏮ button which restarts a song first.
+    func skipToPrevious() {
+        guard index > 0 else { seek(to: 0); return }
+        index -= 1
+        load()
     }
 
     func seekToChapter(_ i: Int) {
