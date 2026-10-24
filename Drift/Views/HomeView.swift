@@ -15,11 +15,25 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack {
+                HStack(spacing: 10) {
+                    NavigationLink(value: Route.profile) {
+                        UserAvatar(data: SocialStore.shared.me?.avatar,
+                                   name: SocialStore.shared.me?.username ?? "?", size: 34)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Your profile")
                     Text(greeting)
                         .font(.system(size: 26, weight: .heavy))
                         .tracking(-0.5)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Spacer()
+                    NavigationLink(value: Route.friends) {
+                        Image(systemName: "person.2")
+                            .font(.system(size: 19))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Friends")
                     NavigationLink(value: Route.settings) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))

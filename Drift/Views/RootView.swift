@@ -7,6 +7,7 @@ enum AppTab: Hashable {
 struct RootView: View {
     @State private var tab: AppTab = .home
     @State private var ui = UIState.shared
+    @State private var social = SocialStore.shared
     @Environment(\.scenePhase) private var scenePhase
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
@@ -28,6 +29,9 @@ struct RootView: View {
                     .allowsHitTesting(tab == .library)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .fullScreenCover(isPresented: $social.showOnboarding) {
+                OnboardingView()
+            }
 
             if player.current != nil {
                 MiniPlayer { ui.showPlayer = true }

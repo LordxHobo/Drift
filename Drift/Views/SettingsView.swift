@@ -68,6 +68,20 @@ struct SettingsView: View {
                     .disabled(library.downloaded.isEmpty)
                 }
 
+                section("Profile") {
+                    NavigationLink(value: Route.profile) {
+                        HStack {
+                            Text(SocialStore.shared.me.map { "@\($0.username)" } ?? "Create a profile")
+                                .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 section("Lyrics") {
                     toggle("Lyrics on CarPlay & Lock Screen",
                            "Shows the current line as a Live Activity. On CarPlay it needs iOS 26; it starts when you play something with Drift open.",

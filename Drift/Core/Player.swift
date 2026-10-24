@@ -87,6 +87,7 @@ final class Player {
                 if status == .playing { self.watchdog?.cancel() }
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
+                SocialStore.shared.playerChanged()
                 if status == .paused, let t = self.current, t.isEpisode, self.currentTime > 0 {
                     PodcastStore.shared.update(t, position: self.currentTime, duration: self.duration, force: true)
                 }
@@ -282,6 +283,7 @@ final class Player {
         updateNowPlaying()
         loadArtwork(for: track)
         LyricsActivity.shared.trackChanged(track)
+        SocialStore.shared.playerChanged()
         chapters = []
         lastChapterIndex = nil
         updateCommands()
