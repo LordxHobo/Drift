@@ -94,17 +94,25 @@ struct TabBar: View {
 
 struct MiniPlayer: View {
     var open: () -> Void
-    @State private var swipe: CGFloat = 0
+    /// Live drag (resets itself even if iOS cancels it) plus the slide after letting go.
+    @GestureState private var dragX: CGFloat = 0
+    @State private var settle: CGFloat = 0
+    private var swipe: CGFloat { dragX + settle }
 
     /// Current song slides out one side, the new one slides in from the other.
-    private func slide(out x: CGFloat, change: @escaping () -> Void) {
-        withAnimation(.easeIn(duration: 0.15)) { swipe = x } completion: {
+    private func slide(from start: CGFloat, out x: CGFloat, change: @escaping () -> Void) {
+        instantly { settle = start }
+        withAnimation(.easeIn(duration: 0.15)) { settle = x } completion: {
             change()
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) { swipe = -x }
-            withAnimation(.easeOut(duration: 0.2)) { swipe = 0 }
+            instantly { settle = -x }
+            withAnimation(.easeOut(duration: 0.2)) { settle = 0 }
         }
+    }
+
+    private func instantly(_ change: () -> Void) {
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx, change)
     }
     private var player: Player { .shared }
     private var accent: Color { AppSettings.shared.accent }
@@ -183,19 +191,23 @@ struct MiniPlayer: View {
                 .frame(height: 2)
                 .padding(.horizontal, 8)
             }
-            .gesture(DragGesture(minimumDistance: 12).onChanged { v in
-                if abs(v.translation.width) > abs(v.translation.height) { swipe = v.translation.width }
-            }.onEnded { v in
-                let x = v.predictedEndTranslation.width
-                if x < -80, player.nextInQueue != nil {
-                    slide(out: -360) { player.next() }
-                } else if x > 80, player.previousInQueue != nil {
-                    slide(out: 360) { player.skipToPrevious() }
-                } else {
-                    withAnimation(.spring(duration: 0.3)) { swipe = 0 }
-                    if v.translation.height < -30 { open() }
+            .gesture(DragGesture(minimumDistance: 12)
+                .updating($dragX) { v, state, _ in
+                    if abs(v.translation.width) > abs(v.translation.height) { state = v.translation.width }
                 }
-            })
+                .onEnded { v in
+                    let x = v.predictedEndTranslation.width
+                    let start = abs(v.translation.width) > abs(v.translation.height) ? v.translation.width : 0
+                    if x < -80, player.nextInQueue != nil {
+                        slide(from: start, out: -360) { player.next() }
+                    } else if x > 80, player.previousInQueue != nil {
+                        slide(from: start, out: 360) { player.skipToPrevious() }
+                    } else {
+                        instantly { settle = start }
+                        withAnimation(.spring(duration: 0.3)) { settle = 0 }
+                        if v.translation.height < -30 { open() }
+                    }
+                })
         }
     }
 }

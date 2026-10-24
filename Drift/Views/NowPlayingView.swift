@@ -8,9 +8,11 @@ struct NowPlayingView: View {
     @State private var dragDown: CGFloat = 0
     @State private var showLyrics = false
     @State private var showChapters = false
-    /// Artwork swipe: horizontal offset and which way the current drag is going.
-    @State private var swipe: CGFloat = 0
-    @State private var swipeAxis: Axis?
+    /// Live artwork drag. A @GestureState resets itself even when iOS cancels the drag,
+    /// so the artwork can never get stuck halfway.
+    @GestureState private var drag = SwipeDrag()
+    /// Where the artwork sits after letting go (animates to the neighbour, then back to 0).
+    @State private var settle: CGFloat = 0
     private var player: Player { .shared }
     private var library: Library { .shared }
     private var accent: Color { AppSettings.shared.accent }
@@ -29,13 +31,10 @@ struct NowPlayingView: View {
         .foregroundStyle(Theme.text)
         .offset(y: dragDown)
         .gesture(DragGesture().onChanged { v in
-            if swipeAxis == .horizontal { return }
+            // Sideways drags belong to the artwork.
+            guard abs(v.translation.height) > abs(v.translation.width) else { return }
             dragDown = max(0, v.translation.height)
         }.onEnded { v in
-            if swipeAxis == .horizontal {
-                swipeAxis = nil
-                return
-            }
             if v.translation.height > 140 || v.predictedEndTranslation.height > 400 {
                 dismiss()
             } else {
@@ -295,56 +294,60 @@ struct NowPlayingView: View {
         let step = size + 32
         let prev = player.previousInQueue
         let next = player.nextInQueue
+        let offset = drag.x + settle
+        // Nothing on that side: resist instead of sliding freely.
+        func resisted(_ x: CGFloat) -> CGFloat {
+            (x > 0 && prev == nil) || (x < 0 && next == nil) ? x / 3 : x
+        }
         return ZStack {
             if let prev {
                 ArtworkView(url: prev.artwork(size: 800), size: size, corner: 8, seed: prev.id)
-                    .offset(x: swipe - step)
+                    .offset(x: offset - step)
             }
             ArtworkView(url: t.artwork(size: 800), size: size, corner: 8, seed: t.id)
                 .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
-                .offset(x: swipe)
+                .offset(x: offset)
             if let next {
                 ArtworkView(url: next.artwork(size: 800), size: size, corner: 8, seed: next.id)
-                    .offset(x: swipe + step)
+                    .offset(x: offset + step)
             }
         }
         .frame(height: size)
         .contentShape(Rectangle())
-        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { v in
-            if swipeAxis == nil {
-                swipeAxis = abs(v.translation.width) > abs(v.translation.height) ? .horizontal : .vertical
-            }
-            guard swipeAxis == .horizontal else { return }
-            var x = v.translation.width
-            // Nothing on that side: resist instead of sliding freely.
-            if (x > 0 && prev == nil) || (x < 0 && next == nil) { x /= 3 }
-            swipe = x
-        }.onEnded { v in
-            let horizontal = swipeAxis == .horizontal
-            swipeAxis = nil
-            guard horizontal else { return }
-            let x = v.predictedEndTranslation.width
-            if x < -step / 3, next != nil {
-                withAnimation(.easeOut(duration: 0.22)) { swipe = -step } completion: {
-                    player.next()
-                    resetSwipe()
+        .simultaneousGesture(DragGesture(minimumDistance: 8)
+            .updating($drag) { v, state, _ in
+                if state.axis == nil {
+                    state.axis = abs(v.translation.width) > abs(v.translation.height) ? .horizontal : .vertical
                 }
-            } else if x > step / 3, prev != nil {
-                withAnimation(.easeOut(duration: 0.22)) { swipe = step } completion: {
-                    player.skipToPrevious()
-                    resetSwipe()
-                }
-            } else {
-                withAnimation(.spring(duration: 0.3)) { swipe = 0 }
+                guard state.axis == .horizontal else { return }
+                state.x = resisted(v.translation.width)
             }
-        })
+            .onEnded { v in
+                guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                // Take over from the finger exactly where it let go.
+                instantly { settle = resisted(v.translation.width) }
+                let x = v.predictedEndTranslation.width
+                if x < -step / 3, next != nil {
+                    withAnimation(.easeOut(duration: 0.22)) { settle = -step } completion: {
+                        player.next()
+                        instantly { settle = 0 }
+                    }
+                } else if x > step / 3, prev != nil {
+                    withAnimation(.easeOut(duration: 0.22)) { settle = step } completion: {
+                        player.skipToPrevious()
+                        instantly { settle = 0 }
+                    }
+                } else {
+                    withAnimation(.spring(duration: 0.3)) { settle = 0 }
+                }
+            })
     }
 
-    /// The new song's artwork is already where the old one was: snap back without animating.
-    private func resetSwipe() {
+    /// Change without animating (the new song's artwork is already where the old one was).
+    private func instantly(_ change: () -> Void) {
         var tx = Transaction()
         tx.disablesAnimations = true
-        withTransaction(tx) { swipe = 0 }
+        withTransaction(tx, change)
     }
 
     private var playButton: some View {
@@ -591,4 +594,10 @@ struct ChaptersSheet: View {
         .presentationDetents([.medium, .large])
         .tint(accent)
     }
+}
+
+/// One artwork drag: which way it's going and how far.
+struct SwipeDrag {
+    var axis: Axis?
+    var x: CGFloat = 0
 }
