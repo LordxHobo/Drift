@@ -299,17 +299,16 @@ struct NowPlayingView: View {
         func resisted(_ x: CGFloat) -> CGFloat {
             (x > 0 && prev == nil) || (x < 0 && next == nil) ? x / 3 : x
         }
+        // Each cover belongs to its song (not to a left/middle/right slot), so the cover you
+        // swipe in stays on screen with its image already loaded: no flash of the old artwork.
+        var covers: [(track: Track, base: CGFloat)] = [(t, 0)]
+        if let prev, prev.id != t.id { covers.insert((prev, -step), at: 0) }
+        if let next, next.id != t.id, next.id != prev?.id { covers.append((next, step)) }
         return ZStack {
-            if let prev {
-                ArtworkView(url: prev.artwork(size: 800), size: size, corner: 8, seed: prev.id)
-                    .offset(x: offset - step)
-            }
-            ArtworkView(url: t.artwork(size: 800), size: size, corner: 8, seed: t.id)
-                .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
-                .offset(x: offset)
-            if let next {
-                ArtworkView(url: next.artwork(size: 800), size: size, corner: 8, seed: next.id)
-                    .offset(x: offset + step)
+            ForEach(covers, id: \.track.id) { cover in
+                ArtworkView(url: cover.track.artwork(size: 800), size: size, corner: 8, seed: cover.track.id)
+                    .shadow(color: .black.opacity(cover.base == 0 ? 0.45 : 0), radius: 25, y: 16)
+                    .offset(x: offset + cover.base)
             }
         }
         .frame(height: size)
