@@ -231,6 +231,25 @@ enum Firestore {
         return ((body as? [[String: Any]]) ?? []).compactMap { $0["document"] as? [String: Any] }
     }
 
+    /// Documents in a collection, with only the listed fields (all fields when empty).
+    static func list(_ path: String, fields: [String] = []) async throws -> [[String: Any]] {
+        let token = try await FirebaseAuth.shared.token()
+        var out: [[String: Any]] = []
+        var pageToken: String?
+        repeat {
+            var q = [URLQueryItem(name: "pageSize", value: "100")]
+            q += fields.map { URLQueryItem(name: "mask.fieldPaths", value: $0) }
+            if let pageToken { q.append(URLQueryItem(name: "pageToken", value: pageToken)) }
+            let (status, body) = try await HTTP.send("GET", url(path, query: q), token: token)
+            if status == 404 { return out }
+            guard status == 200 else { throw SocialError.server(status, HTTP.errorMessage(body)) }
+            let d = body as? [String: Any]
+            out += (d?["documents"] as? [[String: Any]]) ?? []
+            pageToken = d?["nextPageToken"] as? String
+        } while pageToken != nil
+        return out
+    }
+
     /// Several documents at once (e.g. everyone you follow).
     static func batchGet(_ paths: [String]) async throws -> [[String: Any]] {
         guard !paths.isEmpty else { return [] }

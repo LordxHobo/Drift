@@ -16,7 +16,8 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(spacing: 10) {
-                    NavigationLink(value: Route.profile) {
+                    // Your own profile page (as friends see it); the editing screen if you have none yet.
+                    NavigationLink(value: SocialStore.shared.me.map(Route.user) ?? Route.profile) {
                         UserAvatar(data: SocialStore.shared.me?.avatar,
                                    name: SocialStore.shared.me?.username ?? "?", size: 34)
                             .frame(width: 44, height: 44)

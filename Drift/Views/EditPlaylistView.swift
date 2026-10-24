@@ -9,6 +9,7 @@ struct EditPlaylistView: View {
     @State private var style: Playlist.CoverStyle
     @State private var colorIndex: Int
     @State private var symbol: String
+    @State private var isPublic: Bool
     @State private var pickedItem: PhotosPickerItem?
     @State private var newPhoto: UIImage?
     @State private var confirmDelete = false
@@ -29,6 +30,7 @@ struct EditPlaylistView: View {
         _style = State(initialValue: playlist.style)
         _colorIndex = State(initialValue: playlist.colorIndex)
         _symbol = State(initialValue: playlist.symbol)
+        _isPublic = State(initialValue: playlist.isShared)
     }
 
     private var previewPhoto: UIImage? {
@@ -89,6 +91,16 @@ struct EditPlaylistView: View {
                                 .foregroundStyle(Theme.muted)
                         }
                     }
+
+                    Toggle(isOn: $isPublic) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Show on my profile").font(.system(size: 15, weight: .semibold))
+                            Text("People on Drift can see and play this playlist from your profile.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .tint(accent)
 
                     Button(role: .destructive) {
                         confirmDelete = true
@@ -198,7 +210,7 @@ struct EditPlaylistView: View {
 
     private func save() {
         library.updatePlaylist(playlist.id, name: name, style: style, colorIndex: colorIndex,
-                               symbol: symbol, photo: style == .photo ? newPhoto : nil)
+                               symbol: symbol, photo: style == .photo ? newPhoto : nil, isPublic: isPublic)
         dismiss()
     }
 }

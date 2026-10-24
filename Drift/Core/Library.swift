@@ -44,6 +44,7 @@ final class Library {
         let s = Stored(playlists: playlists, liked: liked, recent: recent, downloaded: downloaded)
         guard let data = try? JSONEncoder().encode(s) else { return }
         try? data.write(to: storeURL, options: .atomic)
+        PlaylistSharing.shared.libraryChanged()
     }
 
     // MARK: Liked
@@ -131,8 +132,9 @@ final class Library {
 
     /// Saves name and cover in one go. `photo` replaces the custom photo when given.
     func updatePlaylist(_ id: UUID, name: String, style: Playlist.CoverStyle, colorIndex: Int,
-                        symbol: String, photo: UIImage?) {
+                        symbol: String, photo: UIImage?, isPublic: Bool) {
         guard let i = playlists.firstIndex(where: { $0.id == id }) else { return }
+        playlists[i].isPublic = isPublic
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { playlists[i].name = trimmed }
         playlists[i].colorIndex = colorIndex

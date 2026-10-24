@@ -498,12 +498,9 @@ struct FriendsView: View {
                         .listRowBackground(Theme.bg)
                 }
                 ForEach(social.following) { u in
-                    Button {
-                        if let t = u.nowPlaying { player.play([t], from: "\(u.username)'s activity") }
-                    } label: {
+                    NavigationLink(value: Route.user(u)) {
                         FriendRow(user: u)
                     }
-                    .buttonStyle(.plain)
                     .listRowBackground(Theme.bg)
                     .contextMenu {
                         if let t = u.nowPlaying {
@@ -550,17 +547,24 @@ struct FriendsView: View {
     }
 }
 
-// MARK: Someone's profile
+// MARK: Someone's profile (or your own, as others see it)
 
 struct UserView: View {
     let initial: UserProfile
     @State private var user: UserProfile?
     @State private var followerCount: Int?
+    @State private var shared: [SharedPlaylist] = []
+    @State private var playlistsLoaded = false
+    @State private var playlistsFailed = false
     private var social: SocialStore { .shared }
     private var player: Player { .shared }
+    private var library: Library { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    private var isMe: Bool { initial.id == social.me?.id }
 
     var body: some View {
-        let u = user ?? initial
+        let u = isMe ? (social.me ?? initial) : (user ?? initial)
         ScrollView {
             VStack(spacing: 16) {
                 UserAvatar(data: u.avatar, name: u.username, size: 120).padding(.top, 12)
@@ -569,7 +573,21 @@ struct UserView: View {
                     count(followerCount, "Followers")
                     count(u.following.count, "Following")
                 }
-                if u.id != social.me?.id { UserFollowButton(user: u) }
+                if isMe {
+                    NavigationLink(value: Route.profile) {
+                        Text("Edit profile")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 32)
+                            .overlay(Capsule().stroke(Theme.muted, lineWidth: 1))
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    UserFollowButton(user: u)
+                }
 
                 if let t = u.nowPlaying {
                     Button {
@@ -581,13 +599,13 @@ struct UserView: View {
                                 Text(u.isListeningNow ? "LISTENING NOW" : "LAST PLAYED")
                                     .font(.system(size: 10, weight: .heavy))
                                     .tracking(0.8)
-                                    .foregroundStyle(u.isListeningNow ? AppSettings.shared.accent : Theme.muted)
+                                    .foregroundStyle(u.isListeningNow ? accent : Theme.muted)
                                 Text(t.title).font(.system(size: 15, weight: .bold)).lineLimit(1)
                                 Text(t.artist).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
                             }
                             Spacer()
                             Image(systemName: "play.circle.fill").font(.system(size: 32))
-                                .foregroundStyle(AppSettings.shared.accent)
+                                .foregroundStyle(accent)
                         }
                         .padding(12)
                         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -598,6 +616,8 @@ struct UserView: View {
                     Text("@\(u.username) keeps their listening activity private.")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 }
+
+                playlistsSection(u)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
@@ -607,10 +627,87 @@ struct UserView: View {
         .background(Theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
-        .task {
-            user = await social.user(initial.id) ?? initial
-            followerCount = await SocialStore.followers(of: initial.id).count
+        .refreshable { await load() }
+        .task { await load() }
+    }
+
+    private func load() async {
+        if !isMe {
+            user = await social.user(initial.id) ?? user ?? initial
+            do {
+                shared = try await SharedPlaylist.list(of: user ?? initial)
+                playlistsFailed = false
+            } catch {
+                playlistsFailed = true
+            }
+            playlistsLoaded = true
         }
+        followerCount = await SocialStore.followers(of: initial.id).count
+    }
+
+    @ViewBuilder private func playlistsSection(_ u: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Playlists")
+                .font(.system(size: 20, weight: .heavy))
+                .tracking(-0.3)
+                .padding(.bottom, 6)
+            if isMe {
+                let mine = library.playlists.filter(\.isShared)
+                if mine.isEmpty {
+                    note("None of your playlists are on your profile. Turn on “Show on my profile” when editing a playlist.")
+                }
+                ForEach(mine) { p in
+                    NavigationLink(value: Route.playlist(p.id)) {
+                        playlistRow(name: p.name, subtitle: songsText(p.tracks.count)) {
+                            PlaylistArt(playlist: p, size: 56)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else if !playlistsLoaded {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else if playlistsFailed && shared.isEmpty {
+                note("Couldn't load playlists.")
+            } else if shared.isEmpty {
+                note("@\(u.username) has no public playlists.")
+            } else {
+                ForEach(shared) { p in
+                    NavigationLink(value: Route.sharedPlaylist(p)) {
+                        playlistRow(name: p.name, subtitle: p.subtitle) {
+                            SharedPlaylistCover(playlist: p, size: 56, corner: 4)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 8)
+    }
+
+    private func playlistRow<Art: View>(name: String, subtitle: String, @ViewBuilder art: () -> Art) -> some View {
+        HStack(spacing: 12) {
+            art()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(subtitle).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+
+    private func songsText(_ n: Int) -> String { "\(n) \(n == 1 ? "song" : "songs")" }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.muted)
+            .padding(.vertical, 6)
     }
 
     private func count(_ n: Int?, _ title: String) -> some View {
@@ -619,6 +716,133 @@ struct UserView: View {
             Text(title).font(.system(size: 12)).foregroundStyle(Theme.muted)
         }
         .frame(minWidth: 80)
+    }
+}
+
+struct SharedPlaylistCover: View {
+    let playlist: SharedPlaylist
+    var size: CGFloat
+    var corner: CGFloat = 4
+
+    var body: some View {
+        PlaylistCover(tracks: playlist.preview, size: size, color: Theme.tile(playlist.colorIndex),
+                      symbol: playlist.symbol, corner: corner, forceTile: playlist.style == .color,
+                      photo: playlist.style == .photo ? playlist.cover.flatMap(UIImage.init(data:)) : nil)
+    }
+}
+
+/// A friend's public playlist.
+struct SharedPlaylistView: View {
+    let playlist: SharedPlaylist
+    @State private var tracks: [Track]?
+    @State private var failed = false
+    @State private var saved = false
+    private var player: Player { .shared }
+    private var library: Library { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        let list = tracks ?? []
+        let source = "\(playlist.name) · @\(playlist.ownerName)"
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                SharedPlaylistCover(playlist: playlist, size: 230, corner: 6)
+                    .shadow(color: .black.opacity(0.5), radius: 20, y: 12)
+                    .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(playlist.name)
+                        .font(.system(size: 24, weight: .heavy))
+                        .tracking(-0.4)
+                    Text("@\(playlist.ownerName)")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(playlist.subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+
+                HStack(spacing: 4) {
+                    Button {
+                        if allDownloaded(list) {
+                            list.forEach { library.removeDownload($0.id) }
+                        } else {
+                            DownloadManager.shared.download(list)
+                        }
+                    } label: {
+                        Image(systemName: allDownloaded(list) ? "arrow.down.circle.fill" : "arrow.down.circle")
+                            .font(.system(size: 26))
+                            .foregroundStyle(allDownloaded(list) ? accent : Color(hex: 0xD4D4D8))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(allDownloaded(list) ? "Remove downloads" : "Download playlist")
+                    Button {
+                        library.createPlaylist(playlist.name, tracks: list)
+                        saved = true
+                    } label: {
+                        Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle")
+                            .font(.system(size: 26))
+                            .foregroundStyle(saved ? accent : Color(hex: 0xD4D4D8))
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(saved || list.isEmpty)
+                    .accessibilityLabel(saved ? "Saved to your library" : "Save a copy to your library")
+                    Spacer()
+                    Button { player.shufflePlay(list, from: source) } label: {
+                        Image(systemName: "shuffle")
+                            .font(.system(size: 20, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Shuffle playlist")
+                    Button { player.play(list, from: source) } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Theme.onAccent)
+                            .frame(width: 56, height: 56)
+                            .background(accent, in: Circle())
+                    }
+                    .accessibilityLabel("Play playlist")
+                }
+                .buttonStyle(.plain)
+                .disabled(list.isEmpty)
+
+                if tracks == nil {
+                    if failed {
+                        Text("Couldn't load this playlist.").foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                } else if list.isEmpty {
+                    Text("This playlist is empty.").foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
+                }
+
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(list.enumerated()), id: \.element.id) { i, t in
+                        TrackRow(track: t) { player.play(list, startAt: i, from: source) }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.bg, for: .navigationBar)
+        .task {
+            guard tracks == nil else { return }
+            do {
+                let loaded = try await playlist.tracks()
+                tracks = loaded
+                player.prefetch(Array(loaded.prefix(2)))
+            } catch {
+                failed = true
+            }
+        }
+    }
+
+    private func allDownloaded(_ list: [Track]) -> Bool {
+        !list.isEmpty && list.allSatisfy { library.isDownloaded($0.id) }
     }
 }
 

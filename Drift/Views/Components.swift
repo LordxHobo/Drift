@@ -9,6 +9,7 @@ enum Route: Hashable {
     case profile
     case friends
     case user(UserProfile)
+    case sharedPlaylist(SharedPlaylist)
     case followList(followers: Bool)
     case artist(ArtistRef)
     case album(AlbumRef, artist: String)
@@ -27,6 +28,7 @@ extension View {
             case .profile: ProfileView()
             case .friends: FriendsView()
             case .user(let u): UserView(initial: u)
+            case .sharedPlaylist(let p): SharedPlaylistView(playlist: p)
             case .followList(let followers): FollowListView(followers: followers)
             case .artist(let a): ArtistView(artist: a)
             case .album(let a, let artist): AlbumView(album: a, artist: artist)

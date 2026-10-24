@@ -47,6 +47,8 @@ struct Playlist: Codable, Hashable, Identifiable {
     var coverSymbol: String?
     /// File name of a custom photo in Documents/Covers.
     var coverFile: String?
+    /// Shown on your Drift profile. nil = yes (the default, like Spotify).
+    var isPublic: Bool?
 
     enum CoverStyle: String, Codable {
         case auto, color, photo
@@ -54,6 +56,7 @@ struct Playlist: Codable, Hashable, Identifiable {
 
     var style: CoverStyle { coverStyle ?? .auto }
     var symbol: String { coverSymbol ?? "music.note.list" }
+    var isShared: Bool { isPublic ?? true }
 }
 
 func formatTime(_ t: Double) -> String {
