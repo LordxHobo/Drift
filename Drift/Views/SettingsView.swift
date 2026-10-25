@@ -31,7 +31,7 @@ struct SettingsView: View {
                            "Moves to the next song when a song goes silent for several seconds in its second half (hidden tracks, long dead air).",
                            $settings.skipSilence)
                     toggle("Prefer official audio",
-                           "Search returns album versions instead of music videos.",
+                           "Search returns album versions instead of music videos, and a music video plays as its album version when YouTube Music has one (no intros or cut endings).",
                            $settings.preferOfficialAudio)
                     Text("Audio is streamed directly, so YouTube ads never play.")
                         .font(.system(size: 12))

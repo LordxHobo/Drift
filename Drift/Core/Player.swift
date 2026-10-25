@@ -71,6 +71,10 @@ final class Player {
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
     /// Where to start when the restored song (from last time) is played.
+    /// The video actually playing (the album version of a music video, or the song itself).
+    @ObservationIgnored private var playID: String?
+    /// Length came from the stream itself (exact), not from search results (rounded, sometimes off).
+    @ObservationIgnored private var durationIsExact = false
     @ObservationIgnored private var pendingResume: (id: String, time: Double)?
     @ObservationIgnored private var lastPositionSave: Double = -10
     /// Quiet at the very end of a song (after its listed length), used to end it cleanly.
@@ -290,6 +294,8 @@ final class Player {
         duration = track.duration ?? 0
         // Search results give whole seconds: allow a moment so the last note isn't cut.
         knownDuration = track.duration.map { $0 + 1 }
+        durationIsExact = false
+        playID = nil
         segments = []
         retried = false
         isBuffering = true
@@ -309,27 +315,34 @@ final class Player {
         tailSilentSince = nil
         saveSession()
 
-        // Skip segments are looked up while the audio link is being found.
-        let segsTask = Task {
-            await SponsorBlock.segments(
-                for: track.id,
-                categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
-        }
-
         loadTask = Task { [weak self] in
             guard let self else { return }
+            // Music video → its album version when YouTube Music has one (no intro/outro, real length).
+            let downloaded = Library.shared.isDownloaded(track.id)
+            var chosen = track.id
+            if !downloaded && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track.id) }
+            let playID = chosen
+            guard !Task.isCancelled, self.current?.id == track.id else { return }
+            self.playID = playID
+            // Skip segments are looked up while the audio link is being found.
+            let segsTask = Task {
+                await SponsorBlock.segments(
+                    for: playID,
+                    categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
+            }
             do {
                 let url: URL
-                if Library.shared.isDownloaded(track.id) {
+                if downloaded {
                     url = Library.shared.fileURL(for: track.id)
                     self.qualityLabel = "Downloaded"
                 } else {
                     let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
-                        try await StreamResolver.shared.resolve(track.id, dataSaver: low)
+                        try await StreamResolver.shared.resolve(playID, dataSaver: low)
                     }
                     self.qualityLabel = s.label
                     if let d = s.duration, d > 0 {
                         self.knownDuration = d
+                        self.durationIsExact = true
                         self.duration = d
                     }
                     url = s.url
@@ -494,16 +507,18 @@ final class Player {
         let wasPlaying = isPlaying || isBuffering
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            await StreamResolver.shared.invalidate(track.id)
             guard let self else { return }
+            let playID = self.playID ?? track.id
+            await StreamResolver.shared.invalidate(playID)
             do {
                 let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
-                        try await StreamResolver.shared.resolve(track.id, dataSaver: low)
+                        try await StreamResolver.shared.resolve(playID, dataSaver: low)
                     }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
                 self.qualityLabel = s.label
                     if let d = s.duration, d > 0 {
                         self.knownDuration = d
+                        self.durationIsExact = true
                         self.duration = d
                     }
                 self.start(s.url, autoplay: wasPlaying, at: resumeAt)
@@ -536,7 +551,7 @@ final class Player {
     func retry() {
         guard let t = current else { return }
         Task {
-            await StreamResolver.shared.invalidate(t.id)
+            await StreamResolver.shared.invalidate(playID ?? t.id)
             load()
         }
     }
@@ -549,7 +564,8 @@ final class Player {
         // In parallel: each one is ready to start instantly (link found, opening seconds downloaded).
         for id in ids {
             Task.detached(priority: .utility) {
-                if let s = try? await StreamResolver.shared.resolve(id, dataSaver: low) {
+                let playID = await AudioVersion.shared.preferred(id)
+                if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)
                 }
             }
@@ -642,8 +658,10 @@ final class Player {
             } else {
                 tailSilentSince = nil
             }
-            let quietLongEnough = tailSilentSince.map { t - $0 >= 0.5 } ?? false
-            if t >= k + 4 || quietLongEnough || (meter == nil && t >= k + 1) {
+            let quietLongEnough = tailSilentSince.map { t - $0 >= (durationIsExact ? 0.5 : 1) } ?? false
+            // A length from search results is only a hint: never cut a song short because of it.
+            let forced = durationIsExact && (t >= k + 4 || (meter == nil && t >= k + 1))
+            if forced || quietLongEnough {
                 knownDuration = nil
                 tailSilentSince = nil
                 advance(auto: true)

@@ -44,7 +44,8 @@ final class DownloadManager {
                     try await fetch(t)
                 } catch {
                     // Link may have stopped working: get a fresh one and try once more.
-                    await StreamResolver.shared.invalidate(t.id)
+                    let playID = await AudioVersion.shared.preferred(t.id)
+                    await StreamResolver.shared.invalidate(playID)
                     try await fetch(t)
                 }
                 Library.shared.markDownloaded(t)
@@ -59,7 +60,8 @@ final class DownloadManager {
 
     private func fetch(_ t: Track) async throws {
         // Downloads always use the best stream.
-        let stream = try await StreamResolver.shared.resolve(t.id, dataSaver: false)
+        let playID = await AudioVersion.shared.preferred(t.id)
+        let stream = try await StreamResolver.shared.resolve(playID, dataSaver: false)
 
         let config = URLSessionConfiguration.default
         config.allowsCellularAccess = AppSettings.shared.downloadOverCellular

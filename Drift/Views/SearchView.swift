@@ -1,4 +1,52 @@
 import SwiftUI
+import Observation
+
+/// Recent searches, kept on the phone (separately for songs and podcasts).
+@Observable @MainActor
+final class SearchHistory {
+    static let shared = SearchHistory()
+
+    struct Entry: Codable, Hashable {
+        var text: String
+        var podcasts: Bool
+    }
+
+    private(set) var entries: [Entry] = []
+    @ObservationIgnored private let key = "search.history"
+
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: key),
+           let list = try? JSONDecoder().decode([Entry].self, from: data) {
+            entries = list
+        }
+    }
+
+    func items(podcasts: Bool) -> [Entry] { entries.filter { $0.podcasts == podcasts } }
+
+    func add(_ text: String, podcasts: Bool) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count >= 2 else { return }
+        // Same search again moves to the top.
+        entries.removeAll { $0.podcasts == podcasts && $0.text.lowercased() == t.lowercased() }
+        entries.insert(Entry(text: t, podcasts: podcasts), at: 0)
+        if entries.count > 60 { entries.removeLast(entries.count - 60) }
+        save()
+    }
+
+    func remove(_ e: Entry) {
+        entries.removeAll { $0 == e }
+        save()
+    }
+
+    func clear(podcasts: Bool) {
+        entries.removeAll { $0.podcasts == podcasts }
+        save()
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(entries) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}
 
 struct SearchView: View {
     enum Mode: String, Hashable {
@@ -16,6 +64,9 @@ struct SearchView: View {
     @FocusState private var focused: Bool
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
+    private var history: SearchHistory { .shared }
+    private var historyItems: [SearchHistory.Entry] { history.items(podcasts: mode == .podcasts) }
+    private var showingHistory: Bool { trimmed.isEmpty && !historyItems.isEmpty }
     private var accent: Color { settings.accent }
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -34,11 +85,25 @@ struct SearchView: View {
             HStack(spacing: 8) {
                 modeChip("Songs", .songs)
                 modeChip("Podcasts", .podcasts)
+                Spacer()
+                if showingHistory {
+                    Button("Clear all") { history.clear(podcasts: mode == .podcasts) }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 34)
+                        .overlay(Capsule().stroke(Theme.muted, lineWidth: 1))
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal, 20)
 
             Group {
-                if loading && !hasResults {
+                if showingHistory {
+                    historyList
+                } else if loading && !hasResults {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else if let error, !hasResults {
                     message(error)
@@ -83,6 +148,7 @@ struct SearchView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .focused($focused)
                 .submitLabel(.search)
+                .onSubmit { remember() }
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             if !query.isEmpty {
@@ -136,6 +202,7 @@ struct SearchView: View {
                     }
                     .padding(.vertical, 6)
                 }
+                .simultaneousGesture(TapGesture().onEnded { remember() })
                 .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 16))
                 .listRowSeparator(.hidden)
@@ -143,6 +210,7 @@ struct SearchView: View {
             ForEach(Array(results.enumerated()), id: \.element.id) { i, t in
                 TrackRow(track: t) {
                     focused = false
+                    remember()
                     player.play(results, startAt: i, from: "Search “\(query)”")
                 }
                 .listRowBackground(Theme.bg)
@@ -177,6 +245,7 @@ struct SearchView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
+                                .simultaneousGesture(TapGesture().onEnded { remember() })
                                 FollowButton(channel: c, compact: true)
                             }
                         }
@@ -189,6 +258,7 @@ struct SearchView: View {
                             ForEach(episodes) { t in
                                 EpisodeRow(track: t) {
                                     focused = false
+                                    remember()
                                     player.play([t], from: t.artist)
                                 }
                             }
@@ -199,6 +269,64 @@ struct SearchView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    private func remember() {
+        // Pasted links aren't worth keeping.
+        guard YouTubeSearch.videoID(fromLink: trimmed) == nil else { return }
+        history.add(trimmed, podcasts: mode == .podcasts)
+    }
+
+    private var historyList: some View {
+        List {
+            Text("Recent searches")
+                .font(.system(size: 17, weight: .heavy))
+                .listRowBackground(Theme.bg)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 12))
+            ForEach(historyItems, id: \.self) { e in
+                HStack(spacing: 12) {
+                    Button {
+                        query = e.text
+                        history.add(e.text, podcasts: e.podcasts)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 15))
+                                .foregroundStyle(Theme.muted)
+                                .frame(width: 24)
+                            Text(e.text)
+                                .font(.system(size: 15, weight: .medium))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        history.remove(e)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove “\(e.text)” from recent searches")
+                }
+                .listRowBackground(Theme.bg)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 8))
+                .swipeActions {
+                    Button(role: .destructive) { history.remove(e) } label: { Label("Remove", systemImage: "trash") }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
     }
 
