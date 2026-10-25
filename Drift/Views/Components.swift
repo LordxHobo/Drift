@@ -371,3 +371,29 @@ struct AddToPlaylistSheet: View {
         .presentationDetents([.medium, .large])
     }
 }
+
+
+/// "Downloading 12 songs · About 3 min left" under a playlist or album while its songs download.
+struct DownloadStatusLine: View {
+    let tracks: [Track]
+    private var downloads: DownloadManager { .shared }
+
+    var body: some View {
+        let remaining = tracks.filter { downloads.isActive($0.id) }.count
+        if remaining > 0 {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle")
+                Text("Downloading \(remaining) \(remaining == 1 ? "song" : "songs")")
+                if let eta = downloads.estimate(remaining: remaining) {
+                    Text("·")
+                    Text(eta)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppSettings.shared.accent)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .accessibilityElement(children: .combine)
+        }
+    }
+}

@@ -22,7 +22,8 @@ struct ImportSpotifyView: View {
                         progress(title: "Reading playlist…", detail: nil, value: nil)
                     case .matching:
                         progress(title: importer.listName,
-                                 detail: "Finding songs · \(importer.processed) of \(importer.total)",
+                                 detail: "Finding songs · \(importer.processed) of \(importer.total)"
+                                    + (importer.estimate.map { " · \($0)" } ?? ""),
                                  value: importer.total > 0 ? Double(importer.processed) / Double(importer.total) : nil)
                     case .done:
                         done

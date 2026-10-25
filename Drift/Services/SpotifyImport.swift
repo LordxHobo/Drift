@@ -167,6 +167,15 @@ final class SpotifyImporter {
     private(set) var unmatched: [SpotifyTrack] = []
     private(set) var playlistID: UUID?
     private(set) var hitLimit = false
+    @ObservationIgnored private var matchStart: Date?
+
+    /// Rough time left, from how fast songs have been found so far.
+    var estimate: String? {
+        guard phase == .matching, let start = matchStart, total > processed else { return nil }
+        let elapsed = Date().timeIntervalSince(start)
+        guard processed >= 6, elapsed > 4 else { return "Estimating time left…" }
+        return timeLeftText(elapsed / Double(processed) * Double(total - processed))
+    }
 
     func start(link: String) {
         guard phase != .reading, phase != .matching else { return }
@@ -181,6 +190,7 @@ final class SpotifyImporter {
                 total = list.tracks.count
                 hitLimit = list.tracks.count == SpotifyReader.embedLimit
                 phase = .matching
+                matchStart = Date()
                 // Keep the screen on: iOS pauses Drift when the phone locks and nothing is playing.
                 UIApplication.shared.isIdleTimerDisabled = true
                 defer { UIApplication.shared.isIdleTimerDisabled = false }

@@ -328,6 +328,7 @@ struct AlbumView: View {
                     Text(subtitle(tracks))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
+                    DownloadStatusLine(tracks: tracks)
                 }
 
                 HStack(spacing: 4) {

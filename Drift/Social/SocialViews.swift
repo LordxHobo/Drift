@@ -776,6 +776,7 @@ struct SharedPlaylistView: View {
                     Text(playlist.subtitle)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
+                    DownloadStatusLine(tracks: list)
                 }
 
                 HStack(spacing: 4) {

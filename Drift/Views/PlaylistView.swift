@@ -145,6 +145,7 @@ struct PlaylistView: View {
                 Text(subtitle(tracks, downloadedCount))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.text2)
+                DownloadStatusLine(tracks: kind == .downloads ? [] : tracks)
             }
 
             HStack(spacing: 4) {
