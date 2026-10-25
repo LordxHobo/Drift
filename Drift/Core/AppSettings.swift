@@ -43,6 +43,8 @@ final class AppSettings {
     /// Skip sponsor reads, self-promotion and subscribe reminders in podcasts (SponsorBlock).
     var skipSponsors: Bool { didSet { defaults.set(skipSponsors, forKey: "skipSponsors") } }
     var podcastSpeed: Double { didSet { defaults.set(podcastSpeed, forKey: "podcastSpeed") } }
+    /// Liquid Glass tab bar, mini player, drawer and player buttons (iOS 26+).
+    var glassEffects: Bool { didSet { defaults.set(glassEffects, forKey: "glassEffects") } }
     /// Dark (default), light, or follow the iPhone's setting.
     var appearance: Appearance {
         didSet {
@@ -62,6 +64,7 @@ final class AppSettings {
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
+        glassEffects = d.bool(forKey: "glassEffects")
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
 

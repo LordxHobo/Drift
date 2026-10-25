@@ -18,8 +18,7 @@ struct RootView: View {
     private var settings: AppSettings { .shared }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
+        ZStack {
                 NavigationStack(path: $homePath) { HomeView().withRoutes() }
                     .opacity(tab == .home ? 1 : 0)
                     .allowsHitTesting(tab == .home)
@@ -49,20 +48,11 @@ struct RootView: View {
                         .accessibilityHidden(true)
                 }
             }
+            // Pages scroll behind the bars (visible through them with glass effects on).
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBars }
             .fullScreenCover(isPresented: $social.showOnboarding) {
                 OnboardingView()
             }
-
-            if player.current != nil {
-                MiniPlayer { ui.showPlayer = true }
-                    .foregroundStyle(Theme.text)
-                    .environment(\.colorScheme, .dark)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            TabBar(tab: $tab, reselect: backToStart)
-        }
         .overlay {
             ProfileDrawer(isOpen: $ui.showDrawer, open: openFromDrawer)
         }
@@ -97,6 +87,24 @@ struct RootView: View {
 }
 
 extension RootView {
+    @ViewBuilder var bottomBars: some View {
+        let glass = DriftGlass.isOn
+        VStack(spacing: glass ? 8 : 0) {
+            if player.current != nil {
+                MiniPlayer { ui.showPlayer = true }
+                    .foregroundStyle(Theme.text)
+                    .environment(\.colorScheme, .dark)
+                    .padding(.horizontal, glass ? 14 : 8)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            TabBar(tab: $tab, reselect: backToStart)
+        }
+        .background {
+            if !glass { Theme.bg.ignoresSafeArea(edges: .bottom) }
+        }
+    }
+
     func isAtStart(_ t: AppTab) -> Bool {
         switch t {
         case .home: homePath.isEmpty
@@ -133,15 +141,26 @@ struct TabBar: View {
     var reselect: (AppTab) -> Void = { _ in }
 
     var body: some View {
-        HStack {
+        let items = HStack {
             item(.home, "Home", "house", "house.fill")
             item(.search, "Search", "magnifyingglass", "magnifyingglass")
             item(.podcasts, "Podcasts", "mic", "mic.fill")
             item(.library, "Library", "books.vertical", "books.vertical.fill")
         }
-        .padding(.top, 8)
-        .padding(.bottom, 2)
-        .background(Theme.bg)
+        if DriftGlass.isOn {
+            // Floating glass capsule.
+            items
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .driftGlass(in: Capsule())
+                .padding(.horizontal, 14)
+                .padding(.bottom, 2)
+        } else {
+            items
+                .padding(.top, 8)
+                .padding(.bottom, 2)
+                .background(Theme.bg.ignoresSafeArea(edges: .bottom))
+        }
     }
 
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ selectedIcon: String) -> some View {
@@ -155,7 +174,8 @@ struct TabBar: View {
                     .frame(height: 24)
                 Text(title).font(.system(size: 11, weight: selected ? .bold : .medium))
             }
-            .foregroundStyle(selected ? Theme.text : Theme.muted)
+            .foregroundStyle(selected ? (DriftGlass.isOn ? AppSettings.shared.accent : Theme.text)
+                                      : (DriftGlass.isOn ? Theme.text2 : Theme.muted))
             .frame(maxWidth: .infinity, minHeight: 48)
             .contentShape(Rectangle())
         }
@@ -252,7 +272,9 @@ struct MiniPlayer: View {
                 .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             }
             .padding(8)
-            .background(Theme.miniPlayer, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .driftGlass(in: DriftGlass.isOn ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 10, style: .continuous)),
+                        clear: false, tint: Theme.miniPlayer.opacity(0.55), interactive: true,
+                        fallback: Theme.miniPlayer)
             .overlay(alignment: .bottom) {
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
@@ -261,7 +283,9 @@ struct MiniPlayer: View {
                     }
                 }
                 .frame(height: 2)
-                .padding(.horizontal, 8)
+                .clipShape(Capsule())
+                .padding(.horizontal, DriftGlass.isOn ? 26 : 8)
+                .padding(.bottom, DriftGlass.isOn ? 1 : 0)
             }
             .gesture(DragGesture(minimumDistance: 12)
                 .updating($dragX) { v, state, _ in

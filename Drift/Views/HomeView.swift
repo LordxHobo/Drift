@@ -47,6 +47,7 @@ struct HomeView: View {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))
                             .frame(width: 44, height: 44)
+                            .driftGlass(in: Circle(), interactive: true)
                     }
                     .accessibilityLabel("Settings")
                 }

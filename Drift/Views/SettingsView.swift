@@ -104,6 +104,13 @@ struct SettingsView: View {
                     Text("Device follows your iPhone's light or dark setting. The player always stays dark.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
+                    toggle("Glass effects",
+                           DriftGlass.isSupported
+                               ? "Apple's Liquid Glass look: a floating glass tab bar and mini player, a glass drawer and glass buttons in the player."
+                               : "Apple's Liquid Glass look. Needs iOS 26 or newer.",
+                           $settings.glassEffects)
+                        .disabled(!DriftGlass.isSupported)
+                        .padding(.top, 6)
                 }
 
                 section("Accent color") {

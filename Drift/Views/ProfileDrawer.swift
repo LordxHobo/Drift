@@ -19,7 +19,7 @@ struct ProfileDrawer: View {
             let shift = isOpen ? min(0, drag) : -width
             let progress = max(0, 1 + shift / width)
             ZStack(alignment: .leading) {
-                Color.black.opacity(0.55 * progress)
+                Color.black.opacity((DriftGlass.isOn ? 0.35 : 0.55) * progress)
                     .ignoresSafeArea()
                     .onTapGesture { close() }
                     .accessibilityLabel("Close menu")
@@ -29,8 +29,19 @@ struct ProfileDrawer: View {
                 panel
                     .frame(width: width)
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .background(Self.background.ignoresSafeArea())
-                    .shadow(color: .black.opacity(isOpen ? 0.45 : 0), radius: 24, x: 8)
+                    .background {
+                        if DriftGlass.isOn {
+                            // Floating glass panel, slightly in from the screen edges.
+                            Color.clear
+                                .driftGlass(in: RoundedRectangle(cornerRadius: 34, style: .continuous), clear: false)
+                                .padding(.vertical, 8)
+                                .padding(.leading, 8)
+                                .ignoresSafeArea()
+                        } else {
+                            Self.background.ignoresSafeArea()
+                        }
+                    }
+                    .shadow(color: .black.opacity(isOpen && !DriftGlass.isOn ? 0.45 : 0), radius: 24, x: 8)
                     .offset(x: shift)
                     .accessibilityAddTraits(.isModal)
                     .accessibilityHidden(!isOpen)
@@ -97,6 +108,7 @@ struct ProfileDrawer: View {
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 22)
+        .padding(.leading, DriftGlass.isOn ? 8 : 0)
         .foregroundStyle(Theme.text)
     }
 

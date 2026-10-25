@@ -65,6 +65,7 @@ struct NowPlayingView: View {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 20, weight: .semibold))
                             .frame(width: 44, height: 44)
+                            .driftGlass(in: Circle(), interactive: true)
                     }
                     .accessibilityLabel("Close player")
                     Spacer()
@@ -84,6 +85,7 @@ struct NowPlayingView: View {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 20, weight: .semibold))
                             .frame(width: 44, height: 44)
+                            .driftGlass(in: Circle(), interactive: true)
                     }
                     .accessibilityLabel("More options")
                 }
@@ -198,17 +200,19 @@ struct NowPlayingView: View {
                     .accessibilityLabel("Previous")
                     Spacer()
                     Button { player.togglePlay() } label: {
+                        let glass = DriftGlass.isOn
                         ZStack {
-                            Circle().fill(Theme.text)
+                            if !glass { Circle().fill(Theme.text) }
                             if player.isBuffering && !player.isPlaying {
-                                ProgressView().tint(Theme.bg)
+                                ProgressView().tint(glass ? Theme.text : Theme.bg)
                             } else {
                                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                                     .font(.system(size: 28))
-                                    .foregroundStyle(Theme.bg)
+                                    .foregroundStyle(glass ? Theme.text : Theme.bg)
                             }
                         }
                         .frame(width: 72, height: 72)
+                        .driftGlass(in: Circle(), clear: false, tint: .white.opacity(0.12), interactive: true)
                     }
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                     Spacer()
@@ -254,6 +258,10 @@ struct NowPlayingView: View {
                             .foregroundStyle(player.routeName == "This iPhone" ? Color(hex: 0xD4D4D8) : accent)
                             .lineLimit(1)
                     }
+                    .padding(.trailing, DriftGlass.isOn ? 12 : 0)
+                    .padding(.leading, DriftGlass.isOn ? 4 : 0)
+                    .frame(height: DriftGlass.isOn ? 38 : 44)
+                    .driftGlass(in: Capsule(), interactive: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     if !player.qualityLabel.isEmpty {
@@ -263,7 +271,11 @@ struct NowPlayingView: View {
                                 .tracking(0.5)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x71717A)))
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x71717A))
+                                    .opacity(DriftGlass.isOn ? 0 : 1))
+                                .padding(.horizontal, DriftGlass.isOn ? 4 : 0)
+                                .padding(.vertical, DriftGlass.isOn ? 3 : 0)
+                                .driftGlass(in: Capsule())
                                 .foregroundStyle(Color(hex: 0xE4E4E7))
                                 .fixedSize()
                                 .frame(minHeight: 44)
@@ -283,6 +295,9 @@ struct NowPlayingView: View {
                             Image(systemName: "quote.bubble")
                                 .font(.system(size: 18))
                         }
+                        .padding(.horizontal, DriftGlass.isOn ? 14 : 0)
+                        .frame(height: DriftGlass.isOn ? 38 : 44)
+                        .driftGlass(in: Capsule(), interactive: true)
                         .frame(height: 44)
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
