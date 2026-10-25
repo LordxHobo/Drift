@@ -106,7 +106,7 @@ struct LibraryView: View {
             ImportSpotifyView { id in openPlaylist = id }
         }
         .navigationDestination(item: $openPlaylist) { id in
-            PlaylistView(kind: .playlist(id))
+            PlaylistView(kind: .playlist(id)).modifier(BottomBarSpace())
         }
         .alert("New playlist", isPresented: $showNew) {
             TextField("Name", text: $newName)

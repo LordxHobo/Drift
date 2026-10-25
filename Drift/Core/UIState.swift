@@ -10,6 +10,8 @@ final class UIState {
     var showPlayer = false
     /// The side drawer (profile, notifications, friends, settings).
     var showDrawer = false
+    /// Height of the mini player + tab bar floating over the pages (pages leave this much room at the bottom).
+    var bottomInset: CGFloat = 0
     private init() {}
 }
 

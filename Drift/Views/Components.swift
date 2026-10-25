@@ -20,7 +20,9 @@ enum Route: Hashable {
 
 extension View {
     func withRoutes() -> some View {
-        navigationDestination(for: Route.self) { route in
+        modifier(BottomBarSpace())
+        .navigationDestination(for: Route.self) { route in
+            Group {
             switch route {
             case .settings: SettingsView()
             case .liked: PlaylistView(kind: .liked)
@@ -39,6 +41,20 @@ extension View {
             case .discography(let title, let ref, let albums, let artist):
                 DiscographyView(title: title, ref: ref, initial: albums, artist: artist)
             }
+            }
+            .modifier(BottomBarSpace())
+        }
+    }
+}
+
+/// Leaves room at the bottom of a page for the mini player and tab bar floating over it,
+/// so the last items can be scrolled above them.
+struct BottomBarSpace: ViewModifier {
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: UIState.shared.bottomInset)
+                .allowsHitTesting(false)
         }
     }
 }

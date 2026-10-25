@@ -48,8 +48,12 @@ struct RootView: View {
                         .accessibilityHidden(true)
                 }
             }
-            // Pages scroll behind the bars (visible through them with glass effects on).
-            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBars }
+            // Pages scroll behind the bars (visible through them with glass effects on);
+            // every page leaves room for them at the bottom (see `withRoutes`).
+            .overlay(alignment: .bottom) {
+                bottomBars
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { ui.bottomInset = $0 }
+            }
             .fullScreenCover(isPresented: $social.showOnboarding) {
                 OnboardingView()
             }
