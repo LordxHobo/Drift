@@ -21,6 +21,10 @@ actor AudioVersion {
     /// The ID to actually play for a song (the album version when there is one).
     func preferred(_ track: Track) async -> String {
         let id = track.id
+        if track.upload == true {
+            notes[id] = "YouTube upload (not on YouTube Music)"
+            return id
+        }
         guard AppSettings.shared.preferOfficialAudio, !track.isEpisode else {
             notes[id] = "Off (Prefer official audio is off)"
             return id

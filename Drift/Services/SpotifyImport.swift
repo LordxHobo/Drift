@@ -114,7 +114,67 @@ enum SpotifyReader {
 
 /// Finds each Spotify song on YouTube Music.
 enum SongMatcher {
+    /// Official YouTube Music song first; if there is none, a regular YouTube upload
+    /// (preferably from the artist's own channel).
     static func match(_ s: SpotifyTrack) async -> Track? {
+        if let t = await matchOfficial(s) { return t }
+        return await matchUpload(s)
+    }
+
+    /// Words that mean a different version, unless the song title itself has them.
+    private static let otherVersions = ["live", "cover", "remix", "reaction", "karaoke", "instrumental",
+                                        "slowed", "spedup", "nightcore", "8d", "1hour", "tutorial", "lesson"]
+
+    static func matchUpload(_ s: SpotifyTrack) async -> Track? {
+        let artist = LyricsService.mainArtist(s.artist)
+        let query = "\(artist) \(s.title)"
+        var results = try? await YouTubeSearch.search(query).episodes
+        if results == nil {
+            try? await Task.sleep(for: .seconds(2))
+            results = try? await YouTubeSearch.search(query).episodes
+        }
+        guard let results, !results.isEmpty else { return nil }
+
+        let wantTitle = normalize(s.title)
+        let wantArtist = normalize(artist)
+        guard !wantTitle.isEmpty else { return nil }
+        let songWords = s.title.lowercased()
+        var best: (Track, Double)?
+        for (i, v) in results.prefix(8).enumerated() {
+            let title = normalizeLoose(v.title)
+            guard title.contains(wantTitle) else { continue }
+            var score = 3 - 0.2 * Double(i)
+            // The artist's own channel, its "- Topic" channel or VEVO.
+            let channel = normalizeLoose(v.artist).replacingOccurrences(of: "topic", with: "")
+                .replacingOccurrences(of: "vevo", with: "").replacingOccurrences(of: "official", with: "")
+            if !wantArtist.isEmpty, !channel.isEmpty, channel.contains(wantArtist) || wantArtist.contains(channel) {
+                score += 3
+            } else if !wantArtist.isEmpty, title.contains(wantArtist) {
+                score += 1
+            } else {
+                score -= 1
+            }
+            if let a = s.duration, let b = v.duration {
+                let diff = abs(a - b)
+                if diff > 60 { continue }
+                if diff <= 3 { score += 3 } else if diff <= 10 { score += 1 } else if diff > 30 { score -= 3 }
+            }
+            for w in otherVersions where title.contains(w) && !normalizeLoose(songWords).contains(w) { score -= 3 }
+            if best == nil || score > best!.1 { best = (v, score) }
+        }
+        guard let pick = best, pick.1 >= 4 else { return nil }
+        let v = pick.0
+        return Track(id: v.id, title: s.title, artist: s.artist, album: nil, duration: v.duration,
+                     artworkURL: URL(string: "https://i.ytimg.com/vi/\(v.id)/hqdefault.jpg"), upload: true)
+    }
+
+    /// Lowercase letters and digits only, keeping words in brackets (for whole video titles).
+    static func normalizeLoose(_ s: String) -> String {
+        let t = s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        return String(t.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(Character.init))
+    }
+
+    static func matchOfficial(_ s: SpotifyTrack) async -> Track? {
         let artist = LyricsService.mainArtist(s.artist)
         let query = "\(s.title) \(artist)"
         var results = try? await YTMusic.search(query, songsOnly: true)
@@ -211,7 +271,7 @@ final class SpotifyImporter {
                 }
                 phase = .done
                 if !unmatched.isEmpty {
-                    let missing = unmatched.map { MissingSong(title: $0.title, artist: $0.artist) }
+                    let missing = unmatched.map { MissingSong(title: $0.title, artist: $0.artist, duration: $0.duration) }
                     NotificationStore.shared.post(AppNotification(
                         kind: .importReport,
                         title: "\(missing.count) \(missing.count == 1 ? "song" : "songs") not found in “\(list.name)”",

@@ -13,6 +13,8 @@ struct Track: Codable, Hashable, Identifiable {
     var channelID: String?
     var channelAvatar: URL?
     var published: Date?
+    /// Not on YouTube Music: a regular YouTube upload (often a fan upload) found for an imported song.
+    var upload: Bool?
 
     var isEpisode: Bool { podcast == true }
 

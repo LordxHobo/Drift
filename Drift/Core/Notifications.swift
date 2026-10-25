@@ -6,6 +6,7 @@ import UIKit
 struct MissingSong: Codable, Hashable {
     var title: String
     var artist: String
+    var duration: Double? = nil
 
     var line: String { artist.isEmpty ? title : "\(artist) - \(title)" }
 }
@@ -71,6 +72,20 @@ final class NotificationStore {
     func markAllRead() {
         guard items.contains(where: { !$0.read }) else { return }
         for i in items.indices { items[i].read = true }
+        save()
+    }
+
+    /// After looking for the missing songs again: keep only the ones still not found.
+    func updateMissing(_ id: UUID, _ missing: [MissingSong], found: Int) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].missing = missing
+        if missing.isEmpty {
+            items[i].title = "All missing songs found"
+        } else {
+            items[i].title = "\(missing.count) \(missing.count == 1 ? "song" : "songs") still not found"
+        }
+        items[i].detail = "Found \(found) more on another search (added to the playlist)."
+            + (missing.isEmpty ? "" : " Tap to see and copy the rest.")
         save()
     }
 

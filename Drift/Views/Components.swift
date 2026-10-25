@@ -211,7 +211,17 @@ struct TrackRow: View {
                                     .controlSize(.mini)
                                     .tint(accent)
                             }
-                            HQBadge()
+                            if track.upload == true {
+                                Text("UPLOAD")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Theme.line, in: RoundedRectangle(cornerRadius: 3))
+                                    .foregroundStyle(Theme.text2)
+                                    .accessibilityLabel("YouTube upload")
+                            } else {
+                                HQBadge()
+                            }
                             Text(track.artist)
                                 .font(.system(size: 12))
                                 .foregroundStyle(Theme.muted)

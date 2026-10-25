@@ -114,6 +114,8 @@ struct NotificationsView: View {
 struct NotificationDetailView: View {
     let id: UUID
     @State private var copied = false
+    @State private var searching = false
+    @State private var searched = 0
     private var store: NotificationStore { .shared }
     private var accent: Color { AppSettings.shared.accent }
 
@@ -131,6 +133,37 @@ struct NotificationDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
         .onAppear { store.markRead(id) }
+    }
+
+    /// Matches the missing songs again (now also against regular YouTube uploads) and adds what's found.
+    private func searchAgain(_ n: AppNotification, playlist pid: UUID) {
+        searching = true
+        searched = 0
+        let songs = n.missing
+        Task {
+            var results = [Track?](repeating: nil, count: songs.count)
+            for start in stride(from: 0, to: songs.count, by: 4) {
+                let range = start..<min(start + 4, songs.count)
+                let batch = await withTaskGroup(of: (Int, Track?).self) { group in
+                    for i in range {
+                        let m = songs[i]
+                        group.addTask {
+                            (i, await SongMatcher.match(SpotifyTrack(title: m.title, artist: m.artist, duration: m.duration)))
+                        }
+                    }
+                    var out: [(Int, Track?)] = []
+                    for await r in group { out.append(r) }
+                    return out
+                }
+                for (i, t) in batch { results[i] = t }
+                searched = range.upperBound
+            }
+            let found = results.compactMap { $0 }
+            let still = songs.indices.filter { results[$0] == nil }.map { songs[$0] }
+            Library.shared.appendTracks(found, to: pid)
+            NotificationStore.shared.updateMissing(n.id, still, found: found.count)
+            searching = false
+        }
     }
 
     private func content(_ n: AppNotification) -> some View {
@@ -180,6 +213,19 @@ struct NotificationDetailView: View {
                         }
                     }
                     .padding(.top, 8)
+                    if let pid = n.playlistID, Library.shared.playlist(pid) != nil {
+                        Button {
+                            searchAgain(n, playlist: pid)
+                        } label: {
+                            Label(searching ? "Looking… \(searched) of \(n.missing.count)" : "Look for these again, including YouTube uploads",
+                                  systemImage: "arrow.clockwise")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(accent)
+                                .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(searching)
+                    }
                     Text("Copied as “Artist - Title”, one per line, ready to paste into Notes. Long-press a song to copy just that one.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
