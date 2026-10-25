@@ -121,6 +121,8 @@ struct SearchView: View {
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
+        // Opening an artist or channel from the results keeps the search in Recent searches.
+        .onDisappear { if hasResults { remember() } }
         .task(id: "\(mode.rawValue)|\(settings.preferOfficialAudio)|\(query)") {
             await search()
         }
@@ -202,7 +204,6 @@ struct SearchView: View {
                     }
                     .padding(.vertical, 6)
                 }
-                .simultaneousGesture(TapGesture().onEnded { remember() })
                 .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 16))
                 .listRowSeparator(.hidden)
@@ -245,8 +246,7 @@ struct SearchView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
-                                .simultaneousGesture(TapGesture().onEnded { remember() })
-                                FollowButton(channel: c, compact: true)
+                                                FollowButton(channel: c, compact: true)
                             }
                         }
                     }
