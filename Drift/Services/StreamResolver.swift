@@ -69,8 +69,30 @@ actor StreamResolver {
             return stream
         }
 
+        // Second app: YouTube's iPhone app, which has links for some videos the first one won't give.
+        var hlsFallback: ResolvedStream?
+        if let ios = try? await withTimeout(5, { [visitorData] in
+            try await Self.quickResolve(videoID, dataSaver: dataSaver, visitorData: visitorData, client: .iOS)
+        }) {
+            var stream = ios.stream
+            if stream.source == "ios-hls" {
+                hlsFallback = stream
+            } else {
+                stream.source = "quick (iPhone)"
+                if let d = ResolvedStream.lengthFromURL(stream.url) { stream.duration = d }
+                cache[key] = (stream, Date().addingTimeInterval(3 * 3600))
+                return stream
+            }
+        }
+
         // Full extraction; YouTubeKit's remote fallback if YouTube changed something.
-        let streams = try await YouTube(videoID: videoID, methods: [.local, .remote]).streams
+        let streams: [YouTubeKit.Stream]
+        do {
+            streams = try await YouTube(videoID: videoID, methods: [.local, .remote]).streams
+        } catch {
+            if let hls = hlsFallback { return hls }
+            throw error
+        }
 
         // AVPlayer can't play WebM/Opus, so stick to M4A (AAC) audio-only streams.
         let audio = streams.filterAudioOnly().filter { $0.fileExtension == .m4a && $0.isNativelyPlayable }
@@ -84,7 +106,10 @@ actor StreamResolver {
         // Last resort: a combined audio+video stream (plays fine, audio only is used).
         guard let stream = picked
                 ?? streams.filter({ $0.includesAudioTrack && $0.isNativelyPlayable }).highestAudioBitrateStream()
-        else { throw StreamError.noAudio }
+        else {
+            if let hls = hlsFallback { return hls }
+            throw StreamError.noAudio
+        }
 
         let kbps = (stream.averageBitrate ?? stream.bitrate ?? 0) / 1000
         let label = kbps > 0 ? "AAC · \(kbps) kbps" : "AAC"
@@ -121,23 +146,43 @@ actor StreamResolver {
 
     /// YouTube's visionOS client hands out direct audio links without the web page or signature
     /// decoding (yt-dlp uses it the same way).
-    private static func quickResolve(_ videoID: String, dataSaver: Bool, visitorData: String?) async throws -> QuickResult {
-        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+    /// The YouTube apps Drift can ask for audio links.
+    enum QuickClient: Sendable {
+        case visionOS, iOS
+    }
+
+    private static func quickResolve(_ videoID: String, dataSaver: Bool, visitorData: String?,
+                                     client kind: QuickClient = .visionOS) async throws -> QuickResult {
+        let ua: String, clientNumber: String, version: String
+        var client: [String: Any]
+        switch kind {
+        case .visionOS:
+            ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+            clientNumber = "101"
+            version = "1.02"
+            client = ["clientName": "VISIONOS", "clientVersion": version,
+                      "deviceMake": "Apple", "deviceModel": "RealityDevice17,1",
+                      "osName": "visionOS", "osVersion": "26.5.23O471"]
+        case .iOS:
+            version = "20.10.4"
+            ua = "com.google.ios.youtube/\(version) (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
+            clientNumber = "5"
+            client = ["clientName": "IOS", "clientVersion": version,
+                      "deviceMake": "Apple", "deviceModel": "iPhone16,2",
+                      "osName": "iPhone", "osVersion": "18.3.2.22D82"]
+        }
+        client["userAgent"] = ua
+        client["hl"] = "en"
+        client["gl"] = "US"
         var req = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")!)
         req.httpMethod = "POST"
         req.timeoutInterval = 4
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(ua, forHTTPHeaderField: "User-Agent")
-        req.setValue("101", forHTTPHeaderField: "X-YouTube-Client-Name")
-        req.setValue("1.02", forHTTPHeaderField: "X-YouTube-Client-Version")
+        req.setValue(clientNumber, forHTTPHeaderField: "X-YouTube-Client-Name")
+        req.setValue(version, forHTTPHeaderField: "X-YouTube-Client-Version")
         req.setValue("https://www.youtube.com", forHTTPHeaderField: "Origin")
         if let visitorData { req.setValue(visitorData, forHTTPHeaderField: "X-Goog-Visitor-Id") }
-        var client: [String: Any] = [
-            "clientName": "VISIONOS", "clientVersion": "1.02",
-            "deviceMake": "Apple", "deviceModel": "RealityDevice17,1",
-            "osName": "visionOS", "osVersion": "26.5.23O471",
-            "userAgent": ua, "hl": "en", "gl": "US",
-        ]
         if let visitorData { client["visitorData"] = visitorData }
         let body: [String: Any] = ["context": ["client": client], "videoId": videoID,
                                    "contentCheckOk": true, "racyCheckOk": true]
@@ -149,11 +194,14 @@ actor StreamResolver {
             throw URLError(.badServerResponse)
         }
         let status = (json["playabilityStatus"] as? [String: Any])?["status"] as? String
+        let streaming = json["streamingData"] as? [String: Any]
         guard status == "OK",
               let details = json["videoDetails"] as? [String: Any],
-              (details["videoId"] as? String) == videoID,
-              let formats = (json["streamingData"] as? [String: Any])?["adaptiveFormats"] as? [[String: Any]]
+              (details["videoId"] as? String) == videoID
         else { throw StreamError.noAudio }
+        let formats = (streaming?["adaptiveFormats"] as? [[String: Any]]) ?? []
+        let visitor = (json["responseContext"] as? [String: Any])?["visitorData"] as? String
+        let seconds = (details["lengthSeconds"] as? String).flatMap(Double.init)
 
         // Direct-link AAC audio in the original language (no dubbed tracks).
         let audio = formats.filter { f in
@@ -166,11 +214,17 @@ actor StreamResolver {
             (f["averageBitrate"] as? Int) ?? (f["bitrate"] as? Int) ?? 0
         }
         guard let pick = dataSaver ? audio.min(by: { rate($0) < rate($1) }) : audio.max(by: { rate($0) < rate($1) }),
-              let s = pick["url"] as? String, let url = URL(string: s) else { throw StreamError.noAudio }
+              let s = pick["url"] as? String, let url = URL(string: s) else {
+            // No separate audio file: an HLS stream still plays (audio and video together, only audio is used).
+            if kind == .iOS, let hls = (streaming?["hlsManifestUrl"] as? String).flatMap(URL.init(string:)) {
+                return QuickResult(stream: ResolvedStream(url: hls, label: "HLS", duration: seconds, source: "ios-hls"),
+                                   visitorData: visitor)
+            }
+            throw StreamError.noAudio
+        }
         let kbps = rate(pick) / 1000
-        let visitor = (json["responseContext"] as? [String: Any])?["visitorData"] as? String
         var length = (pick["approxDurationMs"] as? String).flatMap(Double.init).map { $0 / 1000 }
-        if length == nil, let secs = (details["lengthSeconds"] as? String).flatMap(Double.init), secs > 0 { length = secs }
+        if length == nil, let secs = seconds, secs > 0 { length = secs }
         return QuickResult(stream: ResolvedStream(url: url, label: kbps > 0 ? "AAC · \(kbps) kbps" : "AAC",
                                                   duration: length),
                            visitorData: visitor)

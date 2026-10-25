@@ -25,6 +25,8 @@ final class LyricsActivity {
     private var lastSent: State?
     private var pending: State?
     private var sending = false
+    /// Wakes up exactly when the next lyric line starts (time updates can be slow while the phone is locked).
+    private var nextLineTask: Task<Void, Never>?
 
     private init() {
         // Clean up activities left over from a previous run.
@@ -48,6 +50,7 @@ final class LyricsActivity {
     // MARK: Player hooks
 
     func trackChanged(_ t: Track) {
+        nextLineTask?.cancel()
         track = t
         lines = []
         chapterTitle = ""
@@ -89,6 +92,7 @@ final class LyricsActivity {
     func playingChanged(_ playing: Bool) {
         guard playing != isPlaying else { return }
         isPlaying = playing
+        if playing { scheduleNextLine(after: Player.shared.currentTime) } else { nextLineTask?.cancel() }
         guard enabled else { return }
         if playing { startIfPossible() }
         push()
@@ -100,6 +104,19 @@ final class LyricsActivity {
         guard i != lineIndex else { return }
         lineIndex = i
         push()
+        scheduleNextLine(after: time)
+    }
+
+    private func scheduleNextLine(after time: Double) {
+        nextLineTask?.cancel()
+        let n = lineIndex + 1
+        guard isPlaying, n >= 0, n < lines.count else { return }
+        let wait = max(0.05, lines[n].time - 0.3 - time)
+        nextLineTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled, let self else { return }
+            self.tick(Player.shared.currentTime)
+        }
     }
 
     /// Drift came to the foreground: start the activity if something is playing.

@@ -418,7 +418,8 @@ final class Player {
         itemNotifications.removeAll()
 
         let item: AVPlayerItem
-        if url.isFileURL {
+        if url.isFileURL || url.absoluteString.contains(".m3u8") || url.path.contains("/hls") {
+            // Downloaded file, or an HLS stream (AVPlayer streams those itself).
             loader = nil
             item = AVPlayerItem(url: url)
         } else {
