@@ -34,6 +34,21 @@ struct RootView: View {
                     .allowsHitTesting(tab == .library)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .leading) {
+                // Swipe in from the left edge to open the drawer (on a tab's first page only,
+                // so the iPhone's swipe-back keeps working everywhere else).
+                if isAtStart(tab) && !ui.showDrawer {
+                    Color.clear
+                        .frame(width: 16)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 10).onEnded { v in
+                            if v.translation.width > 40 || v.predictedEndTranslation.width > 120 {
+                                ui.showDrawer = true
+                            }
+                        })
+                        .accessibilityHidden(true)
+                }
+            }
             .fullScreenCover(isPresented: $social.showOnboarding) {
                 OnboardingView()
             }
@@ -47,6 +62,9 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             TabBar(tab: $tab, reselect: backToStart)
+        }
+        .overlay {
+            ProfileDrawer(isOpen: $ui.showDrawer, open: openFromDrawer)
         }
         .background(Theme.bg.ignoresSafeArea())
         .foregroundStyle(Theme.text)
@@ -78,6 +96,26 @@ struct RootView: View {
 }
 
 extension RootView {
+    func isAtStart(_ t: AppTab) -> Bool {
+        switch t {
+        case .home: homePath.isEmpty
+        case .search: searchPath.isEmpty
+        case .podcasts: podcastsPath.isEmpty
+        case .library: libraryPath.isEmpty
+        }
+    }
+
+    /// Pages picked in the drawer open in the tab you're on.
+    func openFromDrawer(_ route: Route) {
+        ui.showDrawer = false
+        switch tab {
+        case .home: homePath.append(route)
+        case .search: searchPath.append(route)
+        case .podcasts: podcastsPath.append(route)
+        case .library: libraryPath.append(route)
+        }
+    }
+
     /// Tapping the tab you're already on goes back to its first page (like Spotify).
     func backToStart(_ t: AppTab) {
         switch t {

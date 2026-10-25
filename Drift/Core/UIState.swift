@@ -8,6 +8,8 @@ final class UIState {
     static let shared = UIState()
     var addToPlaylist: Track?
     var showPlayer = false
+    /// The side drawer (profile, notifications, friends, settings).
+    var showDrawer = false
     private init() {}
 }
 

@@ -16,44 +16,33 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(spacing: 10) {
-                    // Your own profile page (as friends see it); the editing screen if you have none yet.
-                    NavigationLink(value: SocialStore.shared.me.map(Route.user) ?? Route.profile) {
+                    // Opens the drawer (profile, notifications, friends, settings).
+                    Button {
+                        UIState.shared.showDrawer = true
+                    } label: {
                         UserAvatar(data: SocialStore.shared.me?.avatar,
                                    name: SocialStore.shared.me?.username ?? "?", size: 34)
+                            .overlay(alignment: .topTrailing) {
+                                if NotificationStore.shared.unreadCount > 0 {
+                                    Circle()
+                                        .fill(AppSettings.shared.accent)
+                                        .frame(width: 11, height: 11)
+                                        .overlay(Circle().stroke(Theme.bg, lineWidth: 2))
+                                        .offset(x: 2, y: -2)
+                                }
+                            }
                             .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("Your profile")
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(NotificationStore.shared.unreadCount > 0
+                                        ? "Menu, \(NotificationStore.shared.unreadCount) unread notifications" : "Menu")
                     Text(greeting)
                         .font(.system(size: 26, weight: .heavy))
                         .tracking(-0.5)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Spacer()
-                    NavigationLink(value: Route.friends) {
-                        Image(systemName: "person.2")
-                            .font(.system(size: 19))
-                            .frame(width: 44, height: 44)
-                    }
-                    .accessibilityLabel("Friends")
-                    NavigationLink(value: Route.notifications) {
-                        let unread = NotificationStore.shared.unreadCount
-                        Image(systemName: "bell")
-                            .font(.system(size: 19))
-                            .frame(width: 44, height: 44)
-                            .overlay(alignment: .topTrailing) {
-                                if unread > 0 {
-                                    Text(unread > 9 ? "9+" : "\(unread)")
-                                        .font(.system(size: 10, weight: .heavy))
-                                        .foregroundStyle(Theme.onAccent)
-                                        .padding(.horizontal, 4)
-                                        .frame(minWidth: 17, minHeight: 17)
-                                        .background(AppSettings.shared.accent, in: Capsule())
-                                        .offset(x: -4, y: 6)
-                                }
-                            }
-                    }
-                    .accessibilityLabel(NotificationStore.shared.unreadCount > 0
-                                        ? "Notifications, \(NotificationStore.shared.unreadCount) unread" : "Notifications")
                     NavigationLink(value: Route.settings) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))
