@@ -82,8 +82,10 @@ final class ArtistStore {
     // MARK: Looking for new releases
 
     /// Compares a freshly loaded artist page with what was seen before.
-    func update(_ artistID: String, with page: ArtistPage) {
-        guard let i = followed.firstIndex(where: { $0.id == artistID }) else { return }
+    @discardableResult
+    func update(_ artistID: String, with page: ArtistPage, notify: Bool = true) -> [NewRelease] {
+        guard let i = followed.firstIndex(where: { $0.id == artistID }) else { return [] }
+        var found: [NewRelease] = []
         let releases = page.albums + page.singles
         if followed[i].known.isEmpty {
             // First look (followed before the page had loaded): nothing counts as new yet.
@@ -91,13 +93,31 @@ final class ArtistStore {
         } else {
             for r in releases where !followed[i].known.contains(r.id) {
                 followed[i].known.insert(r.id)
-                followed[i].newReleases.insert(NewRelease(album: r, artistName: page.name, foundAt: Date()), at: 0)
+                let n = NewRelease(album: r, artistName: page.name, foundAt: Date())
+                followed[i].newReleases.insert(n, at: 0)
+                found.append(n)
             }
         }
         if let thumb = page.thumbnail {
             followed[i].artist = ArtistRef(id: artistID, name: page.name, thumbnail: thumb)
         }
         save()
+        if notify { Self.notify(found) }
+        return found
+    }
+
+    /// One notification for everything found in one go.
+    private static func notify(_ found: [NewRelease]) {
+        guard let first = found.first else { return }
+        var artists: [String] = []
+        for n in found where !artists.contains(n.artistName) { artists.append(n.artistName) }
+        let title = found.count == 1
+            ? "New from \(first.artistName)"
+            : "\(found.count) new releases"
+        let detail = found.count == 1
+            ? first.album.title
+            : artists.prefix(3).joined(separator: ", ") + (artists.count > 3 ? " and more" : "")
+        NotificationStore.shared.post(AppNotification(kind: .newReleases, title: title, detail: detail, releases: found))
     }
 
     /// Checks every followed artist, at most every few hours unless forced.
@@ -109,6 +129,7 @@ final class ArtistStore {
         defer { checking = false }
         prune()
 
+        var found: [NewRelease] = []
         let artists = followed.map(\.artist)
         // A few at a time so it stays light.
         for start in stride(from: 0, to: artists.count, by: 4) {
@@ -122,9 +143,10 @@ final class ArtistStore {
                 return out
             }
             for (id, page) in pages {
-                if let page { update(id, with: page) }
+                if let page { found += update(id, with: page, notify: false) }
             }
         }
+        Self.notify(found)
         UserDefaults.standard.set(Date(), forKey: lastCheckKey)
         save()
     }

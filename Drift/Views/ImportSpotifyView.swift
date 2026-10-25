@@ -7,6 +7,7 @@ struct ImportSpotifyView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var link = ""
     @State private var importer = SpotifyImporter()
+    @State private var copied = false
     @FocusState private var focused: Bool
     private var accent: Color { AppSettings.shared.accent }
 
@@ -158,16 +159,28 @@ struct ImportSpotifyView: View {
 
             if !importer.unmatched.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Not found (\(importer.unmatched.count))")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.muted)
+                    HStack {
+                        Text("Not found (\(importer.unmatched.count))")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.muted)
+                        Spacer()
+                        Button {
+                            NotificationStore.copy(importer.unmatched.map { MissingSong(title: $0.title, artist: $0.artist) })
+                            copied = true
+                        } label: {
+                            Label(copied ? "Copied" : "Copy list", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(accent)
+                                .frame(minHeight: 44)
+                        }
+                    }
                     ForEach(Array(importer.unmatched.enumerated()), id: \.offset) { _, t in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(t.title).font(.system(size: 14, weight: .semibold))
                             Text(t.artist).font(.system(size: 12)).foregroundStyle(Theme.muted)
                         }
                     }
-                    Text("Search for these yourself and add them with ⋯ → Add to playlist.")
+                    Text("Copies “Artist - Title”, one per line, for your Notes app. This list is also saved in Notifications (the bell on Home). Search for these yourself and add them with ⋯ → Add to playlist.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
                 }

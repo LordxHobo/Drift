@@ -200,6 +200,14 @@ final class SpotifyImporter {
                     start += 30
                 }
                 phase = .done
+                if !unmatched.isEmpty {
+                    let missing = unmatched.map { MissingSong(title: $0.title, artist: $0.artist) }
+                    NotificationStore.shared.post(AppNotification(
+                        kind: .importReport,
+                        title: "\(missing.count) \(missing.count == 1 ? "song" : "songs") not found in “\(list.name)”",
+                        detail: "\(total - missing.count) of \(total) songs imported. Tap to see and copy the missing ones.",
+                        playlistID: id, missing: missing))
+                }
             } catch {
                 phase = .failed(error.localizedDescription)
             }

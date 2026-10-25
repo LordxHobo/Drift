@@ -35,6 +35,25 @@ struct HomeView: View {
                             .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel("Friends")
+                    NavigationLink(value: Route.notifications) {
+                        let unread = NotificationStore.shared.unreadCount
+                        Image(systemName: "bell")
+                            .font(.system(size: 19))
+                            .frame(width: 44, height: 44)
+                            .overlay(alignment: .topTrailing) {
+                                if unread > 0 {
+                                    Text(unread > 9 ? "9+" : "\(unread)")
+                                        .font(.system(size: 10, weight: .heavy))
+                                        .foregroundStyle(Theme.onAccent)
+                                        .padding(.horizontal, 4)
+                                        .frame(minWidth: 17, minHeight: 17)
+                                        .background(AppSettings.shared.accent, in: Capsule())
+                                        .offset(x: -4, y: 6)
+                                }
+                            }
+                    }
+                    .accessibilityLabel(NotificationStore.shared.unreadCount > 0
+                                        ? "Notifications, \(NotificationStore.shared.unreadCount) unread" : "Notifications")
                     NavigationLink(value: Route.settings) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))
