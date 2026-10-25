@@ -72,33 +72,6 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                let releases = ArtistStore.shared.allNewReleases
-                if !releases.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("New releases")
-                            .font(.system(size: 20, weight: .heavy))
-                            .tracking(-0.3)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 14) {
-                                ForEach(releases) { r in
-                                    NavigationLink(value: Route.album(r.album, artist: r.artistName)) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            AlbumCard(album: r.album, size: 140)
-                                            Text(r.artistName)
-                                                .font(.system(size: 12))
-                                                .foregroundStyle(Theme.muted)
-                                                .lineLimit(1)
-                                                .frame(width: 140, alignment: .leading)
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .scrollClipDisabled()
-                    }
-                }
-
                 if library.recent.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Nothing played yet")
@@ -133,6 +106,33 @@ struct HomeView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu { TrackMenuItems(track: t) }
+                                }
+                            }
+                        }
+                        .scrollClipDisabled()
+                    }
+                }
+
+                let releases = ArtistStore.shared.allNewReleases
+                if !releases.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("New releases")
+                            .font(.system(size: 20, weight: .heavy))
+                            .tracking(-0.3)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: 14) {
+                                ForEach(releases) { r in
+                                    NavigationLink(value: Route.album(r.album, artist: r.artistName)) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            AlbumCard(album: r.album, size: 140)
+                                            Text(r.artistName)
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(Theme.muted)
+                                                .lineLimit(1)
+                                                .frame(width: 140, alignment: .leading)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }

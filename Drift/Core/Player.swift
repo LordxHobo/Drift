@@ -70,6 +70,11 @@ final class Player {
     @ObservationIgnored private var silentSince: Double?
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var artwork: (id: String, art: MPMediaItemArtwork)?
+    /// Where to start when the restored song (from last time) is played.
+    @ObservationIgnored private var pendingResume: (id: String, time: Double)?
+    @ObservationIgnored private var lastPositionSave: Double = -10
+    /// Quiet at the very end of a song (after its listed length), used to end it cleanly.
+    @ObservationIgnored private var tailSilentSince: Double?
 
     private init() {
         av.automaticallyWaitsToMinimizeStalling = true
@@ -88,6 +93,7 @@ final class Player {
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
                 SocialStore.shared.playerChanged()
+                if status == .paused { self.savePosition() }
                 if status == .paused, let t = self.current, t.isEpisode, self.currentTime > 0 {
                     PodcastStore.shared.update(t, position: self.currentTime, duration: self.duration, force: true)
                 }
@@ -96,6 +102,7 @@ final class Player {
         setupRemoteCommands()
         observeSession()
         updateRoute()
+        restoreSession()
     }
 
     func configureAudioSession() {
@@ -239,6 +246,12 @@ final class Player {
     func seek(to t: Double, precise: Bool = true) {
         let target = max(0, duration > 0 ? min(t, duration - 0.5) : t)
         currentTime = target
+        // Restored song that isn't loaded yet: remember where to start.
+        if av.currentItem == nil, let p = pendingResume {
+            pendingResume = (p.id, target)
+            updateNowPlaying()
+            return
+        }
         let tolerance = precise ? CMTime.zero : CMTime(seconds: 0.5, preferredTimescale: 600)
         av.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                 toleranceBefore: .zero, toleranceAfter: tolerance)
@@ -289,8 +302,12 @@ final class Player {
         updateCommands()
         lastProgressReport = -10
         if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
-        let resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
+        var resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
+        if let p = pendingResume, p.id == track.id { resumeAt = p.time }
+        pendingResume = nil
         currentTime = resumeAt
+        tailSilentSince = nil
+        saveSession()
 
         // Skip segments are looked up while the audio link is being found.
         let segsTask = Task {
@@ -545,6 +562,62 @@ final class Player {
         prefetch(Array(upcoming))
     }
 
+    // MARK: Remembering what was playing
+
+    private static let sessionURL = URL.documentsDirectory.appending(path: "playback.json")
+    private static let positionKey = "player.position"
+
+    private struct Session: Codable {
+        var queue: [Track]
+        var index: Int
+        var playingFrom: String
+        var shuffle: Bool
+    }
+
+    /// Saves the queue (on every song change). The position is saved separately every few seconds.
+    private func saveSession() {
+        guard current != nil else { return }
+        // Very long queues: keep the part around the current song.
+        let lower = max(0, index - 100), upper = min(queue.count, index + 400)
+        let session = Session(queue: Array(queue[lower..<upper]), index: index - lower,
+                              playingFrom: playingFrom, shuffle: shuffle)
+        UserDefaults.standard.set(currentTime, forKey: Self.positionKey)
+        let url = Self.sessionURL
+        Task.detached(priority: .utility) {
+            if let data = try? JSONEncoder().encode(session) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+    /// Saves the exact position (when pausing and when Drift goes to the background).
+    func savePosition() {
+        guard current != nil else { return }
+        UserDefaults.standard.set(currentTime, forKey: Self.positionKey)
+    }
+
+    /// Brings back the song from last time, paused where it was. It loads when you press play.
+    private func restoreSession() {
+        guard let data = try? Data(contentsOf: Self.sessionURL),
+              let s = try? JSONDecoder().decode(Session.self, from: data),
+              s.queue.indices.contains(s.index) else { return }
+        queue = s.queue
+        originalQueue = s.queue
+        index = s.index
+        playingFrom = s.playingFrom
+        shuffle = s.shuffle
+        let track = s.queue[s.index]
+        let position = UserDefaults.standard.double(forKey: Self.positionKey)
+        duration = track.duration ?? 0
+        currentTime = position
+        pendingResume = (track.id, position)
+        isPlaying = false
+        isBuffering = false
+        loadArtwork(for: track)
+        updateNowPlaying()
+        updateCommands()
+    }
+
     // MARK: Time & skipping
 
     private func tick(_ t: Double) {
@@ -555,11 +628,27 @@ final class Player {
             duration = d
             updateNowPlaying()
         }
-        // Song is over at its real length, even if iOS thinks the file runs longer.
-        if let k = knownDuration, t >= k - 0.15, isPlaying {
-            knownDuration = nil
-            advance(auto: true)
-            return
+        if abs(t - lastPositionSave) >= 3 {
+            lastPositionSave = t
+            UserDefaults.standard.set(t, forKey: Self.positionKey)
+        }
+        // Song is over at its real length, even if iOS thinks the file runs longer (it can add minutes of
+        // silence). The listed length is a little short for some songs, so the last notes get up to 4 s
+        // more: it ends once the audio has gone quiet, or at the latest 4 s past the listed length.
+        if let k = knownDuration, isPlaying, t >= k - 0.15 {
+            let quiet = (meter?.peak ?? 1) < 0.003
+            if quiet {
+                if tailSilentSince == nil { tailSilentSince = t }
+            } else {
+                tailSilentSince = nil
+            }
+            let quietLongEnough = tailSilentSince.map { t - $0 >= 0.5 } ?? false
+            if t >= k + 4 || quietLongEnough || (meter == nil && t >= k + 1) {
+                knownDuration = nil
+                tailSilentSince = nil
+                advance(auto: true)
+                return
+            }
         }
         chapterTick()
         if checkSilence(at: t) { return }
