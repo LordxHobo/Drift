@@ -10,6 +10,8 @@ struct PlaylistView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var headerColor: Color = Color(hex: 0x1A2B21)
     @State private var editing: Playlist?
+    @State private var filter = ""
+    @FocusState private var filterFocused: Bool
     private var library: Library { .shared }
     private var player: Player { .shared }
     private var downloads: DownloadManager { .shared }
@@ -65,17 +67,40 @@ struct PlaylistView: View {
                     .listRowSeparator(.hidden)
             }
 
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                TrackRow(track: t) {
-                    player.play(tracks, startAt: i, from: title)
+            if !tracks.isEmpty {
+                filterField
+                    .listRowBackground(Theme.bg)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
+            }
+
+            let shown = filtered(tracks)
+            if !query.isEmpty && shown.isEmpty {
+                Text("No songs or artists matching “\(query)”")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 20)
+                    .listRowBackground(Theme.bg)
+                    .listRowSeparator(.hidden)
+            }
+
+            // Tapping a song plays the whole list from that song, filtered or not.
+            ForEach(shown) { item in
+                TrackRow(track: item.track) {
+                    filterFocused = false
+                    player.play(tracks, startAt: item.index, from: title)
                 }
                 .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
                 .listRowSeparator(.hidden)
             }
-            .onDelete(perform: delete)
-            .onMove(perform: move)
+            .onDelete { offsets in
+                delete(IndexSet(offsets.map { shown[$0].index }))
+            }
+            .onMove(perform: query.isEmpty ? move : nil)
         }
+        .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Theme.bg)
@@ -222,6 +247,53 @@ struct PlaylistView: View {
         if !tracks.isEmpty { s += " · \(formatTotal(tracks))" }
         if kind != .downloads, downloaded > 0 { s += " · \(downloaded) downloaded" }
         return s
+    }
+
+    private var query: String { filter.trimmingCharacters(in: .whitespaces) }
+
+    /// Songs matching the filter (title, artist or album), with their place in the full list.
+    private struct Item: Identifiable {
+        let index: Int
+        let track: Track
+        var id: String { track.id }
+    }
+
+    private func filtered(_ tracks: [Track]) -> [Item] {
+        let all = tracks.enumerated().map { Item(index: $0.offset, track: $0.element) }
+        guard !query.isEmpty else { return all }
+        return all.filter { item in
+            item.track.title.localizedStandardContains(query)
+                || item.track.artist.localizedStandardContains(query)
+                || (item.track.album?.localizedStandardContains(query) ?? false)
+        }
+    }
+
+    private var filterField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+            TextField("", text: $filter, prompt: Text("Find in \(kind == .downloads ? "downloads" : "playlist")")
+                .foregroundStyle(Theme.muted))
+                .font(.system(size: 14, weight: .medium))
+                .focused($filterFocused)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !filter.isEmpty {
+                Button {
+                    filter = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
+                        .frame(width: 32, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func delete(_ offsets: IndexSet) {
