@@ -101,6 +101,7 @@ struct PlaylistView: View {
             .onMove(perform: query.isEmpty ? move : nil)
         }
         .scrollDismissesKeyboard(.immediately)
+        .environment(\.songPlace, songPlace)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Theme.bg)
@@ -247,6 +248,14 @@ struct PlaylistView: View {
         if !tracks.isEmpty { s += " · \(formatTotal(tracks))" }
         if kind != .downloads, downloaded > 0 { s += " · \(downloaded) downloaded" }
         return s
+    }
+
+    private var songPlace: SongPlace? {
+        switch kind {
+        case .liked: .liked
+        case .playlist(let id): .playlist(id)
+        case .downloads: nil
+        }
     }
 
     private var query: String { filter.trimmingCharacters(in: .whitespaces) }

@@ -7,6 +7,8 @@ import CoreImage
 final class UIState {
     static let shared = UIState()
     var addToPlaylist: Track?
+    /// Song being swapped for another YouTube version (from a playlist or Liked songs).
+    var replacing: ReplaceRequest?
     var showPlayer = false
     /// The side drawer (profile, notifications, friends, settings).
     var showDrawer = false

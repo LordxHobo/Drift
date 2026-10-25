@@ -72,6 +72,9 @@ struct RootView: View {
         .sheet(item: $ui.addToPlaylist) { track in
             AddToPlaylistSheet(track: track)
         }
+        .sheet(item: $ui.replacing) { r in
+            ReplaceSongSheet(request: r)
+        }
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onAppear { settings.applyAppearance() }
         .task { await ArtistStore.shared.check() }

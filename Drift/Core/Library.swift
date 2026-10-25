@@ -201,6 +201,26 @@ final class Library {
         save()
     }
 
+    /// Swaps a song for another version, in the same spot. A song that was downloaded gets
+    /// the new version downloaded too.
+    func replace(_ old: Track, with new: Track, in place: SongPlace) {
+        switch place {
+        case .liked:
+            guard let i = liked.firstIndex(where: { $0.id == old.id }) else { return }
+            if liked.contains(where: { $0.id == new.id }) { liked.remove(at: i) } else { liked[i] = new }
+        case .playlist(let id):
+            guard let p = playlists.firstIndex(where: { $0.id == id }),
+                  let i = playlists[p].tracks.firstIndex(where: { $0.id == old.id }) else { return }
+            if playlists[p].tracks.contains(where: { $0.id == new.id }) {
+                playlists[p].tracks.remove(at: i)
+            } else {
+                playlists[p].tracks[i] = new
+            }
+        }
+        save()
+        if isDownloaded(old.id) { DownloadManager.shared.download(new) }
+    }
+
     // MARK: Recently played
 
     func addRecent(_ t: Track) {

@@ -1,7 +1,7 @@
 import SwiftUI
 import Observation
 
-/// Recent searches, kept on the phone (separately for songs, YouTube and podcasts).
+/// Recent searches, kept on the phone (separately for songs and podcasts).
 @Observable @MainActor
 final class SearchHistory {
     static let shared = SearchHistory()
@@ -9,10 +9,6 @@ final class SearchHistory {
     struct Entry: Codable, Hashable {
         var text: String
         var podcasts: Bool
-        var youtube: Bool? = nil
-
-        /// "songs", "youtube" or "podcasts".
-        var mode: String { youtube == true ? "youtube" : (podcasts ? "podcasts" : "songs") }
     }
 
     private(set) var entries: [Entry] = []
@@ -25,14 +21,14 @@ final class SearchHistory {
         }
     }
 
-    func items(_ mode: String) -> [Entry] { entries.filter { $0.mode == mode } }
+    func items(podcasts: Bool) -> [Entry] { entries.filter { $0.podcasts == podcasts } }
 
-    func add(_ text: String, mode: String) {
+    func add(_ text: String, podcasts: Bool) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.count >= 2 else { return }
         // Same search again moves to the top.
-        entries.removeAll { $0.mode == mode && $0.text.lowercased() == t.lowercased() }
-        entries.insert(Entry(text: t, podcasts: mode == "podcasts", youtube: mode == "youtube" ? true : nil), at: 0)
+        entries.removeAll { $0.podcasts == podcasts && $0.text.lowercased() == t.lowercased() }
+        entries.insert(Entry(text: t, podcasts: podcasts), at: 0)
         if entries.count > 60 { entries.removeLast(entries.count - 60) }
         save()
     }
@@ -42,8 +38,8 @@ final class SearchHistory {
         save()
     }
 
-    func clear(_ mode: String) {
-        entries.removeAll { $0.mode == mode }
+    func clear(podcasts: Bool) {
+        entries.removeAll { $0.podcasts == podcasts }
         save()
     }
 
@@ -54,7 +50,7 @@ final class SearchHistory {
 
 struct SearchView: View {
     enum Mode: String, Hashable {
-        case songs, youtube, podcasts
+        case songs, podcasts
     }
 
     @State private var query = ""
@@ -69,12 +65,12 @@ struct SearchView: View {
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
     private var history: SearchHistory { .shared }
-    private var historyItems: [SearchHistory.Entry] { history.items(mode.rawValue) }
+    private var historyItems: [SearchHistory.Entry] { history.items(podcasts: mode == .podcasts) }
     private var showingHistory: Bool { trimmed.isEmpty && !historyItems.isEmpty }
     private var accent: Color { settings.accent }
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var hasResults: Bool { mode == .podcasts ? !(channels.isEmpty && episodes.isEmpty) : !results.isEmpty }
+    private var hasResults: Bool { mode == .songs ? !results.isEmpty : !(channels.isEmpty && episodes.isEmpty) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -88,11 +84,10 @@ struct SearchView: View {
 
             HStack(spacing: 8) {
                 modeChip("Songs", .songs)
-                modeChip("YouTube", .youtube)
                 modeChip("Podcasts", .podcasts)
                 Spacer()
                 if showingHistory {
-                    Button("Clear all") { history.clear(mode.rawValue) }
+                    Button("Clear all") { history.clear(podcasts: mode == .podcasts) }
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.text)
                         .padding(.horizontal, 14)
@@ -116,7 +111,7 @@ struct SearchView: View {
                     message("Nothing found for “\(query)”")
                 } else if !hasResults {
                     message(prompt)
-                } else if mode != .podcasts {
+                } else if mode == .songs {
                     songList
                 } else {
                     podcastList
@@ -139,8 +134,6 @@ struct SearchView: View {
             settings.preferOfficialAudio
                 ? "Search songs, artists and albums from YouTube Music."
                 : "Search songs and music videos from YouTube."
-        case .youtube:
-            "Search all of YouTube for anything that isn't on YouTube Music (fan uploads, live sets, mixes), or paste a YouTube link. Only the audio plays."
         case .podcasts:
             "Search podcasts and channels on YouTube, or paste a YouTube link to play any video."
         }
@@ -151,8 +144,7 @@ struct SearchView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color(hex: 0x3F3F46))
             TextField("", text: $query,
-                      prompt: Text(mode == .songs ? "What do you want to listen to?"
-                                   : mode == .youtube ? "Search YouTube or paste a link" : "Podcasts, channels or a YouTube link")
+                      prompt: Text(mode == .songs ? "What do you want to listen to?" : "Podcasts, channels or a YouTube link")
                         .foregroundStyle(Color(hex: 0x52525B)))
                 .foregroundStyle(Color(hex: 0x18181B))
                 .font(.system(size: 15, weight: .semibold))
@@ -179,9 +171,6 @@ struct SearchView: View {
     private func modeChip(_ title: String, _ m: Mode) -> some View {
         let selected = mode == m
         return Button {
-            guard mode != m else { return }
-            results = []
-            topArtist = nil
             mode = m
         } label: {
             Text(title)
@@ -286,7 +275,7 @@ struct SearchView: View {
     private func remember() {
         // Pasted links aren't worth keeping.
         guard YouTubeSearch.videoID(fromLink: trimmed) == nil else { return }
-        history.add(trimmed, mode: mode.rawValue)
+        history.add(trimmed, podcasts: mode == .podcasts)
     }
 
     private var historyList: some View {
@@ -300,7 +289,7 @@ struct SearchView: View {
                 HStack(spacing: 12) {
                     Button {
                         query = e.text
-                        history.add(e.text, mode: e.mode)
+                        history.add(e.text, podcasts: e.podcasts)
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "clock.arrow.circlepath")
@@ -376,23 +365,6 @@ struct SearchView: View {
                 results = found
                 topArtist = Artists.bestMatch(artists, for: q)
                 player.prefetch(Array(found.prefix(2)))
-            case .youtube:
-                // Any YouTube video, played as a song (audio only, kept as it is).
-                let found: [Track]
-                if isLink {
-                    found = (try await YouTubeSearch.resolve(link: q)).map { [$0] } ?? []
-                } else {
-                    found = try await YouTubeSearch.search(q).episodes
-                }
-                guard !Task.isCancelled else { return }
-                results = found.map { v in
-                    var t = v
-                    t.podcast = nil
-                    t.upload = true
-                    return t
-                }
-                topArtist = nil
-                player.prefetch(Array(results.prefix(2)))
             case .podcasts:
                 if isLink {
                     let t = try await YouTubeSearch.resolve(link: q)

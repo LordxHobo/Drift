@@ -282,11 +282,40 @@ struct LikeButton: View {
     }
 }
 
+/// Where a song row sits, so its menu can offer "Replace with another version".
+enum SongPlace: Hashable {
+    case playlist(UUID), liked
+}
+
+private struct SongPlaceKey: EnvironmentKey {
+    static let defaultValue: SongPlace? = nil
+}
+
+extension EnvironmentValues {
+    var songPlace: SongPlace? {
+        get { self[SongPlaceKey.self] }
+        set { self[SongPlaceKey.self] = newValue }
+    }
+}
+
+struct ReplaceRequest: Identifiable {
+    let id = UUID()
+    let track: Track
+    let place: SongPlace
+}
+
 struct TrackMenuItems: View {
     let track: Track
+    @Environment(\.songPlace) private var place
     private var library: Library { .shared }
 
     var body: some View {
+        if let place, !track.isEpisode {
+            Button {
+                UIState.shared.replacing = ReplaceRequest(track: track, place: place)
+            } label: { Label("Replace with another version", systemImage: "arrow.triangle.2.circlepath") }
+        }
+
         Button {
             Player.shared.playNext(track)
         } label: { Label("Play next", systemImage: "text.insert") }
