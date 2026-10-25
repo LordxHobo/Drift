@@ -6,6 +6,11 @@ enum AppTab: Hashable {
 
 struct RootView: View {
     @State private var tab: AppTab = .home
+    /// Pages opened inside each tab; emptied when the tab is tapped again.
+    @State private var homePath = NavigationPath()
+    @State private var searchPath = NavigationPath()
+    @State private var podcastsPath = NavigationPath()
+    @State private var libraryPath = NavigationPath()
     @State private var ui = UIState.shared
     @State private var social = SocialStore.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -15,16 +20,16 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                NavigationStack { HomeView().withRoutes() }
+                NavigationStack(path: $homePath) { HomeView().withRoutes() }
                     .opacity(tab == .home ? 1 : 0)
                     .allowsHitTesting(tab == .home)
-                NavigationStack { SearchView().withRoutes() }
+                NavigationStack(path: $searchPath) { SearchView().withRoutes() }
                     .opacity(tab == .search ? 1 : 0)
                     .allowsHitTesting(tab == .search)
-                NavigationStack { PodcastsView().withRoutes() }
+                NavigationStack(path: $podcastsPath) { PodcastsView().withRoutes() }
                     .opacity(tab == .podcasts ? 1 : 0)
                     .allowsHitTesting(tab == .podcasts)
-                NavigationStack { LibraryView().withRoutes() }
+                NavigationStack(path: $libraryPath) { LibraryView().withRoutes() }
                     .opacity(tab == .library ? 1 : 0)
                     .allowsHitTesting(tab == .library)
             }
@@ -39,7 +44,7 @@ struct RootView: View {
                     .padding(.top, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            TabBar(tab: $tab)
+            TabBar(tab: $tab, reselect: backToStart)
         }
         .background(Theme.bg.ignoresSafeArea())
         .foregroundStyle(Theme.text)
@@ -61,8 +66,21 @@ struct RootView: View {
     }
 }
 
+extension RootView {
+    /// Tapping the tab you're already on goes back to its first page (like Spotify).
+    func backToStart(_ t: AppTab) {
+        switch t {
+        case .home: homePath = NavigationPath()
+        case .search: searchPath = NavigationPath()
+        case .podcasts: podcastsPath = NavigationPath()
+        case .library: libraryPath = NavigationPath()
+        }
+    }
+}
+
 struct TabBar: View {
     @Binding var tab: AppTab
+    var reselect: (AppTab) -> Void = { _ in }
 
     var body: some View {
         HStack {
@@ -79,7 +97,7 @@ struct TabBar: View {
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ selectedIcon: String) -> some View {
         let selected = tab == t
         return Button {
-            tab = t
+            if tab == t { reselect(t) } else { tab = t }
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: selected ? selectedIcon : icon)
