@@ -6,6 +6,14 @@ struct ResolvedStream {
     let label: String   // e.g. "AAC · 128 kbps"
     /// Exact length from YouTube, when known (iOS can misread it from these files).
     var duration: Double? = nil
+    /// "quick" or "full" extraction (shown in the player's stream info).
+    var source = ""
+
+    /// YouTube puts the exact length in the link itself ("dur=156.13").
+    static func lengthFromURL(_ url: URL) -> Double? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .first { $0.name == "dur" }?.value.flatMap(Double.init)
+    }
 }
 
 struct TimeoutError: Error {}
@@ -54,8 +62,11 @@ actor StreamResolver {
                try await Self.quickResolve(videoID, dataSaver: dataSaver, visitorData: visitorData)
            }) {
             if let v = quick.visitorData { visitorData = v }
-            cache[key] = (quick.stream, Date().addingTimeInterval(3 * 3600))
-            return quick.stream
+            var stream = quick.stream
+            stream.source = "quick"
+            if let d = ResolvedStream.lengthFromURL(stream.url) { stream.duration = d }
+            cache[key] = (stream, Date().addingTimeInterval(3 * 3600))
+            return stream
         }
 
         // Full extraction; YouTubeKit's remote fallback if YouTube changed something.
@@ -77,7 +88,8 @@ actor StreamResolver {
 
         let kbps = (stream.averageBitrate ?? stream.bitrate ?? 0) / 1000
         let label = kbps > 0 ? "AAC · \(kbps) kbps" : "AAC"
-        let resolved = ResolvedStream(url: stream.url, label: label)
+        let resolved = ResolvedStream(url: stream.url, label: label,
+                                      duration: ResolvedStream.lengthFromURL(stream.url), source: "full")
         // Stream URLs expire after ~6 hours; refresh well before that.
         cache[key] = (resolved, Date().addingTimeInterval(3 * 3600))
         return resolved

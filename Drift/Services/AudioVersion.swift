@@ -9,6 +9,10 @@ actor AudioVersion {
     /// Video ID → album-audio video ID ("" = it already is the album audio, or there is none).
     private var map: [String: String]
     private var pending: [String: Task<String?, Never>] = [:]
+    /// What the last lookup found, per song (shown in the player's stream info).
+    private var notes: [String: String] = [:]
+
+    func note(_ id: String) -> String { notes[id] ?? "Not looked up" }
 
     private init() {
         map = (UserDefaults.standard.dictionary(forKey: "audioVersion.map.v2") as? [String: String]) ?? [:]
@@ -17,31 +21,45 @@ actor AudioVersion {
     /// The ID to actually play for a song (the album version when there is one).
     func preferred(_ track: Track) async -> String {
         let id = track.id
-        guard AppSettings.shared.preferOfficialAudio, !track.isEpisode else { return id }
-        if let known = map[id] { return known.isEmpty ? id : known }
+        guard AppSettings.shared.preferOfficialAudio, !track.isEpisode else {
+            notes[id] = "Off (Prefer official audio is off)"
+            return id
+        }
+        if let known = map[id] {
+            if notes[id] == nil { notes[id] = known.isEmpty ? "Remembered: keep this video" : "Remembered: album version" }
+            return known.isEmpty ? id : known
+        }
         if let task = pending[id] { return await task.value ?? id }
         let task = Task<String?, Never> {
-            let answer: String?? = try? await withTimeout(4) { try await Self.lookup(track) }
-            return answer ?? nil
+            let answer: (String, String)?? = try? await withTimeout(4) { try await Self.lookup(track) }
+            guard let pair = answer ?? nil else { return nil }
+            await self.setNote(id, pair.1)
+            return pair.0
         }
         pending[id] = task
         let result = await task.value
         pending[id] = nil
         // Only remember real answers; a failed or slow lookup is tried again next time.
-        guard let result else { return id }
+        guard let result else {
+            notes[id] = "Lookup failed or timed out"
+            return id
+        }
         map[id] = result == id ? "" : result
         if map.count > 5000 { map.removeAll() }
         UserDefaults.standard.set(map, forKey: defaultsKey)
         return result
     }
 
+    private func setNote(_ id: String, _ text: String) { notes[id] = text }
+
     private static let atv = "MUSIC_VIDEO_TYPE_ATV"
 
     /// 1. YouTube Music's own link between a music video and its album version.
     /// 2. Otherwise, a "songs" search for the same title and artist, keeping only album audio.
-    private static func lookup(_ track: Track) async throws -> String? {
+    private static func lookup(_ track: Track) async throws -> (String, String)? {
         let id = track.id
         var ownType: String?
+        var linkNote = "YouTube Music link: no answer"
         if let json = try? await YTMusic.post("next", [
             "videoId": id,
             "playlistId": "RDAMVM\(id)",
@@ -55,13 +73,17 @@ actor AudioVersion {
             collect(first, into: &candidates)
             let types = candidates.map { ($0["videoId"] as? String, videoType($0)) }
             ownType = types.first(where: { $0.0 == id })?.1
-            if ownType == atv { return id }
-            if let other = types.first(where: { $0.1 == atv && $0.0 != nil && $0.0 != id })?.0 { return other }
+            let short = (ownType ?? "unknown").replacingOccurrences(of: "MUSIC_VIDEO_TYPE_", with: "")
+            if ownType == atv { return (id, "Already album audio (ATV)") }
+            if let other = types.first(where: { $0.1 == atv && $0.0 != nil && $0.0 != id })?.0 {
+                return (other, "Album version via YouTube Music link (this video: \(short))")
+            }
+            linkNote = "YouTube Music link: none (this video: \(short), \(types.count) entries)"
         }
 
         // Search for the album version.
         let artist = LyricsService.mainArtist(track.artist)
-        guard !track.title.isEmpty else { return ownType == nil ? nil : id }
+        guard !track.title.isEmpty else { return ownType == nil ? nil : (id, linkNote) }
         let json = try await YTMusic.post("search", ["query": "\(track.title) \(artist)",
                                                      "params": "EgWKAQIIAWoMEA4QChADEAQQCRAF"])
         let wantTitle = SongMatcher.normalize(track.title)
@@ -76,7 +98,11 @@ actor AudioVersion {
             guard diff <= 6 else { return }
             if best == nil || diff < best!.diff { best = (t.id, diff) }
         }
-        return best?.id ?? id
+        if let b = best {
+            return b.id == id ? (id, "\(linkNote); search: this is the album version")
+                              : (b.id, "\(linkNote); album version found by search")
+        }
+        return (id, "\(linkNote); search: no album version matched")
     }
 
     private static func firstValue(_ node: Any, _ key: String) -> Any? {

@@ -7,6 +7,7 @@ struct NowPlayingView: View {
     @State private var scrub: Double?
     @State private var dragDown: CGFloat = 0
     @State private var showLyrics = false
+    @State private var showStreamInfo = false
     @State private var showChapters = false
     /// Live artwork drag. A @GestureState resets itself even when iOS cancels the drag,
     /// so the artwork can never get stuck halfway.
@@ -256,14 +257,21 @@ struct NowPlayingView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     if !player.qualityLabel.isEmpty {
-                        Text(player.qualityLabel.uppercased())
-                            .font(.system(size: 10, weight: .heavy))
-                            .tracking(0.5)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x71717A)))
-                            .foregroundStyle(Color(hex: 0xE4E4E7))
-                            .fixedSize()
+                        Button { showStreamInfo = true } label: {
+                            Text(player.qualityLabel.uppercased())
+                                .font(.system(size: 10, weight: .heavy))
+                                .tracking(0.5)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x71717A)))
+                                .foregroundStyle(Color(hex: 0xE4E4E7))
+                                .fixedSize()
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(player.qualityLabel), stream info")
+                        .sheet(isPresented: $showStreamInfo) { StreamInfoSheet() }
                     }
 
                     if t.isEpisode {
@@ -599,4 +607,46 @@ struct ChaptersSheet: View {
 struct SwipeDrag {
     var axis: Axis?
     var x: CGFloat = 0
+}
+
+
+/// What's actually playing: which YouTube video, its length and how the album version was found.
+struct StreamInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+    private var player: Player { .shared }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let t = player.current {
+                    Section {
+                        Text("\(t.title) · \(t.artist)").font(.system(size: 15, weight: .semibold))
+                    }
+                }
+                Section {
+                    ForEach(Array(player.streamInfo.enumerated()), id: \.offset) { _, line in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(line.0).font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text(line.1).font(.system(size: 14).monospaced()).textSelection(.enabled)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                Section {
+                    Button(copied ? "Copied" : "Copy all") {
+                        let title = player.current.map { "\($0.title) - \($0.artist)\n" } ?? ""
+                        UIPasteboard.general.string = title + player.streamInfo.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
+                        copied = true
+                    }
+                }
+            }
+            .navigationTitle("Stream info")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
 }

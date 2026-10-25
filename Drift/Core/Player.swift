@@ -22,6 +22,8 @@ final class Player {
     var repeatMode: RepeatMode = .off
     private(set) var playingFrom = ""
     private(set) var qualityLabel = ""
+    /// Details about what's actually playing (tap the quality badge in the player).
+    private(set) var streamInfo: [(String, String)] = []
     private(set) var skipMessage: String?
     private(set) var errorMessage: String?
     private(set) var routeName = "This iPhone"
@@ -296,6 +298,7 @@ final class Player {
         knownDuration = track.duration.map { $0 + 1 }
         durationIsExact = false
         playID = nil
+        streamInfo = [("Song", track.id)]
         segments = []
         retried = false
         isBuffering = true
@@ -346,6 +349,15 @@ final class Player {
                         self.duration = d
                     }
                     url = s.url
+                    let note = await AudioVersion.shared.note(track.id)
+                    self.streamInfo = [
+                        ("Song", track.id),
+                        ("Playing", playID == track.id ? "\(playID) (same)" : playID),
+                        ("Album version", note),
+                        ("Listed length", track.duration.map { formatTime($0) } ?? "–"),
+                        ("Stream length", s.duration.map { String(format: "%.1f s", $0) } ?? "unknown"),
+                        ("Extraction", s.source.isEmpty ? "–" : s.source),
+                    ]
                 }
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
 
@@ -489,6 +501,7 @@ final class Player {
             if knownDuration == nil, d.isFinite, d > 0 { duration = d }
             // Length only known from search results: trust the file when it's close (a music video
             // can run longer than the album song). Files claiming minutes more are ignored.
+            streamInfo.append(("File length", d.isFinite ? String(format: "%.1f s", d) : "unknown"))
             if !durationIsExact, d.isFinite, d > 0, let k = knownDuration, d > k - 3, d < k + 60 {
                 duration = d
                 knownDuration = d
