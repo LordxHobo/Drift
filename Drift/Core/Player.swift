@@ -320,7 +320,7 @@ final class Player {
             // Music video → its album version when YouTube Music has one (no intro/outro, real length).
             let downloaded = Library.shared.isDownloaded(track.id)
             var chosen = track.id
-            if !downloaded && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track.id) }
+            if !downloaded && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track) }
             let playID = chosen
             guard !Task.isCancelled, self.current?.id == track.id else { return }
             self.playID = playID
@@ -487,6 +487,12 @@ final class Player {
         case .readyToPlay:
             let d = item.duration.seconds
             if knownDuration == nil, d.isFinite, d > 0 { duration = d }
+            // Length only known from search results: trust the file when it's close (a music video
+            // can run longer than the album song). Files claiming minutes more are ignored.
+            if !durationIsExact, d.isFinite, d > 0, let k = knownDuration, d > k - 3, d < k + 60 {
+                duration = d
+                knownDuration = d
+            }
             updateNowPlaying()
         case .failed:
             recover()
@@ -559,12 +565,12 @@ final class Player {
     /// Resolve stream links ahead of time so tapping play starts right away.
     func prefetch(_ tracks: [Track]) {
         let low = AppSettings.shared.dataSaver
-        let ids = tracks.filter { !Library.shared.isDownloaded($0.id) && $0.id != current?.id }.map(\.id)
-        guard !ids.isEmpty else { return }
+        let todo = tracks.filter { !Library.shared.isDownloaded($0.id) && $0.id != current?.id }
+        guard !todo.isEmpty else { return }
         // In parallel: each one is ready to start instantly (link found, opening seconds downloaded).
-        for id in ids {
+        for track in todo {
             Task.detached(priority: .utility) {
-                let playID = await AudioVersion.shared.preferred(id)
+                let playID = await AudioVersion.shared.preferred(track)
                 if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)
                 }
@@ -642,6 +648,11 @@ final class Player {
         LyricsActivity.shared.tick(t)
         if knownDuration == nil, let d = av.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duration) > 0.5 {
             duration = d
+            updateNowPlaying()
+        }
+        // Never show a position past the end (e.g. "2:38 / 2:38" while it keeps playing).
+        if isPlaying, duration > 0, t > duration + 0.5 {
+            duration = t
             updateNowPlaying()
         }
         if abs(t - lastPositionSave) >= 3 {
