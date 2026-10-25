@@ -21,13 +21,22 @@ extension UIColor {
 }
 
 enum Theme {
-    static let bg = Color(hex: 0x0E0E10)
-    static let surface = Color(hex: 0x1A1A1F)
-    static let surface2 = Color(hex: 0x26262D)
-    static let line = Color(hex: 0x3F3F46)
-    static let text = Color(hex: 0xF4F4F5)
-    static let muted = Color(hex: 0xA1A1AA)
+    /// A color with a dark-mode and a light-mode version (follows the chosen appearance).
+    static func dynamic(dark: UInt32, light: UInt32) -> Color {
+        Color(UIColor { $0.userInterfaceStyle == .light ? UIColor(hex: light) : UIColor(hex: dark) })
+    }
+
+    static let bg = dynamic(dark: 0x0E0E10, light: 0xFFFFFF)
+    static let surface = dynamic(dark: 0x1A1A1F, light: 0xF1F1F3)
+    static let surface2 = dynamic(dark: 0x26262D, light: 0xE4E4E8)
+    static let line = dynamic(dark: 0x3F3F46, light: 0xD4D4D8)
+    static let text = dynamic(dark: 0xF4F4F5, light: 0x111113)
+    /// Slightly softer than `text`.
+    static let text2 = dynamic(dark: 0xD4D4D8, light: 0x3F3F46)
+    static let muted = dynamic(dark: 0xA1A1AA, light: 0x6B6B73)
+    static let searchField = dynamic(dark: 0xF4F4F5, light: 0xE9E9EC)
     static let onAccent = Color(hex: 0x0E0E10)
+    // The player and mini player always stay dark.
     static let miniPlayer = Color(hex: 0x16241B)
     static let playerFallback = Color(hex: 0x1A2B21)
 

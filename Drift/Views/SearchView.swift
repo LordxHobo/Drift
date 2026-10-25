@@ -96,7 +96,7 @@ struct SearchView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 46)
-        .background(Color(hex: 0xF4F4F5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(Theme.searchField, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 20)
     }
 

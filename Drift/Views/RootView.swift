@@ -40,6 +40,8 @@ struct RootView: View {
 
             if player.current != nil {
                 MiniPlayer { ui.showPlayer = true }
+                    .foregroundStyle(Theme.text)
+                    .environment(\.colorScheme, .dark)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -51,13 +53,22 @@ struct RootView: View {
         .tint(settings.accent)
         .fullScreenCover(isPresented: $ui.showPlayer) {
             NowPlayingView()
+                .foregroundStyle(Theme.text)
+                .environment(\.colorScheme, .dark)
+                .preferredColorScheme(.dark)
         }
         .sheet(item: $ui.addToPlaylist) { track in
             AddToPlaylistSheet(track: track)
         }
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
+        .onAppear { settings.applyAppearance() }
+        .task { await ArtistStore.shared.check() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { LyricsActivity.shared.appBecameActive() }
+            if phase == .active {
+                settings.applyAppearance()
+                Task { await ArtistStore.shared.check() }
+                LyricsActivity.shared.appBecameActive()
+            }
             if phase == .background {
                 PodcastStore.shared.flush()
                 LyricsActivity.shared.appWentToBackground(playing: player.isPlaying)

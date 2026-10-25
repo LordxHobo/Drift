@@ -154,7 +154,7 @@ struct HQBadge: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(Theme.line, in: RoundedRectangle(cornerRadius: 3))
-            .foregroundStyle(Color(hex: 0xE4E4E7))
+            .foregroundStyle(Theme.text2)
     }
 }
 

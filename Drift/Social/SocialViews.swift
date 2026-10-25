@@ -85,7 +85,7 @@ struct FriendRow: View {
                 if let t = user.nowPlaying {
                     Text("\(t.title) · \(t.artist)")
                         .font(.system(size: 13))
-                        .foregroundStyle(Color(hex: 0xD4D4D8))
+                        .foregroundStyle(Theme.text2)
                         .lineLimit(1)
                 } else {
                     Text(user.shareActivity ? "Nothing played yet" : "Listening activity is hidden")
@@ -110,6 +110,7 @@ struct OnboardingView: View {
     @State private var name = ""
     @State private var photo: UIImage?
     @State private var pickerItem: PhotosPickerItem?
+    @State private var cropping: CropRequest?
     @State private var check: Check = .idle
     @State private var saving = false
     @State private var error: String?
@@ -206,9 +207,15 @@ struct OnboardingView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
-                    photo = img
+                    cropping = CropRequest(image: img)
                 }
+                pickerItem = nil
             }
+        }
+        .fullScreenCover(item: $cropping) { r in
+            ImageCropper(image: r.image, circle: true,
+                         onDone: { photo = $0; cropping = nil },
+                         onCancel: { cropping = nil })
         }
         .task(id: name) { await runCheck() }
     }
@@ -275,6 +282,7 @@ struct OnboardingView: View {
 
 struct ProfileView: View {
     @State private var pickerItem: PhotosPickerItem?
+    @State private var cropping: CropRequest?
     @State private var renaming = false
     @State private var newName = ""
     @State private var confirmDelete = false
@@ -379,9 +387,18 @@ struct ProfileView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    cropping = CropRequest(image: img)
+                }
+                pickerItem = nil
+            }
+        }
+        .fullScreenCover(item: $cropping) { r in
+            ImageCropper(image: r.image, circle: true, onDone: { img in
+                cropping = nil
+                Task {
                     do { try await social.setPhoto(img) } catch { self.error = error.localizedDescription }
                 }
-            }
+            }, onCancel: { cropping = nil })
         }
         .alert("Change username", isPresented: $renaming) {
             TextField("username", text: $newName)
@@ -771,7 +788,7 @@ struct SharedPlaylistView: View {
                     } label: {
                         Image(systemName: allDownloaded(list) ? "arrow.down.circle.fill" : "arrow.down.circle")
                             .font(.system(size: 26))
-                            .foregroundStyle(allDownloaded(list) ? accent : Color(hex: 0xD4D4D8))
+                            .foregroundStyle(allDownloaded(list) ? accent : Theme.text2)
                             .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel(allDownloaded(list) ? "Remove downloads" : "Download playlist")
@@ -781,7 +798,7 @@ struct SharedPlaylistView: View {
                     } label: {
                         Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle")
                             .font(.system(size: 26))
-                            .foregroundStyle(saved ? accent : Color(hex: 0xD4D4D8))
+                            .foregroundStyle(saved ? accent : Theme.text2)
                             .frame(width: 44, height: 44)
                     }
                     .disabled(saved || list.isEmpty)

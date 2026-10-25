@@ -12,6 +12,7 @@ struct EditPlaylistView: View {
     @State private var isPublic: Bool
     @State private var pickedItem: PhotosPickerItem?
     @State private var newPhoto: UIImage?
+    @State private var cropping: CropRequest?
     @State private var confirmDelete = false
     @FocusState private var nameFocused: Bool
     private var library: Library { .shared }
@@ -133,9 +134,15 @@ struct EditPlaylistView: View {
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let image = UIImage(data: data) {
-                        newPhoto = image
+                        cropping = CropRequest(image: image)
                     }
+                    pickedItem = nil
                 }
+            }
+            .fullScreenCover(item: $cropping) { r in
+                ImageCropper(image: r.image, circle: false,
+                             onDone: { newPhoto = $0; cropping = nil },
+                             onCancel: { cropping = nil })
             }
             .confirmationDialog("Delete “\(playlist.name)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete playlist", role: .destructive) {
@@ -193,7 +200,7 @@ struct EditPlaylistView: View {
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(style == s ? Theme.onAccent : Color(hex: 0xD4D4D8))
+                .foregroundStyle(style == s ? Theme.onAccent : Theme.text2)
                 .frame(maxWidth: .infinity, minHeight: 42)
                 .background(style == s ? accent : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         }

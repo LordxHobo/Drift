@@ -7,6 +7,7 @@ struct PlaylistView: View {
 
     let kind: Kind
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var headerColor: Color = Color(hex: 0x1A2B21)
     @State private var editing: Playlist?
     private var library: Library { .shared }
@@ -143,7 +144,7 @@ struct PlaylistView: View {
                     .tracking(-0.5)
                 Text(subtitle(tracks, downloadedCount))
                     .font(.system(size: 13))
-                    .foregroundStyle(Color(hex: 0xD4D4D8))
+                    .foregroundStyle(Theme.text2)
             }
 
             HStack(spacing: 4) {
@@ -161,7 +162,7 @@ struct PlaylistView: View {
                             } else {
                                 Image(systemName: allDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
                                     .font(.system(size: 26))
-                                    .foregroundStyle(allDownloaded ? accent : Color(hex: 0xD4D4D8))
+                                    .foregroundStyle(allDownloaded ? accent : Theme.text2)
                             }
                         }
                         .frame(width: 44, height: 44)
@@ -176,7 +177,7 @@ struct PlaylistView: View {
                 } label: {
                     Image(systemName: "shuffle")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(player.shuffle ? accent : Color(hex: 0xD4D4D8))
+                        .foregroundStyle(player.shuffle ? accent : Theme.text2)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -205,7 +206,8 @@ struct PlaylistView: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
         .background(
-            LinearGradient(colors: [headerColor, Theme.bg], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [colorScheme == .light ? headerColor.opacity(0.35) : headerColor, Theme.bg],
+                           startPoint: .top, endPoint: .bottom)
                 .padding(.top, -400)
         )
     }

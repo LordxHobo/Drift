@@ -93,6 +93,19 @@ struct SettingsView: View {
                     row("Fallback (unsynced)", "Genius")
                 }
 
+                section("Appearance") {
+                    HStack(spacing: 4) {
+                        ForEach(Appearance.allCases, id: \.self) { a in
+                            qualityButton(a.title, selected: settings.appearance == a) { settings.appearance = a }
+                        }
+                    }
+                    .padding(4)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text("Device follows your iPhone's light or dark setting. The player always stays dark.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+
                 section("Accent color") {
                     HStack(spacing: 10) {
                         ForEach(Theme.accents.indices, id: \.self) { i in
@@ -142,7 +155,7 @@ struct SettingsView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(selected ? Theme.onAccent : Color(hex: 0xD4D4D8))
+                .foregroundStyle(selected ? Theme.onAccent : Theme.text2)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(selected ? settings.accent : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         }

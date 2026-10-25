@@ -7,6 +7,7 @@ struct ArtistView: View {
     @State private var page: ArtistPage?
     @State private var failed = false
     private var player: Player { .shared }
+    private var store: ArtistStore { .shared }
     private var accent: Color { AppSettings.shared.accent }
 
     var body: some View {
@@ -15,6 +16,7 @@ struct ArtistView: View {
                 header
 
                 if let page {
+                    newReleaseRow(page)
                     if !page.topSongs.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             sectionTitle("Popular")
@@ -71,10 +73,11 @@ struct ArtistView: View {
                     .tracking(-1)
                     .lineLimit(2)
                     .minimumScaleFactor(0.6)
+                if let sub = page?.subtitle {
+                    Text(sub).font(.system(size: 13)).foregroundStyle(Theme.text2)
+                }
                 HStack(spacing: 4) {
-                    if let sub = page?.subtitle {
-                        Text(sub).font(.system(size: 13)).foregroundStyle(Color(hex: 0xD4D4D8))
-                    }
+                    followButton
                     Spacer()
                     if let songs = page?.topSongs, !songs.isEmpty {
                         Button { player.shufflePlay(songs, from: name) } label: {
@@ -100,14 +103,87 @@ struct ArtistView: View {
         }
     }
 
+    private var followButton: some View {
+        let following = store.isFollowing(artist.id)
+        return Button {
+            if following { store.unfollow(artist.id) } else { store.follow(artist, page: page) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Text(following ? "Following" : "Follow")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 32)
+                .overlay(Capsule().stroke(following ? accent : Theme.muted, lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(following ? "Unfollow \(page?.name ?? artist.name)" : "Follow \(page?.name ?? artist.name)")
+    }
+
+    /// Releases found since you followed the artist; otherwise their most recent one.
+    @ViewBuilder private func newReleaseRow(_ page: ArtistPage) -> some View {
+        let fresh = store.newReleases(of: artist.id).map(\.album)
+        let releases = fresh.isEmpty ? latest(page).map { [$0] } ?? [] : fresh
+        if !releases.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                sectionTitle(fresh.isEmpty ? "Latest release" : (fresh.count == 1 ? "New release" : "New releases"))
+                ForEach(releases, id: \.id) { a in
+                    NavigationLink(value: Route.album(a, artist: page.name)) {
+                        HStack(spacing: 14) {
+                            AsyncImage(url: resizedImage(a.thumbnail, size: 300)) { phase in
+                                if let img = phase.image { img.resizable().scaledToFill() } else { Theme.tile(seed: a.id) }
+                            }
+                            .frame(width: 84, height: 84)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !fresh.isEmpty {
+                                    Text("NEW")
+                                        .font(.system(size: 10, weight: .heavy))
+                                        .tracking(0.8)
+                                        .foregroundStyle(accent)
+                                }
+                                Text(a.title).font(.system(size: 16, weight: .bold)).lineLimit(2)
+                                Text(a.subtitle).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Theme.muted)
+                        }
+                        .padding(10)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    /// The newest of the first album and first single (both lists are newest first).
+    private func latest(_ page: ArtistPage) -> AlbumRef? {
+        switch (page.albums.first, page.singles.first) {
+        case let (a?, s?): return (a.year ?? "") > (s.year ?? "") ? a : s
+        case let (a?, nil): return a
+        case let (nil, s?): return s
+        default: return nil
+        }
+    }
+
     private func sectionTitle(_ s: String) -> some View {
         Text(s).font(.system(size: 20, weight: .heavy)).tracking(-0.3).padding(.bottom, 4)
     }
 
     private func load() async {
         do {
-            page = try await Artists.page(artist)
+            let loaded = try await Artists.page(artist)
+            page = loaded
             failed = false
+            store.update(artist.id, with: loaded)
             if let songs = page?.topSongs { player.prefetch(Array(songs.prefix(2))) }
         } catch {
             if page == nil { failed = true }
@@ -260,7 +336,7 @@ struct AlbumView: View {
                     } label: {
                         Image(systemName: allDownloaded(tracks) ? "arrow.down.circle.fill" : "arrow.down.circle")
                             .font(.system(size: 26))
-                            .foregroundStyle(allDownloaded(tracks) ? accent : Color(hex: 0xD4D4D8))
+                            .foregroundStyle(allDownloaded(tracks) ? accent : Theme.text2)
                             .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel(allDownloaded(tracks) ? "Remove downloads" : "Download album")
@@ -271,7 +347,7 @@ struct AlbumView: View {
                     } label: {
                         Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle")
                             .font(.system(size: 26))
-                            .foregroundStyle(saved ? accent : Color(hex: 0xD4D4D8))
+                            .foregroundStyle(saved ? accent : Theme.text2)
                             .frame(width: 44, height: 44)
                     }
                     .disabled(saved || tracks.isEmpty)

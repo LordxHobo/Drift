@@ -1,5 +1,26 @@
 import SwiftUI
+import UIKit
 import Observation
+
+enum Appearance: String, CaseIterable {
+    case dark, light, system
+
+    var title: String {
+        switch self {
+        case .dark: "Dark"
+        case .light: "Light"
+        case .system: "Device"
+        }
+    }
+
+    var style: UIUserInterfaceStyle {
+        switch self {
+        case .dark: .dark
+        case .light: .light
+        case .system: .unspecified
+        }
+    }
+}
 
 @Observable
 final class AppSettings {
@@ -22,6 +43,13 @@ final class AppSettings {
     /// Skip sponsor reads, self-promotion and subscribe reminders in podcasts (SponsorBlock).
     var skipSponsors: Bool { didSet { defaults.set(skipSponsors, forKey: "skipSponsors") } }
     var podcastSpeed: Double { didSet { defaults.set(podcastSpeed, forKey: "podcastSpeed") } }
+    /// Dark (default), light, or follow the iPhone's setting.
+    var appearance: Appearance {
+        didSet {
+            defaults.set(appearance.rawValue, forKey: "appearance")
+            applyAppearance()
+        }
+    }
 
     private init() {
         let d = UserDefaults.standard
@@ -34,10 +62,29 @@ final class AppSettings {
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
+        appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
 
     var accentHex: UInt32 {
         Theme.accents[min(max(accentIndex, 0), Theme.accents.count - 1)]
     }
-    var accent: Color { Color(hex: accentHex) }
+    /// A little darker in light mode so it stays readable on white.
+    var accent: Color {
+        let h = accentHex
+        func dim(_ shift: UInt32) -> UInt32 { UInt32(Double((h >> shift) & 0xFF) * 0.78) << shift }
+        return Theme.dynamic(dark: h, light: dim(16) | dim(8) | dim(0))
+    }
+
+    /// Sets the look on every window (more reliable than SwiftUI's preferredColorScheme when going back to "Device").
+    func applyAppearance() {
+        let style = appearance.style
+        Task { @MainActor in Self.apply(style) }
+    }
+
+    @MainActor private static func apply(_ style: UIUserInterfaceStyle) {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            for w in ws.windows { w.overrideUserInterfaceStyle = style }
+        }
+    }
 }

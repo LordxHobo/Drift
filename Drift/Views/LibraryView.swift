@@ -43,7 +43,7 @@ struct LibraryView: View {
 
                 NavigationLink(value: Route.downloads) {
                     row(title: "Downloaded", subtitle: "\(library.downloaded.count) songs on this iPhone") {
-                        SymbolTile(symbol: "arrow.down", color: Theme.line, size: 64)
+                        SymbolTile(symbol: "arrow.down", color: Color(hex: 0x3F3F46), size: 64)
                     }
                 }
                 .listRowBackground(Theme.bg)
@@ -67,6 +67,33 @@ struct LibraryView: View {
                         Button(role: .destructive) {
                             library.deletePlaylist(p.id)
                         } label: { Label("Delete", systemImage: "trash") }
+                    }
+                }
+
+                ForEach(ArtistStore.shared.followed) { f in
+                    NavigationLink(value: Route.artist(f.artist)) {
+                        HStack(spacing: 12) {
+                            AsyncImage(url: resizedImage(f.artist.thumbnail, size: 200)) { phase in
+                                if let img = phase.image { img.resizable().scaledToFill() } else { Theme.tile(seed: f.artist.name) }
+                            }
+                            .frame(width: 64, height: 64)
+                            .clipShape(Circle())
+                            .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(f.artist.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                                Text(f.newReleases.isEmpty ? "Artist" : "Artist · new release")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(f.newReleases.isEmpty ? Theme.muted : AppSettings.shared.accent)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .listRowBackground(Theme.bg)
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            ArtistStore.shared.unfollow(f.id)
+                        } label: { Label("Unfollow", systemImage: "person.badge.minus") }
                     }
                 }
             }
