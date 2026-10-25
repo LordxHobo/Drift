@@ -256,12 +256,25 @@ final class SpotifyImporter {
                 defer { UIApplication.shared.isIdleTimerDisabled = false }
 
                 // Saved in batches of 30, so a big import keeps what it found if interrupted.
+                // Songs you already have (downloaded first) are reused as they are: no search needed.
+                let local = Self.localIndex()
                 let id = Library.shared.createPlaylist(list.name).id
                 playlistID = id
                 var start = 0
                 while start < list.tracks.count {
                     let slice = Array(list.tracks[start..<min(start + 30, list.tracks.count)])
-                    let matched = await matchAll(slice)
+                    var matched = [Track?](repeating: nil, count: slice.count)
+                    var toSearch: [Int] = []
+                    for (i, s) in slice.enumerated() {
+                        if let mine = Self.lookup(s, in: local) {
+                            matched[i] = mine
+                            processed += 1
+                        } else {
+                            toSearch.append(i)
+                        }
+                    }
+                    let searched = await matchAll(toSearch.map { slice[$0] })
+                    for (k, i) in toSearch.enumerated() { matched[i] = searched[k] }
                     var found: [Track] = []
                     for (i, t) in matched.enumerated() {
                         if let t { found.append(t) } else { unmatched.append(slice[i]) }
@@ -281,6 +294,31 @@ final class SpotifyImporter {
             } catch {
                 phase = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    /// Your songs by title + main artist: downloaded songs first, then liked songs, then playlists.
+    private static func localIndex() -> [String: [Track]] {
+        let lib = Library.shared
+        var index: [String: [Track]] = [:]
+        var seen = Set<String>()
+        for t in lib.downloaded + lib.liked + lib.playlists.flatMap(\.tracks) where !t.isEpisode {
+            guard seen.insert(t.id).inserted else { continue }
+            index[key(t.title, t.artist), default: []].append(t)
+        }
+        return index
+    }
+
+    private static func key(_ title: String, _ artist: String) -> String {
+        SongMatcher.normalize(title) + "|" + SongMatcher.normalize(LyricsService.mainArtist(artist))
+    }
+
+    /// The copy you already have of this song, if any (same title and artist, about the same length).
+    private static func lookup(_ s: SpotifyTrack, in index: [String: [Track]]) -> Track? {
+        guard let candidates = index[key(s.title, s.artist)] else { return nil }
+        return candidates.first { t in
+            guard let a = s.duration, let b = t.duration else { return true }
+            return abs(a - b) <= 10
         }
     }
 
