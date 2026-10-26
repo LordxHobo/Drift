@@ -422,6 +422,7 @@ final class Player {
             // Downloaded file, or an HLS stream (AVPlayer streams those itself).
             loader = nil
             item = AVPlayerItem(url: url)
+            if !url.isFileURL { item.preferredPeakBitRate = 1_000_000 }
         } else {
             let l = StreamLoader(url: url)
             loader = l

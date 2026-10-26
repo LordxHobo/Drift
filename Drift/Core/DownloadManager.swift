@@ -131,7 +131,7 @@ final class DownloadManager {
         do {
             let playID = await AudioVersion.shared.preferred(t)
             if freshLink { await StreamResolver.shared.invalidate(playID) }
-            let stream = try await StreamResolver.shared.resolve(playID, dataSaver: false)
+            let stream = try await StreamResolver.shared.resolve(playID, dataSaver: false, forDownload: true)
             // A stream-only video (no audio file to save) can play but not be downloaded.
             guard stream.source != "ios-hls" else { throw StreamError.noAudio }
             let total = try await Self.size(of: stream.url)

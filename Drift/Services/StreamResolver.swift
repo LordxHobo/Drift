@@ -48,8 +48,9 @@ actor StreamResolver {
         if let v { visitorData = v }
     }
 
-    func resolve(_ videoID: String, dataSaver: Bool) async throws -> ResolvedStream {
-        let key = videoID + (dataSaver ? "#low" : "#best")
+    /// `forDownload`: only a real audio file will do (a streaming-only version can play but not be saved).
+    func resolve(_ videoID: String, dataSaver: Bool, forDownload: Bool = false) async throws -> ResolvedStream {
+        let key = videoID + (dataSaver ? "#low" : "#best") + (forDownload ? "#file" : "")
         if let entry = cache[key], entry.1 > Date() { return entry.0 }
         if visitorData == nil {
             warmUp()
@@ -69,20 +70,16 @@ actor StreamResolver {
             return stream
         }
 
-        // Second app: YouTube's iPhone app, which has links for some videos the first one won't give.
-        var hlsFallback: ResolvedStream?
-        if let ios = try? await withTimeout(5, { [visitorData] in
-            try await Self.quickResolve(videoID, dataSaver: dataSaver, visitorData: visitorData, client: .iOS)
-        }) {
-            var stream = ios.stream
-            if stream.source == "ios-hls" {
-                hlsFallback = stream
-            } else {
-                stream.source = "quick (iPhone)"
-                if let d = ResolvedStream.lengthFromURL(stream.url) { stream.duration = d }
-                cache[key] = (stream, Date().addingTimeInterval(3 * 3600))
-                return stream
+        // Last resort (playback only): the streaming version from YouTube's iPhone app. Its direct
+        // file links get cut off by YouTube after a minute or so, but its stream keeps working.
+        func iPhoneStream() async -> ResolvedStream? {
+            guard !forDownload else { return nil }
+            let r = try? await withTimeout(5) { [visitorData] in
+                try await Self.quickResolve(videoID, dataSaver: dataSaver, visitorData: visitorData, client: .iOS)
             }
+            guard let stream = r?.stream, stream.source == "ios-hls" else { return nil }
+            cache[key] = (stream, Date().addingTimeInterval(3 * 3600))
+            return stream
         }
 
         // Full extraction; YouTubeKit's remote fallback if YouTube changed something.
@@ -90,7 +87,7 @@ actor StreamResolver {
         do {
             streams = try await YouTube(videoID: videoID, methods: [.local, .remote]).streams
         } catch {
-            if let hls = hlsFallback { return hls }
+            if let hls = await iPhoneStream() { return hls }
             throw error
         }
 
@@ -107,7 +104,7 @@ actor StreamResolver {
         guard let stream = picked
                 ?? streams.filter({ $0.includesAudioTrack && $0.isNativelyPlayable }).highestAudioBitrateStream()
         else {
-            if let hls = hlsFallback { return hls }
+            if let hls = await iPhoneStream() { return hls }
             throw StreamError.noAudio
         }
 
@@ -213,13 +210,16 @@ actor StreamResolver {
         func rate(_ f: [String: Any]) -> Int {
             (f["averageBitrate"] as? Int) ?? (f["bitrate"] as? Int) ?? 0
         }
+        // iPhone app: only its stream is used (its file links stop working partway through a song).
+        if kind == .iOS {
+            guard let hls = (streaming?["hlsManifestUrl"] as? String).flatMap(URL.init(string:)) else {
+                throw StreamError.noAudio
+            }
+            return QuickResult(stream: ResolvedStream(url: hls, label: "Stream", duration: seconds, source: "ios-hls"),
+                               visitorData: visitor)
+        }
         guard let pick = dataSaver ? audio.min(by: { rate($0) < rate($1) }) : audio.max(by: { rate($0) < rate($1) }),
               let s = pick["url"] as? String, let url = URL(string: s) else {
-            // No separate audio file: an HLS stream still plays (audio and video together, only audio is used).
-            if kind == .iOS, let hls = (streaming?["hlsManifestUrl"] as? String).flatMap(URL.init(string:)) {
-                return QuickResult(stream: ResolvedStream(url: hls, label: "HLS", duration: seconds, source: "ios-hls"),
-                                   visitorData: visitor)
-            }
             throw StreamError.noAudio
         }
         let kbps = rate(pick) / 1000
