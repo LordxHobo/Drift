@@ -8,6 +8,7 @@ struct DriftApp: App {
         _ = Library.shared
         // Reconnect to downloads iOS carried on with in the background.
         _ = DownloadManager.shared
+        DownloadManager.registerBackgroundTask()
         Task { await StreamResolver.shared.warmUp() }
     }
 

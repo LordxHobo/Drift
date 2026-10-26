@@ -424,7 +424,7 @@ struct AlbumView: View {
         if allDownloaded(tracks) {
             tracks.forEach { library.removeDownload($0.id) }
         } else {
-            DownloadManager.shared.download(tracks)
+            DownloadManager.shared.download(tracks, name: page?.title ?? album.title)
         }
     }
 }

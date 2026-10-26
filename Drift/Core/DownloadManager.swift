@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import Observation
 import UIKit
@@ -21,6 +22,13 @@ final class DownloadManager {
     private(set) var batchTotal = 0
     private(set) var batchDone = 0
     @ObservationIgnored private var batchStart: Date?
+    /// Name shown in the background progress ("Big Spotify playlist"); nil when songs come from several places.
+    @ObservationIgnored private var batchName: String?
+    @ObservationIgnored private var batchNames: Set<String> = []
+    /// iOS 26 background task that keeps Drift running until the downloads are done.
+    @ObservationIgnored private var continued: AnyObject?
+    @ObservationIgnored private var continuedRequested = false
+    nonisolated static let continuedTaskID = "com.lordxhobo.drift.downloads.run"
 
     /// Songs waiting for their audio link.
     @ObservationIgnored private var queue: [Track] = []
@@ -82,9 +90,15 @@ final class DownloadManager {
         progress[t.id] = 0
         queue.append(t)
         pump()
+        startContinuedTask()
+        updateContinued()
     }
 
-    func download(_ tracks: [Track]) {
+    /// `name`: the playlist or album, shown in the progress on the lock screen.
+    func download(_ tracks: [Track], name: String? = nil) {
+        if progress.isEmpty { batchNames = [] }
+        if let name { batchNames.insert(name) }
+        batchName = batchNames.count == 1 ? batchNames.first : nil
         tracks.forEach { download($0) }
     }
 
@@ -214,6 +228,7 @@ final class DownloadManager {
             Library.shared.markDownloaded(p.track)
             finish(id)
             batchDone += 1
+            updateContinued()
         } catch {
             try? FileManager.default.removeItem(at: dest)
             fail(id)
@@ -224,6 +239,7 @@ final class DownloadManager {
         failed.insert(id)
         finish(id)
         batchDone += 1
+        updateContinued()
     }
 
     private func finish(_ id: String) {
@@ -296,6 +312,88 @@ final class DownloadManager {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+    }
+
+    // MARK: Running until done (iOS 26)
+
+    /// Called once at launch: what to do when iOS starts the background task.
+    nonisolated static func registerBackgroundTask() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            BGTaskScheduler.shared.register(forTaskWithIdentifier: continuedTaskID, using: nil) { task in
+                guard let task = task as? BGContinuedProcessingTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                Task { @MainActor in DownloadManager.shared.attach(task) }
+            }
+        }
+        #endif
+    }
+
+    /// Asks iOS to keep Drift running in the background until the downloads are done
+    /// (shown as progress on the lock screen and in the Dynamic Island). Only possible while Drift is open.
+    private func startContinuedTask() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            guard continued == nil, !continuedRequested,
+                  UIApplication.shared.applicationState == .active else { return }
+            let request = BGContinuedProcessingTaskRequest(identifier: Self.continuedTaskID,
+                                                           title: continuedTitle, subtitle: continuedSubtitle)
+            request.strategy = .fail
+            do {
+                try BGTaskScheduler.shared.submit(request)
+                continuedRequested = true
+            } catch {
+                continuedRequested = false
+            }
+        }
+        #endif
+    }
+
+    private var continuedTitle: String {
+        if let batchName { return "Downloading “\(batchName)”" }
+        return "Downloading songs"
+    }
+
+    private var continuedSubtitle: String {
+        "\(batchDone) of \(batchTotal) \(batchTotal == 1 ? "song" : "songs")"
+    }
+
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    private func attach(_ task: BGContinuedProcessingTask) {
+        continuedRequested = false
+        guard !progress.isEmpty else {
+            task.setTaskCompleted(success: true)
+            return
+        }
+        continued = task
+        task.expirationHandler = { [weak self] in
+            // Cancelled with ✕, or iOS needed to stop it: what's left continues the next time Drift is open.
+            Task { @MainActor in
+                guard let self, let t = self.continued as? BGContinuedProcessingTask, t === task else { return }
+                self.continued = nil
+                task.setTaskCompleted(success: false)
+            }
+        }
+        updateContinued()
+    }
+    #endif
+
+    /// Keeps the progress on the lock screen up to date, and ends the task when everything is done.
+    private func updateContinued() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *), let task = continued as? BGContinuedProcessingTask {
+            task.progress.totalUnitCount = Int64(max(batchTotal, 1))
+            task.progress.completedUnitCount = Int64(min(batchDone, batchTotal))
+            task.updateTitle(continuedTitle, subtitle: continuedSubtitle)
+            if progress.isEmpty {
+                continued = nil
+                task.setTaskCompleted(success: true)
+            }
+        }
+        #endif
     }
 
     // MARK: Time estimate

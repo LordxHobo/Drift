@@ -784,7 +784,7 @@ struct SharedPlaylistView: View {
                         if allDownloaded(list) {
                             list.forEach { library.removeDownload($0.id) }
                         } else {
-                            DownloadManager.shared.download(list)
+                            DownloadManager.shared.download(list, name: playlist.name)
                         }
                     } label: {
                         Image(systemName: allDownloaded(list) ? "arrow.down.circle.fill" : "arrow.down.circle")

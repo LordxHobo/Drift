@@ -180,7 +180,7 @@ struct PlaylistView: View {
                         if allDownloaded {
                             tracks.forEach { library.removeDownload($0.id) }
                         } else {
-                            downloads.download(tracks)
+                            downloads.download(tracks, name: title)
                         }
                     } label: {
                         Group {
