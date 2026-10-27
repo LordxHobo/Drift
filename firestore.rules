@@ -24,6 +24,21 @@ service cloud.firestore {
       }
     }
 
+    // Linking a computer: the computer posts a one-time code with its public key, your phone answers
+    // with your sign-in encrypted for that computer only. Codes can't be listed, only looked up.
+    match /pairings/{code} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.keys().hasOnly(['owner', 'desktopKey', 'device', 'createdAt'])
+        && code.matches('^[A-Z2-9]{8}$');
+      allow update: if request.auth != null
+        && request.auth.uid != resource.data.owner
+        && !('box' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneKey', 'box']);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.owner;
+    }
+
     // Usernames: one owner each, first come first served.
     match /usernames/{name} {
       allow read: if request.auth != null;

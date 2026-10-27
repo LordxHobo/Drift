@@ -144,6 +144,13 @@ actor FirebaseAuth {
         return uid
     }
 
+    /// This phone's sign-in (for linking a computer to the same profile).
+    func currentSession() async throws -> Keychain.Session {
+        _ = try await token()
+        guard let uid, let refreshToken else { throw SocialError.notSignedIn }
+        return Keychain.Session(uid: uid, refreshToken: refreshToken)
+    }
+
     private func signUp() async throws {
         let url = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=\(FirebaseConfig.apiKey)")!
         let (status, body) = try await HTTP.send("POST", url, json: ["returnSecureToken": true])

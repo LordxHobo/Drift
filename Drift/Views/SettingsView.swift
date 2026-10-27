@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var confirmDelete = false
+    @State private var linkComputer = false
     private var library: Library { .shared }
 
     var body: some View {
@@ -73,6 +74,26 @@ struct SettingsView: View {
                         HStack {
                             Text(SocialStore.shared.me.map { "@\($0.username)" } ?? "Create a profile")
                                 .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                section("Computer") {
+                    Button {
+                        linkComputer = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Link a computer").font(.system(size: 15, weight: .semibold))
+                                Text("Use your library in Drift for Windows, Mac or Linux. Type the code the computer shows.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.muted)
+                            }
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
                         }
@@ -163,6 +184,7 @@ struct SettingsView: View {
         .navigationTitle("Playback")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
+        .sheet(isPresented: $linkComputer) { LinkComputerSheet() }
         .confirmationDialog("Remove all downloaded songs?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Remove all", role: .destructive) { library.removeAllDownloads() }
         }
