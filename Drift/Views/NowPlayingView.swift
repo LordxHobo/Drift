@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import MediaPlayer
 
 struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
@@ -60,6 +61,18 @@ struct NowPlayingView: View {
             let artSize = min(geo.size.width - 48, geo.size.height * 0.45)
             VStack(spacing: 22) {
                 // Header
+                if Theme.isMusic {
+                    // Apple Music: just a grabber at the top.
+                    Button { dismiss() } label: {
+                        Capsule()
+                            .fill(.white.opacity(0.45))
+                            .frame(width: 40, height: 5)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close player")
+                } else {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "chevron.down")
@@ -90,6 +103,7 @@ struct NowPlayingView: View {
                     .accessibilityLabel("More options")
                 }
                 .padding(.horizontal, -10)
+                }
 
                 // Artwork (16:9 for podcast episodes)
                 Group {
@@ -108,15 +122,27 @@ struct NowPlayingView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(t.title)
-                            .font(.system(size: 22, weight: .heavy))
-                            .tracking(-0.3)
+                            .font(Theme.isMusic ? .system(size: 21, weight: .semibold) : .system(size: 22, weight: .heavy))
+                            .tracking(Theme.isMusic ? 0 : -0.3)
                             .lineLimit(1)
                         Text(t.artist)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color(hex: 0xD4D4D8))
+                            .font(.system(size: Theme.isMusic ? 20 : 15))
+                            .foregroundStyle(Theme.isMusic ? Color.white.opacity(0.6) : Color(hex: 0xD4D4D8))
                             .lineLimit(1)
                     }
                     Spacer()
+                    if Theme.isMusic {
+                        Menu {
+                            TrackMenuItems(track: t)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 15, weight: .bold))
+                                .frame(width: 30, height: 30)
+                                .background(.white.opacity(0.2), in: Circle())
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("More options")
+                    }
                     if t.isEpisode {
                         if let c = PodcastStore.shared.channel(for: t) {
                             FollowButton(channel: c, compact: true)
@@ -173,7 +199,10 @@ struct NowPlayingView: View {
                              ? formatTime((scrub ?? player.progress) * player.duration)
                              : (player.isBuffering ? "Loading…" : "0:00"))
                         Spacer()
-                        Text(player.duration > 0 ? formatTime(player.duration) : "--:--")
+                        Text(player.duration > 0
+                             ? (Theme.isMusic ? "-" + formatTime(max(player.duration - (scrub ?? player.progress) * player.duration, 0))
+                                              : formatTime(player.duration))
+                             : "--:--")
                     }
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(Color(hex: 0xD4D4D8))
@@ -193,21 +222,21 @@ struct NowPlayingView: View {
                     .accessibilityLabel(player.shuffle ? "Shuffle on" : "Shuffle off")
                     Spacer()
                     Button { player.previous() } label: {
-                        Image(systemName: "backward.end.fill")
-                            .font(.system(size: 28))
+                        Image(systemName: Theme.isMusic ? "backward.fill" : "backward.end.fill")
+                            .font(.system(size: Theme.isMusic ? 34 : 28))
                             .frame(width: 52, height: 52)
                     }
                     .accessibilityLabel("Previous")
                     Spacer()
                     Button { player.togglePlay() } label: {
-                        let glass = DriftGlass.isOn
+                        let glass = DriftGlass.isOn || Theme.isMusic
                         ZStack {
                             if !glass { Circle().fill(Theme.text) }
                             if player.isBuffering && !player.isPlaying {
                                 ProgressView().tint(glass ? Theme.text : Theme.bg)
                             } else {
                                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 28))
+                                    .font(.system(size: Theme.isMusic ? 46 : 28))
                                     .foregroundStyle(glass ? Theme.text : Theme.bg)
                             }
                         }
@@ -217,8 +246,8 @@ struct NowPlayingView: View {
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                     Spacer()
                     Button { player.next() } label: {
-                        Image(systemName: "forward.end.fill")
-                            .font(.system(size: 28))
+                        Image(systemName: Theme.isMusic ? "forward.fill" : "forward.end.fill")
+                            .font(.system(size: Theme.isMusic ? 34 : 28))
                             .frame(width: 52, height: 52)
                     }
                     .accessibilityLabel("Next")
@@ -232,6 +261,16 @@ struct NowPlayingView: View {
                     .accessibilityLabel(repeatLabel)
                 }
                 .buttonStyle(.plain)
+                }
+
+                // Volume (Apple Music style)
+                if Theme.isMusic {
+                    HStack(spacing: 10) {
+                        Image(systemName: "speaker.fill").font(.system(size: 12))
+                        VolumeSlider().frame(height: 24)
+                        Image(systemName: "speaker.wave.3.fill").font(.system(size: 12))
+                    }
+                    .foregroundStyle(.white.opacity(0.6))
                 }
 
                 // Skip / error toast
@@ -664,4 +703,16 @@ struct StreamInfoSheet: View {
         }
         .presentationDetents([.medium, .large])
     }
+}
+
+
+/// The iPhone's volume as a slider (Apple Music style player).
+struct VolumeSlider: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let v = MPVolumeView(frame: .zero)
+        v.tintColor = .white
+        v.setVolumeThumbImage(UIImage(), for: .normal)
+        return v
+    }
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }

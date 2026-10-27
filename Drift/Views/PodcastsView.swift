@@ -10,7 +10,7 @@ struct PodcastsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 Text("Podcasts")
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(Theme.titleFont)
                     .tracking(-0.5)
 
                 if store.subscriptions.isEmpty && store.continueListening.isEmpty {

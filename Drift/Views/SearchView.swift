@@ -79,7 +79,7 @@ struct SearchView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Search")
-                .font(.system(size: 26, weight: .heavy))
+                .font(Theme.titleFont)
                 .tracking(-0.5)
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -149,12 +149,12 @@ struct SearchView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(Color(hex: 0x3F3F46))
+                .foregroundStyle(Theme.isMusic ? Theme.muted : Color(hex: 0x3F3F46))
             TextField("", text: $query,
                       prompt: Text(mode == .songs ? "What do you want to listen to?"
                                    : mode == .youtube ? "Search YouTube or paste a link" : "Podcasts, channels or a YouTube link")
-                        .foregroundStyle(Color(hex: 0x52525B)))
-                .foregroundStyle(Color(hex: 0x18181B))
+                        .foregroundStyle(Theme.isMusic ? Theme.muted : Color(hex: 0x52525B)))
+                .foregroundStyle(Theme.searchText)
                 .font(.system(size: 15, weight: .semibold))
                 .focused($focused)
                 .submitLabel(.search)
@@ -165,7 +165,7 @@ struct SearchView: View {
                 Button {
                     query = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color(hex: 0x52525B))
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.isMusic ? Theme.muted : Color(hex: 0x52525B))
                 }
                 .accessibilityLabel("Clear search")
             }
