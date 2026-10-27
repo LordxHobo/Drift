@@ -22,6 +22,7 @@ nsis:
   shortcutName: Drift
 linux:
   executableName: drift
+  syncDesktopName: true
   target: [AppImage, deb]
   category: Audio
   icon: build/icon.png

@@ -5,6 +5,8 @@
   "description": "Drift for Windows, Linux and Mac",
   "main": "out/main/index.js",
   "author": "LordxHobo",
+  "homepage": "https://github.com/LordxHobo",
+  "desktopName": "drift.desktop",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
