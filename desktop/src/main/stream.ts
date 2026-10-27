@@ -17,12 +17,136 @@ Platform.shim.eval = (data) => {
   return vm.runInNewContext(`(function () {\n${data.output}\n})()`, context, { timeout: 5000 })
 }
 
+// MARK: YouTube visitor ID
+
+// YouTube treats requests without a real visitor ID as likely bots ("Sign in to confirm you're not a
+// bot"). Like the phone, Drift gets one from YouTube itself once and keeps reusing it.
+const visitorFile = (): string => join(app.getPath('userData'), 'visitor.json')
+let visitorData: string | undefined
+let visitorLoaded = false
+let warmUpTask: Promise<void> | undefined
+
+function loadVisitor(): void {
+  if (visitorLoaded) return
+  visitorLoaded = true
+  try {
+    visitorData = JSON.parse(readFileSync(visitorFile(), 'utf8')).visitorData || undefined
+  } catch {
+    visitorData = undefined
+  }
+}
+
+function setVisitor(v: string | undefined): void {
+  if (!v || v === visitorData) return
+  visitorData = v
+  try {
+    writeFileSync(visitorFile(), JSON.stringify({ visitorData: v }))
+  } catch {
+    // kept in memory only
+  }
+}
+
+/** Gets a visitor ID before the first song (any public video works; this is YouTube's first upload). */
+function warmUp(): Promise<void> {
+  loadVisitor()
+  if (visitorData) return Promise.resolve()
+  warmUpTask ??= quickResolve('jNQXAC9IVRw')
+    .then(() => undefined)
+    .catch(() => undefined)
+    .finally(() => (warmUpTask = undefined))
+  return warmUpTask
+}
+
+// MARK: Quick path (the same request the phone makes)
+
+const visionOS = {
+  ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+  clientNumber: '101',
+  version: '1.02'
+}
+
+class NotPlayable extends Error {}
+
+/**
+ * YouTube's visionOS app gets direct audio links in one request, without the web page or the
+ * unscrambling step. This is the phone's quick path, unchanged.
+ */
+async function quickResolve(id: string): Promise<Resolved> {
+  loadVisitor()
+  const client: Record<string, unknown> = {
+    clientName: 'VISIONOS',
+    clientVersion: visionOS.version,
+    deviceMake: 'Apple',
+    deviceModel: 'RealityDevice17,1',
+    osName: 'visionOS',
+    osVersion: '26.5.23O471',
+    userAgent: visionOS.ua,
+    hl: 'en',
+    gl: 'US'
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': visionOS.ua,
+    'X-YouTube-Client-Name': visionOS.clientNumber,
+    'X-YouTube-Client-Version': visionOS.version,
+    Origin: 'https://www.youtube.com'
+  }
+  if (visitorData) {
+    headers['X-Goog-Visitor-Id'] = visitorData
+    client.visitorData = visitorData
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 6000)
+  let json: any
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ context: { client }, videoId: id, contentCheckOk: true, racyCheckOk: true }),
+      signal: controller.signal
+    })
+    if (res.status !== 200) throw new Error(`YouTube answered ${res.status}`)
+    json = await res.json()
+  } finally {
+    clearTimeout(timer)
+  }
+  setVisitor(json?.responseContext?.visitorData)
+
+  const status = json?.playabilityStatus?.status
+  if (status !== 'OK' || json?.videoDetails?.videoId !== id) {
+    throw new NotPlayable(json?.playabilityStatus?.reason || `Not playable (${status ?? 'no answer'})`)
+  }
+  const formats: any[] = json?.streamingData?.adaptiveFormats ?? []
+  const rate = (f: any): number => Number(f.averageBitrate ?? f.bitrate ?? 0)
+  // Direct-link audio in the original language (no dubbed tracks); AAC first, like the phone.
+  const audio = formats.filter(
+    (f) => typeof f.url === 'string' && String(f.mimeType ?? '').startsWith('audio/') && f.audioTrack?.audioIsDefault !== false
+  )
+  const aac = audio.filter((f) => String(f.mimeType).startsWith('audio/mp4'))
+  const pick = (aac.length ? aac : audio).sort((a, b) => rate(b) - rate(a))[0]
+  if (!pick) throw new NotPlayable('YouTube didn’t offer audio for this song')
+  const expire = Number(new URL(pick.url).searchParams.get('expire') ?? 0) * 1000
+  const seconds = Number(json?.videoDetails?.lengthSeconds) || undefined
+  return {
+    url: pick.url,
+    mime: String(pick.mimeType).split(';')[0],
+    bitrate: rate(pick),
+    size: Number(pick.contentLength) || undefined,
+    duration: pick.approxDurationMs ? Number(pick.approxDurationMs) / 1000 : seconds,
+    client: 'VISIONOS (quick)',
+    expires: Math.min(expire || Infinity, Date.now() + 3 * 3600_000) - 60_000
+  }
+}
+
+// MARK: Full extraction (fallback)
+
 let yt: Promise<Innertube> | undefined
 
 function innertube(): Promise<Innertube> {
+  // A real visitor ID from YouTube (not one made up locally, which YouTube flags as a bot).
   yt ??= Innertube.create({
     retrieve_player: true,
-    generate_session_locally: true,
+    visitor_data: visitorData,
     cache: new UniversalCache(true, join(app.getPath('userData'), 'youtube-cache'))
   }).catch((e) => {
     yt = undefined
@@ -41,23 +165,37 @@ interface Resolved {
   expires: number
 }
 
-/** Clients tried in order (the same quick path the phone uses comes first). */
-const clients: Types.InnerTubeClient[] = ['VISIONOS', 'TV', 'WEB_EMBEDDED', 'ANDROID_VR']
+/** Fallback clients, tried in order after the quick path. */
+const clients: Types.InnerTubeClient[] = ['TV', 'WEB_EMBEDDED', 'ANDROID_VR']
 
 const resolved = new Map<string, Resolved>()
 const resolving = new Map<string, Promise<Resolved>>()
 
+function friendly(message: string): string {
+  if (/not a bot|sign in to confirm/i.test(message)) {
+    return 'YouTube asked to confirm this isn’t a bot. Wait a minute and try again.'
+  }
+  return message
+}
+
 async function resolveFresh(id: string): Promise<Resolved> {
-  const tube = await innertube()
-  let lastError = 'YouTube didn’t offer audio for this song'
+  await warmUp()
+  let firstError: string | undefined
+  try {
+    return await quickResolve(id)
+  } catch (e) {
+    firstError = e instanceof Error ? e.message : String(e)
+    // Some songs really aren't playable; the other clients would say the same thing.
+    if (e instanceof NotPlayable && /unavailable|private|removed|terminated|age/i.test(firstError)) throw new Error(firstError)
+  }
+
+  const tube = await innertube().catch(() => undefined)
+  if (!tube) throw new Error(friendly(firstError))
   for (const client of clients) {
     try {
       const info = await tube.getBasicInfo(id, { client })
       const status = info.playability_status?.status
-      if (status && status !== 'OK') {
-        lastError = info.playability_status?.reason || `Not playable (${status})`
-        continue
-      }
+      if (status && status !== 'OK') continue
       const audio = (info.streaming_data?.adaptive_formats ?? [])
         .filter((f) => f.has_audio && !f.has_video)
         .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
@@ -73,13 +211,13 @@ async function resolveFresh(id: string): Promise<Resolved> {
         size: format.content_length || undefined,
         duration: format.approx_duration_ms ? format.approx_duration_ms / 1000 : undefined,
         client,
-        expires: Math.min(expire || Infinity, Date.now() + 5 * 3600_000) - 60_000
+        expires: Math.min(expire || Infinity, Date.now() + 3 * 3600_000) - 60_000
       }
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e)
+    } catch {
+      // try the next one
     }
   }
-  throw new Error(lastError)
+  throw new Error(friendly(firstError))
 }
 
 export async function resolve(id: string, force = false): Promise<Resolved> {

@@ -50,6 +50,8 @@ export const usePosition = (): number => useStore(positionStore)
 const audio = new Audio()
 audio.preload = 'auto'
 let loadToken = 0
+/** Songs in a row that didn't load. */
+let failures = 0
 /** Order before shuffling, to go back to it. */
 let unshuffled: Track[] | undefined
 let radioFor: string | undefined
@@ -147,8 +149,11 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
     const message = (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
     patch({ loading: false, playing: false, error: message })
     if (autoplay) toast(`Couldn’t play “${t.title}”: ${message}`)
-    // Move on after a moment, like the phone does.
-    if (autoplay) {
+    // Move on after a moment, like the phone does, but stop after a few failures in a row
+    // (asking YouTube again and again only makes it more suspicious).
+    failures++
+    if (autoplay && failures >= 3) toast('Stopped after 3 songs in a row didn’t load. Try again in a minute.')
+    if (autoplay && failures < 3) {
       window.setTimeout(() => {
         if (token === loadToken && playerStore.get().index < playerStore.get().queue.length - 1) next()
       }, 2500)
@@ -264,7 +269,10 @@ export function toggleMute(): void {
 
 // MARK: Audio events
 
-audio.addEventListener('playing', () => patch({ playing: true, loading: false, error: undefined }))
+audio.addEventListener('playing', () => {
+  failures = 0
+  patch({ playing: true, loading: false, error: undefined })
+})
 audio.addEventListener('pause', () => patch({ playing: false }))
 audio.addEventListener('waiting', () => patch({ loading: true }))
 audio.addEventListener('canplay', () => patch({ loading: false }))
@@ -285,7 +293,8 @@ audio.addEventListener('error', () => {
   const token = loadToken
   patch({ playing: false, loading: false, error: 'The song stopped loading' })
   // Move on, unless something else was started meanwhile.
-  if (wasPlaying && s.index < s.queue.length - 1) {
+  failures++
+  if (wasPlaying && failures < 3 && s.index < s.queue.length - 1) {
     window.setTimeout(() => token === loadToken && next(), 2500)
   }
 })
