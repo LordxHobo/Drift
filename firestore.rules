@@ -12,6 +12,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usernames/$(request.resource.data.usernameLower)).data.uid == uid;
       allow delete: if request.auth != null && request.auth.uid == uid;
 
+      // Your synced library (all playlists, liked songs, followed artists): only you.
+      match /library/{doc} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
       // Playlists shown on a profile: anyone signed in can see them, only the owner can change them.
       match /playlists/{playlistId} {
         allow read: if request.auth != null;

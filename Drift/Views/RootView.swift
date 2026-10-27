@@ -82,6 +82,7 @@ struct RootView: View {
             if phase == .active {
                 settings.applyAppearance()
                 Task { await ArtistStore.shared.check() }
+                LibrarySync.shared.refresh()
                 LyricsActivity.shared.appBecameActive()
             }
             if phase == .background {

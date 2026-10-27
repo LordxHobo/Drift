@@ -124,6 +124,7 @@ final class SocialStore {
                 status = .ready
                 cache()
                 PlaylistSharing.shared.profileReady()
+        LibrarySync.shared.refresh(force: true)
             } else {
                 me = nil
                 status = .noProfile
@@ -187,6 +188,7 @@ final class SocialStore {
         cache()
         playerChanged()
         PlaylistSharing.shared.profileReady()
+        LibrarySync.shared.refresh(force: true)
     }
 
     func changeUsername(_ newName: String) async throws {
@@ -224,6 +226,7 @@ final class SocialStore {
     func deleteProfile() async throws {
         guard let profile = me else { return }
         await PlaylistSharing.shared.removeAll(uid: profile.id)
+        await LibrarySync.shared.removeAll(uid: profile.id)
         try await Firestore.delete("users/\(profile.id)")
         try? await Firestore.delete("usernames/\(profile.username)")
         await FirebaseAuth.shared.forget()

@@ -41,9 +41,24 @@ final class ArtistStore {
         prune()
     }
 
+    /// Followed artists from your other devices (library sync). Keeps what this phone already knew.
+    func replaceFollowed(_ list: [FollowedArtist]) {
+        followed = list.map { remote in
+            guard let mine = followed.first(where: { $0.id == remote.id }) else { return remote }
+            var merged = remote
+            merged.known.formUnion(mine.known)
+            for r in mine.newReleases where !merged.newReleases.contains(where: { $0.id == r.id }) {
+                merged.newReleases.append(r)
+            }
+            return merged
+        }
+        save()
+    }
+
     private func save() {
         guard let data = try? JSONEncoder().encode(followed) else { return }
         try? data.write(to: url, options: .atomic)
+        LibrarySync.shared.localChanged()
     }
 
     private func prune() {

@@ -45,6 +45,47 @@ final class Library {
         guard let data = try? JSONEncoder().encode(s) else { return }
         try? data.write(to: storeURL, options: .atomic)
         PlaylistSharing.shared.libraryChanged()
+        LibrarySync.shared.localChanged()
+    }
+
+    // MARK: Changes from your other devices (library sync)
+
+    func replaceLiked(_ tracks: [Track]) {
+        liked = tracks
+        save()
+    }
+
+    /// Adds or updates a playlist that came from another device, in the given position.
+    func applyRemotePlaylist(_ p: Playlist, cover: Data?, position: Int) {
+        var p = p
+        if p.style == .photo, let cover {
+            try? FileManager.default.createDirectory(at: coversDirectory, withIntermediateDirectories: true)
+            let file = "\(p.id.uuidString)-sync-\(cover.count).jpg"
+            if (try? cover.write(to: coversDirectory.appending(path: file), options: .atomic)) != nil {
+                if let old = playlist(p.id)?.coverFile, old != file {
+                    try? FileManager.default.removeItem(at: coversDirectory.appending(path: old))
+                    coverCache[old] = nil
+                }
+                p.coverFile = file
+            }
+        } else if p.style == .photo {
+            p.coverFile = playlist(p.id)?.coverFile
+            if p.coverFile == nil { p.coverStyle = .auto }
+        } else {
+            p.coverFile = nil
+        }
+        if let i = playlists.firstIndex(where: { $0.id == p.id }) {
+            playlists[i] = p
+        } else {
+            playlists.insert(p, at: min(max(position, 0), playlists.count))
+        }
+        save()
+    }
+
+    /// The photo cover of a playlist as JPEG (sent to your other devices).
+    func coverData(_ p: Playlist) -> Data? {
+        guard p.style == .photo, let file = p.coverFile else { return nil }
+        return try? Data(contentsOf: coversDirectory.appending(path: file))
     }
 
     // MARK: Liked
