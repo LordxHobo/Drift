@@ -34,4 +34,9 @@ mac:
   icon: build/icon.png
   artifactName: Drift-${version}.${ext}
   identity: null
-publish: null
+# New versions go to the public drift-releases repository; Drift checks it for updates.
+publish:
+  provider: github
+  owner: LordxHobo
+  repo: drift-releases
+  releaseType: release

@@ -7,6 +7,7 @@ import * as yt from './ytmusic'
 import * as account from './account'
 import { handleStream, prepare } from './stream'
 import { lyrics } from './lyrics'
+import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -122,7 +123,11 @@ const api: DriftApi = {
 
   openExternal: async (url) => {
     if (/^https:\/\//.test(url)) await shell.openExternal(url)
-  }
+  },
+
+  updateState: async () => getUpdateState(),
+  checkForUpdates: () => checkForUpdates(),
+  installUpdate: async () => installUpdate()
 }
 
 for (const name of apiMethods) {
@@ -144,6 +149,7 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', updateTitleBar)
   createWindow()
   account.start()
+  startUpdates()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

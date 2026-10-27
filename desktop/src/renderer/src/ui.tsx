@@ -3,7 +3,7 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 import type { Playlist, Track } from '@shared/types'
 import { Icon } from './icons'
 import {
-  accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, useStore
+  accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, updateStore, useStore
 } from './state'
 import type { MenuItem } from './state'
 import { addToQueue, playList, playNext, usePlayer } from './player'
@@ -537,3 +537,23 @@ export function playlistMenu(p: Playlist): MenuItem[] {
 }
 
 export { resized }
+
+/** Shown when a new version is ready (or, on a Mac, out to download). */
+export function UpdateButton({ className }: { className?: string }): JSX.Element | null {
+  const u = useStore(updateStore)
+  if (u.phase === 'ready') {
+    return (
+      <button className={`update-btn ${className ?? ''}`} onClick={() => void drift.installUpdate()} title={`Drift ${u.version} is ready`}>
+        <Icon name="sync" size={14} /> Restart to update
+      </button>
+    )
+  }
+  if (u.phase === 'available' && u.url) {
+    return (
+      <button className={`update-btn ${className ?? ''}`} onClick={() => void drift.openExternal(u.url!)} title={`Drift ${u.version} is out`}>
+        <Icon name="external" size={14} /> Drift {u.version} is out
+      </button>
+    )
+  }
+  return null
+}

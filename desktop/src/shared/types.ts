@@ -157,6 +157,16 @@ export interface StreamInfo {
   note: string
 }
 
+export interface UpdateState {
+  phase: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'available' | 'error' | 'dev'
+  /** The new version. */
+  version?: string
+  percent?: number
+  message?: string
+  /** Where to download it by hand (Mac, where updates can't install themselves). */
+  url?: string
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -201,16 +211,20 @@ export interface DriftApi {
   unlink(): Promise<void>
 
   openExternal(url: string): Promise<void>
+
+  updateState(): Promise<UpdateState>
+  checkForUpdates(): Promise<void>
+  installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
   'prepare', 'lyrics', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
-  'pairing', 'unlink', 'openExternal'
+  'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */

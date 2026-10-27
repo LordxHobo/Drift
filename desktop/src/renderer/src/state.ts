@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, Library, PairingState, Settings, Track } from '@shared/types'
+import type { Account, AlbumRef, ArtistRef, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -32,11 +32,14 @@ export const settingsStore = new Store<Settings>({
 export const accountStore = new Store<Account>({ linked: false, syncing: false })
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })
 export const platformStore = new Store<string>('win32')
+export const updateStore = new Store<UpdateState>({ phase: 'idle' })
 
 export async function loadAll(): Promise<void> {
-  const [lib, settings, account, pairing, info] = await Promise.all([
-    drift.library(), drift.settings(), drift.account(), drift.pairing(), drift.appInfo()
+  const [lib, settings, account, pairing, info, update] = await Promise.all([
+    drift.library(), drift.settings(), drift.account(), drift.pairing(), drift.appInfo(), drift.updateState()
   ])
+  updateStore.set(update)
+  drift.on('update', (v) => updateStore.set(v))
   libraryStore.set(lib)
   settingsStore.set(settings)
   accountStore.set(account)

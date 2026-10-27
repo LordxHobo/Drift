@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
-import { accountStore, dialogStore, drift, pairingStore, platformStore, setSettings, settingsStore, useStore } from '../state'
+import { accountStore, dialogStore, drift, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
 import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, timeAgo } from '../util'
 
@@ -100,6 +100,11 @@ export function SettingsPage(): JSX.Element {
           </Row>
         </section>
       )}
+
+      <section className="set-section">
+        <h2>Updates</h2>
+        <Updates version={version} />
+      </section>
 
       <section className="set-section">
         <h2>Keyboard</h2>
@@ -203,5 +208,31 @@ function LinkPhone(): JSX.Element {
       </div>
       <p className="set-detail small">You need a Drift profile on your phone. The link is encrypted end to end between your phone and this computer.</p>
     </div>
+  )
+}
+
+function Updates({ version }: { version: string }): JSX.Element {
+  const u = useStore(updateStore)
+  const status =
+    u.phase === 'checking' ? 'Checking…'
+    : u.phase === 'none' ? 'Drift is up to date.'
+    : u.phase === 'downloading' ? `Downloading Drift ${u.version ?? ''}… ${u.percent ?? 0}%`
+    : u.phase === 'ready' ? `Drift ${u.version} is ready. It installs when you restart Drift.`
+    : u.phase === 'available' ? `Drift ${u.version} is out. Download it and replace this version.`
+    : u.phase === 'error' ? `Couldn’t check for updates: ${u.message ?? 'unknown error'}`
+    : u.phase === 'dev' ? u.message ?? ''
+    : 'New versions download by themselves and install the next time Drift starts.'
+  return (
+    <Row title={`Drift ${version}`} detail={status}>
+      {u.phase === 'ready' ? (
+        <button className="btn primary" onClick={() => void drift.installUpdate()}>Restart now</button>
+      ) : u.phase === 'available' && u.url ? (
+        <button className="btn primary" onClick={() => void drift.openExternal(u.url!)}>Download</button>
+      ) : (
+        <button className="btn" onClick={() => void drift.checkForUpdates()} disabled={u.phase === 'checking' || u.phase === 'downloading' || u.phase === 'dev'}>
+          {u.phase === 'checking' ? <Spinner size={14} /> : <Icon name="sync" size={14} />} Check now
+        </button>
+      )}
+    </Row>
   )
 }

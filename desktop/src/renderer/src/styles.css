@@ -2788,3 +2788,26 @@ kbd {
   display: inline-flex;
   flex-shrink: 0;
 }
+
+.update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.update-btn:hover {
+  filter: brightness(1.08);
+}
+.m-update {
+  margin: 6px 10px 0;
+  justify-content: center;
+  border-radius: 7px;
+  color: #fff;
+}

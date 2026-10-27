@@ -10,7 +10,7 @@ import type { Route } from './state'
 import { jumpTo, playList, removeFromQueue, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
-import { Art, Avatar, IconButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
+import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 
 const same = (a: Route, b: Route): boolean => JSON.stringify(a) === JSON.stringify(b)
@@ -141,6 +141,7 @@ export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Ele
       </div>
       <div className="topbar-middle">{children}</div>
       <div className="topbar-right">
+        <UpdateButton />
         <ReleasesBell />
         <ProfileButton />
       </div>
@@ -413,6 +414,7 @@ export function MusicSidebar(): JSX.Element {
           </button>
         ))}
       </div>
+      <UpdateButton className="m-update" />
       <button className="m-profile" onClick={() => go({ name: 'settings' })}>
         <Avatar size={28} />
         <span>{account.username ?? 'Settings'}</span>

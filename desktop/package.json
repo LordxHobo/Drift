@@ -17,7 +17,9 @@
     "dist:linux": "electron-vite build && electron-builder --linux",
     "dist:mac": "electron-vite build && electron-builder --mac"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-updater": "6.8.10"
+  },
   "devDependencies": {
     "@types/node": "22.18.0",
     "@types/react": "19.3.0",

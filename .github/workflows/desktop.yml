@@ -18,6 +18,13 @@ on:
 defaults:
   run:
     working-directory: desktop
+    shell: bash
+
+# Each build gets its own version (0.1.<build number>) so installed copies see it as an update.
+# With the RELEASES_TOKEN secret set, builds are published to LordxHobo/drift-releases, where Drift
+# looks for updates. Without it, they're only kept as downloads on the run's page.
+env:
+  GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
 
 jobs:
   windows:
@@ -32,8 +39,9 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
       - name: Build the installer
-        run: npm run dist:win
+        run: npx electron-vite build && npx electron-builder --win --publish "$([ -n "$GH_TOKEN" ] && echo always || echo never)"
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
@@ -43,6 +51,8 @@ jobs:
           if-no-files-found: error
 
   linux:
+    # After Windows, so both don't try to create the same release at once.
+    needs: windows
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -54,7 +64,8 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run dist:linux
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+      - run: npx electron-vite build && npx electron-builder --linux --publish "$([ -n "$GH_TOKEN" ] && echo always || echo never)"
       - uses: actions/upload-artifact@v4
         with:
           name: drift-linux
@@ -65,6 +76,7 @@ jobs:
 
   mac:
     if: github.event_name == 'workflow_dispatch' && inputs.mac
+    needs: windows
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -75,7 +87,8 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
-      - run: npm run dist:mac
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+      - run: npx electron-vite build && npx electron-builder --mac --publish "$([ -n "$GH_TOKEN" ] && echo always || echo never)"
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
