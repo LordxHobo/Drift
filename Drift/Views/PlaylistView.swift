@@ -93,7 +93,8 @@ struct PlaylistView: View {
                 }
                 .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
-                .listRowSeparator(.hidden)
+                .listRowSeparator(Theme.isMusic ? .visible : .hidden)
+                .listRowSeparatorTint(Theme.line)
             }
             .onDelete { offsets in
                 delete(IndexSet(offsets.map { shown[$0].index }))
@@ -110,6 +111,9 @@ struct PlaylistView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(title).font(.system(size: 15, weight: .bold))
+            }
+            if Theme.isMusic, kind != .downloads {
+                ToolbarItem(placement: .topBarTrailing) { downloadButton(tracks) }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if case .playlist(let id) = kind {
@@ -147,7 +151,97 @@ struct PlaylistView: View {
         }
     }
 
-    private func header(_ tracks: [Track]) -> some View {
+    @ViewBuilder private func header(_ tracks: [Track]) -> some View {
+        if Theme.isMusic { musicHeader(tracks) } else { spotifyHeader(tracks) }
+    }
+
+    /// Download all / remove downloads (in the top bar in the Apple Music style).
+    private func downloadButton(_ tracks: [Track]) -> some View {
+        let allDownloaded = !tracks.isEmpty && tracks.allSatisfy { library.isDownloaded($0.id) }
+        let downloading = tracks.contains { downloads.isActive($0.id) }
+        return Button {
+            if allDownloaded {
+                tracks.forEach { library.removeDownload($0.id) }
+            } else {
+                downloads.download(tracks, name: title)
+            }
+        } label: {
+            if downloading {
+                ProgressView()
+            } else {
+                Image(systemName: allDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+            }
+        }
+        .disabled(tracks.isEmpty)
+        .accessibilityLabel(allDownloaded ? "Remove downloads" : "Download all")
+    }
+
+    /// Who the list is by, in red under the title (Apple Music style).
+    private var byline: String? {
+        switch kind {
+        case .playlist(let id):
+            guard let p = library.playlist(id) else { return nil }
+            if p.isAlbum == true { return p.albumArtist ?? "Album" }
+            return SocialStore.shared.me?.username ?? "Playlist"
+        case .liked: return SocialStore.shared.me?.username
+        case .downloads: return nil
+        }
+    }
+
+    private func musicHeader(_ tracks: [Track]) -> some View {
+        let downloadedCount = tracks.filter { library.isDownloaded($0.id) }.count
+        return VStack(spacing: 4) {
+            Group {
+                if case .playlist(let id) = kind, let p = library.playlist(id) {
+                    PlaylistArt(playlist: p, size: 250, corner: 10)
+                } else {
+                    PlaylistCover(tracks: tracks, size: 250, color: tileColor, symbol: symbol, corner: 10)
+                }
+            }
+            .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            Text(title)
+                .font(.system(size: 22, weight: .bold))
+                .multilineTextAlignment(.center)
+            if let byline {
+                Text(byline)
+                    .font(.system(size: 17))
+                    .foregroundStyle(accent)
+            }
+            Text(subtitle(tracks, downloadedCount))
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.muted)
+                .padding(.top, 2)
+            DownloadStatusLine(tracks: kind == .downloads ? [] : tracks)
+
+            HStack(spacing: 12) {
+                pill("Play", "play.fill") {
+                    if isPlayingThis { player.togglePlay() } else { player.play(tracks, from: title) }
+                }
+                pill("Shuffle", "shuffle") { player.shufflePlay(tracks, from: title) }
+            }
+            .disabled(tracks.isEmpty)
+            .padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+    }
+
+    private func pill(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(accent)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func spotifyHeader(_ tracks: [Track]) -> some View {
         let downloadedCount = tracks.filter { library.isDownloaded($0.id) }.count
         let allDownloaded = !tracks.isEmpty && downloadedCount == tracks.count
         let downloading = tracks.contains { downloads.isActive($0.id) }

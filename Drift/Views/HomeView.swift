@@ -13,6 +13,14 @@ struct HomeView: View {
     }
 
     var body: some View {
+        if Theme.isMusic {
+            MusicHomeView()
+        } else {
+            spotifyBody
+        }
+    }
+
+    private var spotifyBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(spacing: 10) {
@@ -170,5 +178,153 @@ struct QuickTile<Art: View>: View {
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .contentShape(Rectangle())
+    }
+}
+
+
+// MARK: Apple Music style
+
+struct MusicHomeView: View {
+    private var library: Library { .shared }
+    private var player: Player { .shared }
+    private var social: SocialStore { .shared }
+    private let card: CGFloat = 170
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Home").font(Theme.titleFont)
+                    Spacer()
+                    Button {
+                        UIState.shared.showDrawer = true
+                    } label: {
+                        UserAvatar(data: social.me?.avatar, name: social.me?.username ?? "?", size: 34)
+                            .overlay(alignment: .topTrailing) {
+                                if NotificationStore.shared.unreadCount > 0 {
+                                    Circle().fill(AppSettings.shared.accent)
+                                        .frame(width: 11, height: 11)
+                                        .overlay(Circle().stroke(Theme.bg, lineWidth: 2))
+                                        .offset(x: 2, y: -2)
+                                }
+                            }
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Menu")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                if library.recent.isEmpty && library.playlists.isEmpty {
+                    Text("Find a song in Search and it will show up here.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                }
+
+                if !library.recent.isEmpty {
+                    sectionTitle("Recently Played")
+                    shelf {
+                        ForEach(Array(library.recent.prefix(15).enumerated()), id: \.element.id) { i, t in
+                            Button {
+                                player.play(Array(library.recent.prefix(15)), startAt: i, from: "Recently played")
+                            } label: {
+                                MusicCard(title: t.title, subtitle: t.artist, size: card) {
+                                    ArtworkView(url: t.artwork(size: 400), size: card, corner: 0, seed: t.id)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu { TrackMenuItems(track: t) }
+                        }
+                    }
+                }
+
+                let releases = ArtistStore.shared.allNewReleases
+                if !releases.isEmpty {
+                    sectionTitle("New Releases")
+                    shelf {
+                        ForEach(releases) { r in
+                            NavigationLink(value: Route.album(r.album, artist: r.artistName)) {
+                                MusicCard(title: r.album.title, subtitle: r.artistName, size: card) {
+                                    AsyncImage(url: resizedImage(r.album.thumbnail, size: 400)) { phase in
+                                        if let img = phase.image { img.resizable().scaledToFill() } else { Theme.tile(seed: r.album.id) }
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                sectionTitle("Your Playlists", route: .collection(.playlists))
+                shelf {
+                    NavigationLink(value: Route.liked) {
+                        MusicCard(title: "Liked Songs", subtitle: "\(library.liked.count) songs", size: card) {
+                            SymbolTile(symbol: "heart.fill", color: AppSettings.shared.accent, size: card)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(library.playlists.filter { $0.isAlbum != true }.reversed()) { p in
+                        NavigationLink(value: Route.playlist(p.id)) {
+                            MusicCard(title: p.name, subtitle: "Playlist", size: card) {
+                                PlaylistArt(playlist: p, size: card, corner: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                let albums = library.playlists.filter { $0.isAlbum == true }
+                if !albums.isEmpty {
+                    sectionTitle("Albums", route: .collection(.albums))
+                    shelf {
+                        ForEach(albums.reversed()) { p in
+                            NavigationLink(value: Route.playlist(p.id)) {
+                                MusicCard(title: p.name, subtitle: p.albumArtist ?? "Album", size: card) {
+                                    PlaylistArt(playlist: p, size: card, corner: 0)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .background(Theme.bg)
+        .toolbar(.hidden, for: .navigationBar)
+        .task { player.prefetch(Array(library.recent.prefix(2))) }
+    }
+
+    @ViewBuilder private func sectionTitle(_ title: String, route: Route? = nil) -> some View {
+        Group {
+            if let route {
+                NavigationLink(value: route) {
+                    HStack(spacing: 4) {
+                        Text(title)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(title)
+            }
+        }
+        .font(.system(size: 22, weight: .bold))
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
+        .padding(.bottom, 12)
+    }
+
+    private func shelf<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 14) { content() }
+                .padding(.horizontal, 20)
+        }
     }
 }
