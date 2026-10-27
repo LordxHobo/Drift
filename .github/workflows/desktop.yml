@@ -40,6 +40,16 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+      # Create the release first (once), so the uploads below don't race to create it.
+      - name: Prepare the release
+        if: env.GH_TOKEN != ''
+        run: |
+          V="0.1.${{ github.run_number }}"
+          R="LordxHobo/drift-releases"
+          if ! gh release view "v$V" --repo "$R" >/dev/null 2>&1; then
+            gh release create "v$V" --repo "$R" --title "Drift $V" --notes "Drift $V for Windows and Linux." \
+              || { echo "::error::Couldn't create the release. drift-releases needs at least one commit (for example a README)."; exit 1; }
+          fi
       - name: Build the installer
         run: npx electron-vite build && npx electron-builder --win --publish "$([ -n "$GH_TOKEN" ] && echo always || echo never)"
         env:
