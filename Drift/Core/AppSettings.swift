@@ -57,13 +57,6 @@ final class AppSettings {
     var podcastSpeed: Double { didSet { defaults.set(podcastSpeed, forKey: "podcastSpeed") } }
     /// Liquid Glass tab bar, mini player, drawer and player buttons (iOS 26+).
     var glassEffects: Bool { didSet { defaults.set(glassEffects, forKey: "glassEffects") } }
-    /// Current lyric line in the lock screen / CarPlay Now Playing info (in place of the artist).
-    var lyricsInNowPlaying: Bool {
-        didSet {
-            defaults.set(lyricsInNowPlaying, forKey: "lyricsInNowPlaying")
-            Task { @MainActor in LyricsActivity.shared.settingChanged() }
-        }
-    }
     var uiStyle: UIStyle { didSet { defaults.set(uiStyle.rawValue, forKey: "uiStyle") } }
     /// Dark (default), light, or follow the iPhone's setting.
     var appearance: Appearance {
@@ -85,7 +78,6 @@ final class AppSettings {
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
         glassEffects = d.bool(forKey: "glassEffects")
-        lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? true
         uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }

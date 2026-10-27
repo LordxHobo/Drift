@@ -46,15 +46,6 @@ final class LyricsActivity {
         AppSettings.shared.lyricsLiveActivity && ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
-    /// Lyrics are needed for the Live Activity or for the Now Playing info.
-    private var wanted: Bool { enabled || AppSettings.shared.lyricsInNowPlaying }
-
-    /// The current synced lyric line (empty between lines or without synced lyrics).
-    var currentLine: String {
-        guard let t = track, !t.isEpisode, lineIndex >= 0, lineIndex < lines.count else { return "" }
-        return lines[lineIndex].text.trimmingCharacters(in: .whitespaces)
-    }
-
     // MARK: Player hooks
 
     func trackChanged(_ t: Track) {
@@ -66,11 +57,9 @@ final class LyricsActivity {
         kind = "none"
         lineIndex = -2
         lyricsTask?.cancel()
-        guard wanted else { return }
-        if enabled {
-            startIfPossible()
-            push()
-        }
+        guard enabled else { return }
+        startIfPossible()
+        push()
         // Podcasts have no lyrics; the activity just shows the episode and channel.
         if t.isEpisode { return }
         lyricsTask = Task { [weak self] in
@@ -87,7 +76,7 @@ final class LyricsActivity {
             }
             self.lineIndex = -2
             self.tick(Player.shared.currentTime)
-            if self.enabled { self.push() }
+            self.push()
         }
     }
 
@@ -109,13 +98,11 @@ final class LyricsActivity {
     }
 
     func tick(_ time: Double) {
-        guard activity != nil || AppSettings.shared.lyricsInNowPlaying, !lines.isEmpty else { return }
+        guard activity != nil, !lines.isEmpty else { return }
         let i = Self.index(in: lines, at: time + 0.3)
         guard i != lineIndex else { return }
         lineIndex = i
         push()
-        // Background audio apps may always update the Now Playing info (unlike Live Activities).
-        if AppSettings.shared.lyricsInNowPlaying { Player.shared.lyricLineChanged() }
         scheduleNextLine(after: time)
     }
 
@@ -139,12 +126,14 @@ final class LyricsActivity {
     }
 
     func settingChanged() {
-        if !AppSettings.shared.lyricsLiveActivity { endNow() }
-        if wanted, let t = Player.shared.current {
-            isPlaying = Player.shared.isPlaying
-            trackChanged(t)
+        if AppSettings.shared.lyricsLiveActivity {
+            if let t = Player.shared.current {
+                isPlaying = Player.shared.isPlaying
+                trackChanged(t)
+            }
+        } else {
+            endNow()
         }
-        Player.shared.lyricLineChanged()
     }
 
     func endNow() {

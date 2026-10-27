@@ -820,9 +820,6 @@ final class Player {
         c.previousTrackCommand.isEnabled = !ep || !chapters.isEmpty
     }
 
-    /// The lyric line changed: show it in the lock screen / CarPlay Now Playing info.
-    func lyricLineChanged() { updateNowPlaying() }
-
     private func updateNowPlaying() {
         guard let t = current else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -838,14 +835,6 @@ final class Player {
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let album = t.album { info[MPMediaItemPropertyAlbumTitle] = album }
-        // Current lyric line where the artist goes; the artist moves to the album line.
-        if AppSettings.shared.lyricsInNowPlaying, !t.isEpisode {
-            let line = LyricsActivity.shared.currentLine
-            if !line.isEmpty {
-                info[MPMediaItemPropertyArtist] = "♪ " + line
-                info[MPMediaItemPropertyAlbumTitle] = t.artist
-            }
-        }
         if let i = chapterIndex, t.isEpisode {
             info[MPMediaItemPropertyAlbumTitle] = chapters[i].title
             info[MPNowPlayingInfoPropertyChapterNumber] = i

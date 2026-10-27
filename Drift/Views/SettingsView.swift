@@ -89,9 +89,6 @@ struct SettingsView: View {
                         .onChange(of: settings.lyricsLiveActivity) { _, _ in
                             LyricsActivity.shared.settingChanged()
                         }
-                    toggle("Lyrics in Now Playing",
-                           "Shows the current line on the lock screen player and CarPlay's Now Playing screen, where the artist normally is. Keeps working with Drift in the background.",
-                           $settings.lyricsInNowPlaying)
                     row("Synced source", "LRCLIB")
                     row("Fallback (unsynced)", "Genius")
                 }
