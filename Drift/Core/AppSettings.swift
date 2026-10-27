@@ -85,7 +85,7 @@ final class AppSettings {
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
         glassEffects = d.bool(forKey: "glassEffects")
-        lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? true
+        lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? false
         uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
