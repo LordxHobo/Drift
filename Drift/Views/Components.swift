@@ -11,6 +11,7 @@ enum Route: Hashable {
     case user(UserProfile)
     case sharedPlaylist(SharedPlaylist)
     case notifications
+    case collection(LibraryCollection)
     case notification(UUID)
     case followList(followers: Bool)
     case artist(ArtistRef)
@@ -33,6 +34,7 @@ extension View {
             case .friends: FriendsView()
             case .user(let u): UserView(initial: u)
             case .sharedPlaylist(let p): SharedPlaylistView(playlist: p)
+            case .collection(let c): CollectionView(kind: c)
             case .notifications: NotificationsView()
             case .notification(let id): NotificationDetailView(id: id)
             case .followList(let followers): FollowListView(followers: followers)

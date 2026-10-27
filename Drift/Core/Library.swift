@@ -95,6 +95,27 @@ final class Library {
         return p
     }
 
+    /// An album saved to the library (kept as a playlist, listed under Albums).
+    @discardableResult
+    func saveAlbum(_ title: String, artist: String, tracks: [Track]) -> Playlist {
+        var p = createPlaylist(title, tracks: tracks)
+        if let i = playlists.firstIndex(where: { $0.id == p.id }) {
+            playlists[i].isAlbum = true
+            playlists[i].albumArtist = artist
+            p = playlists[i]
+            save()
+        }
+        return p
+    }
+
+    /// Every song in your playlists and liked songs, once each, A–Z.
+    var allSongs: [Track] {
+        var seen = Set<String>()
+        return (liked + playlists.flatMap(\.tracks))
+            .filter { !$0.isEpisode && seen.insert($0.id).inserted }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
     /// Adds songs to the end of a playlist, skipping ones already in it (big imports save as they go).
     func appendTracks(_ tracks: [Track], to id: UUID) {
         guard !tracks.isEmpty, let i = playlists.firstIndex(where: { $0.id == id }) else { return }

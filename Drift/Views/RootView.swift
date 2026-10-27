@@ -95,20 +95,28 @@ struct RootView: View {
 
 extension RootView {
     @ViewBuilder var bottomBars: some View {
-        let glass = DriftGlass.isOn
-        VStack(spacing: glass ? 8 : 0) {
+        // Glass effects and the Apple Music style both float the bars over the page.
+        let floating = DriftGlass.isOn || Theme.isMusic
+        VStack(spacing: floating ? 8 : 0) {
             if player.current != nil {
-                MiniPlayer { ui.showPlayer = true }
-                    .foregroundStyle(Theme.text)
-                    .environment(\.colorScheme, .dark)
-                    .padding(.horizontal, glass ? 14 : 8)
-                    .padding(.top, 4)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                Group {
+                    if Theme.isMusic {
+                        MusicMiniPlayer { ui.showPlayer = true }
+                            .foregroundStyle(Theme.text)
+                    } else {
+                        MiniPlayer { ui.showPlayer = true }
+                            .foregroundStyle(Theme.text)
+                            .environment(\.colorScheme, .dark)
+                    }
+                }
+                .padding(.horizontal, floating ? 14 : 8)
+                .padding(.top, 4)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             TabBar(tab: $tab, reselect: backToStart)
         }
         .background {
-            if !glass { Theme.bg.ignoresSafeArea(edges: .bottom) }
+            if !floating { Theme.bg.ignoresSafeArea(edges: .bottom) }
         }
     }
 
@@ -162,6 +170,16 @@ struct TabBar: View {
                 .driftGlass(in: Capsule())
                 .padding(.horizontal, 14)
                 .padding(.bottom, 2)
+        } else if Theme.isMusic {
+            // Apple Music: a floating frosted capsule.
+            items
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Theme.line.opacity(0.5), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 2)
         } else {
             items
                 .padding(.top, 8)
@@ -181,13 +199,73 @@ struct TabBar: View {
                     .frame(height: 24)
                 Text(title).font(.system(size: 11, weight: selected ? .bold : .medium))
             }
-            .foregroundStyle(selected ? (DriftGlass.isOn ? AppSettings.shared.accent : Theme.text)
-                                      : (DriftGlass.isOn ? Theme.text2 : Theme.muted))
+            .foregroundStyle(selected ? (DriftGlass.isOn || Theme.isMusic ? AppSettings.shared.accent : Theme.text)
+                                      : (DriftGlass.isOn || Theme.isMusic ? Theme.text2 : Theme.muted))
             .frame(maxWidth: .infinity, minHeight: 48)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Apple Music–style mini player: a frosted capsule with the song, play/pause and next.
+struct MusicMiniPlayer: View {
+    var open: () -> Void
+    private var player: Player { .shared }
+
+    var body: some View {
+        if let t = player.current {
+            HStack(spacing: 10) {
+                Button(action: open) {
+                    HStack(spacing: 10) {
+                        ArtworkView(url: t.artwork(size: 120), size: 40, corner: 7, seed: t.id)
+                        Text(t.title)
+                            .font(.system(size: 15, weight: .medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open player, \(t.title) by \(t.artist)")
+
+                Button { player.togglePlay() } label: {
+                    Group {
+                        if player.isBuffering && !player.isPlaying {
+                            ProgressView()
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 20))
+                        }
+                    }
+                    .frame(width: 40, height: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+
+                Button { if t.isEpisode { player.skip(by: 30) } else { player.next() } } label: {
+                    Image(systemName: t.isEpisode ? "goforward.30" : "forward.fill")
+                        .font(.system(size: 18))
+                        .frame(width: 40, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(t.isEpisode ? "Skip forward 30 seconds" : "Next")
+            }
+            .padding(.leading, 7)
+            .padding(.trailing, 8)
+            .frame(height: 56)
+            .driftGlass(in: Capsule(), clear: false, interactive: true)
+            .background {
+                if !DriftGlass.isOn {
+                    Capsule().fill(.regularMaterial)
+                        .overlay(Capsule().stroke(Theme.line.opacity(0.5), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                }
+            }
+        }
     }
 }
 

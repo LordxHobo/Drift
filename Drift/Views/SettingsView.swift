@@ -93,6 +93,21 @@ struct SettingsView: View {
                     row("Fallback (unsynced)", "Genius")
                 }
 
+                section("Style") {
+                    HStack(spacing: 4) {
+                        ForEach(UIStyle.allCases, id: \.self) { st in
+                            qualityButton(st.title, selected: settings.uiStyle == st) { settings.uiStyle = st }
+                        }
+                    }
+                    .padding(4)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text(settings.uiStyle == .music
+                         ? "Looks like Apple Music: white or black pages, red accents, big titles."
+                         : "Drift's own look, like Spotify.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+
                 section("Appearance") {
                     HStack(spacing: 4) {
                         ForEach(Appearance.allCases, id: \.self) { a in
@@ -113,6 +128,7 @@ struct SettingsView: View {
                         .padding(.top, 6)
                 }
 
+                if settings.uiStyle == .spotify {
                 section("Accent color") {
                     HStack(spacing: 10) {
                         ForEach(Theme.accents.indices, id: \.self) { i in
@@ -129,6 +145,7 @@ struct SettingsView: View {
                             .accessibilityAddTraits(settings.accentIndex == i ? .isSelected : [])
                         }
                     }
+                }
                 }
 
                 Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")

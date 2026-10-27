@@ -51,6 +51,9 @@ struct Playlist: Codable, Hashable, Identifiable {
     var coverFile: String?
     /// Shown on your Drift profile. nil = yes (the default, like Spotify).
     var isPublic: Bool?
+    /// Saved from an album page (listed under Albums in the Apple Music style).
+    var isAlbum: Bool?
+    var albumArtist: String?
 
     enum CoverStyle: String, Codable {
         case auto, color, photo

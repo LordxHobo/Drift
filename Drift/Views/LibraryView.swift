@@ -9,6 +9,14 @@ struct LibraryView: View {
     private var library: Library { .shared }
 
     var body: some View {
+        if Theme.isMusic {
+            MusicLibraryView()
+        } else {
+            spotifyBody
+        }
+    }
+
+    private var spotifyBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Your Library")

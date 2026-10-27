@@ -2,6 +2,18 @@ import SwiftUI
 import UIKit
 import Observation
 
+/// Overall look: Drift's own (Spotify-like) or Apple Music–like.
+enum UIStyle: String, CaseIterable {
+    case spotify, music
+
+    var title: String {
+        switch self {
+        case .spotify: "Spotify"
+        case .music: "Apple Music"
+        }
+    }
+}
+
 enum Appearance: String, CaseIterable {
     case dark, light, system
 
@@ -45,6 +57,7 @@ final class AppSettings {
     var podcastSpeed: Double { didSet { defaults.set(podcastSpeed, forKey: "podcastSpeed") } }
     /// Liquid Glass tab bar, mini player, drawer and player buttons (iOS 26+).
     var glassEffects: Bool { didSet { defaults.set(glassEffects, forKey: "glassEffects") } }
+    var uiStyle: UIStyle { didSet { defaults.set(uiStyle.rawValue, forKey: "uiStyle") } }
     /// Dark (default), light, or follow the iPhone's setting.
     var appearance: Appearance {
         didSet {
@@ -65,14 +78,17 @@ final class AppSettings {
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
         glassEffects = d.bool(forKey: "glassEffects")
+        uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
 
     var accentHex: UInt32 {
-        Theme.accents[min(max(accentIndex, 0), Theme.accents.count - 1)]
+        if uiStyle == .music { return Theme.musicRed }
+        return Theme.accents[min(max(accentIndex, 0), Theme.accents.count - 1)]
     }
     /// A little darker in light mode so it stays readable on white.
     var accent: Color {
+        if uiStyle == .music { return Color(hex: Theme.musicRed) }
         let h = accentHex
         func dim(_ shift: UInt32) -> UInt32 { UInt32(Double((h >> shift) & 0xFF) * 0.78) << shift }
         return Theme.dynamic(dark: h, light: dim(16) | dim(8) | dim(0))

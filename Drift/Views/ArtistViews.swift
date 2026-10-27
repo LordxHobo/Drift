@@ -343,7 +343,7 @@ struct AlbumView: View {
                     .accessibilityLabel(allDownloaded(tracks) ? "Remove downloads" : "Download album")
                     Button {
                         guard let page else { return }
-                        library.createPlaylist(page.title, tracks: page.tracks)
+                        library.saveAlbum(page.title, artist: page.artist, tracks: page.tracks)
                         saved = true
                     } label: {
                         Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle")
