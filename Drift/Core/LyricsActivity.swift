@@ -23,8 +23,7 @@ final class LyricsActivity {
     private var nextChapterTitle = ""
     private var lyricsTask: Task<Void, Never>?
     private var lastSent: State?
-    private var pending: State?
-    private var sending = false
+    private var updateCount = 0
     /// Wakes up exactly when the next lyric line starts (time updates can be slow while the phone is locked).
     private var nextLineTask: Task<Void, Never>?
 
@@ -211,19 +210,18 @@ final class LyricsActivity {
         }
     }
 
-    /// Sends the newest state, never more than one update in flight.
+    /// Sends the newest state. An update iOS holds back while Drift is in the background must never
+    /// block the ones after it, so each one is sent on its own and only the newest is kept.
     private func push() {
-        guard activity != nil, let state = currentState(), state != lastSent else { return }
-        pending = state
-        guard !sending else { return }
-        sending = true
+        guard let a = activity, let state = currentState(), state != lastSent else { return }
+        lastSent = state
+        updateCount += 1
+        let n = updateCount
         Task {
-            while let next = self.pending, let a = self.activity {
-                self.pending = nil
-                await a.update(ActivityContent(state: next, staleDate: nil))
-                self.lastSent = next
-            }
-            self.sending = false
+            // A moment's pause lets a burst of changes (new song, then its first line) go out as one.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard n == self.updateCount, let current = self.currentState() else { return }
+            await a.update(ActivityContent(state: current, staleDate: nil))
         }
     }
 }
