@@ -2940,3 +2940,86 @@ kbd {
   justify-content: center;
   border-radius: 7px;
 }
+
+/* Downloads */
+.dl-mark {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 6px;
+}
+.dl-mark.done {
+  color: var(--accent);
+}
+.dl-mark.pending {
+  color: var(--muted);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.dl-toggle.on {
+  color: var(--accent) !important;
+}
+.dl-status {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.m-header .dl-status {
+  margin-top: 4px;
+}
+.dl-cover {
+  background: var(--surface2);
+  color: var(--accent);
+}
+.dl-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 13px;
+  color: var(--muted);
+  margin: -8px 0 16px;
+}
+.dl-failed {
+  color: #f87171;
+}
+.dl-failed .link {
+  color: inherit;
+  text-decoration: underline;
+}
+.set-value {
+  font-weight: 650;
+  white-space: nowrap;
+}
+.link-buttons.tight {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+.danger-text {
+  color: #f87171 !important;
+}
+.set-row .set-detail {
+  overflow-wrap: anywhere;
+}
+.lib-settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  margin: 6px 0 0;
+  padding: 0 12px;
+  border-radius: 6px;
+  border-top: 1px solid var(--line);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.lib-settings:hover,
+.lib-settings.on {
+  color: var(--text);
+}

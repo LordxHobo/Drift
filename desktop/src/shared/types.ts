@@ -192,6 +192,22 @@ export interface ImportState {
   retrying?: boolean
 }
 
+export interface DownloadsState {
+  /** Downloaded songs (track IDs). */
+  done: string[]
+  /** Waiting to download. */
+  queued: string[]
+  active: { id: string; title: string; received: number; total: number }[]
+  /** Kept downloaded: "liked" or playlist IDs (new songs in them download too). */
+  keep: string[]
+  /** Space used, in bytes. */
+  bytes: number
+  folder: string
+  /** Recent download speed, bytes per second. */
+  rate: number
+  failed: { id: string; title: string; error: string }[]
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -242,12 +258,21 @@ export interface DriftApi {
   retryMissing(): Promise<void>
   clearImport(): Promise<void>
 
+  downloads(): Promise<DownloadsState>
+  downloadedTracks(): Promise<Track[]>
+  download(tracks: Track[]): Promise<void>
+  removeDownloads(ids: string[]): Promise<void>
+  keepDownloaded(collection: string, keep: boolean): Promise<void>
+  removeAllDownloads(): Promise<void>
+  openDownloadsFolder(): Promise<void>
+  retryFailedDownloads(): Promise<void>
+
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -255,7 +280,9 @@ export const apiMethods: (keyof DriftApi)[] = [
   'movePlaylistTrack', 'renamePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
-  'startImport', 'importState', 'retryMissing', 'clearImport'
+  'startImport', 'importState', 'retryMissing', 'clearImport',
+  'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
+  'openDownloadsFolder', 'retryFailedDownloads'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */

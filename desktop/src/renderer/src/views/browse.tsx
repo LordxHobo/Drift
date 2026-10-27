@@ -484,7 +484,8 @@ export function AlbumPage({ id, hint }: { id: string; hint?: AlbumRef }): JSX.El
           ) : undefined
         }
         onMore={data ? (e) => openMenu(e, [
-          { label: 'Add to playlist', icon: 'plus', submenu: addToPlaylistItems(data.tracks) }
+          { label: 'Add to playlist', icon: 'plus', submenu: addToPlaylistItems(data.tracks) },
+          { label: 'Download album', icon: 'download', action: () => { void drift.download(data.tracks); toast(`Downloading ${data.title}`) } }
         ]) : undefined}
       />
       {!data ? <Loading /> : <TrackList tracks={data.tracks} context={{ kind: 'album', id, name: title }} showAlbum={false} showArt={false} />}

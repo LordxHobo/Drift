@@ -9,6 +9,7 @@ import { handleStream, prepare } from './stream'
 import { lyrics } from './lyrics'
 import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
 import * as spotify from './spotify'
+import * as downloads from './downloads'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -131,6 +132,15 @@ const api: DriftApi = {
   retryMissing: async () => void spotify.retryMissing(),
   clearImport: async () => spotify.clearImport(),
 
+  downloads: async () => downloads.getDownloads(),
+  downloadedTracks: async () => downloads.downloadedTracks(),
+  download: async (tracks) => downloads.download(tracks),
+  removeDownloads: async (ids) => downloads.removeDownloads(ids),
+  keepDownloaded: async (collection, keep) => downloads.keepDownloaded(collection, keep),
+  removeAllDownloads: async () => downloads.removeAllDownloads(),
+  openDownloadsFolder: async () => downloads.openFolder(),
+  retryFailedDownloads: async () => downloads.retryFailed(),
+
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),
   installUpdate: async () => installUpdate()
@@ -156,12 +166,16 @@ app.whenReady().then(() => {
   createWindow()
   account.start()
   startUpdates()
+  downloads.startDownloads()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-app.on('before-quit', () => store.flush())
+app.on('before-quit', () => {
+  store.flush()
+  downloads.flushDownloads()
+})
 app.on('window-all-closed', () => {
   store.flush()
   if (process.platform !== 'darwin') app.quit()

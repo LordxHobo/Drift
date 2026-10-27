@@ -3,7 +3,7 @@ import type { JSX } from 'react'
 import type { Playlist } from '@shared/types'
 import { Icon, Logo } from './icons'
 import {
-  accountStore, back, forward, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
+  accountStore, back, downloadsStore, forward, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal
 } from './state'
 import type { MenuItem, Route } from './state'
@@ -12,6 +12,7 @@ import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { ImportPill, openImport } from './views/import'
+import { DownloadPill } from './downloads'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 
 const createItems = (): MenuItem[] => [
@@ -38,6 +39,8 @@ export function DriftSidebar(): JSX.Element {
   const playlists = lib.playlists.filter((p) => (filter === 'all' || (filter === 'albums' ? p.isAlbum : filter === 'playlists' && !p.isAlbum)) && match(p.name))
   const artists = filter === 'all' || filter === 'artists' ? lib.artists.filter((a) => match(a.artist.name)) : []
   const showLiked = (filter === 'all' || filter === 'playlists') && match('Liked songs')
+  const downloads = useStore(downloadsStore)
+  const showDownloaded = downloads.done.length > 0 && (filter === 'all' || filter === 'playlists') && match('Downloaded')
 
   return (
     <aside className="sidebar">
@@ -115,8 +118,21 @@ export function DriftSidebar(): JSX.Element {
               sub="Artist"
             />
           ))}
-          {!showLiked && !playlists.length && !artists.length && <div className="empty small">Nothing here yet.</div>}
+          {showDownloaded && (
+            <LibRow
+              on={route.name === 'collection' && route.kind === 'downloaded'}
+              onClick={() => go({ name: 'collection', kind: 'downloaded' })}
+              art={<span className="art dl-cover" style={{ width: 44, height: 44, borderRadius: 4 }}><Icon name="download" size={22} /></span>}
+              title="Downloaded"
+              sub={`On this computer · ${plural(downloads.done.length, 'song')}`}
+            />
+          )}
+          {!showLiked && !playlists.length && !artists.length && !showDownloaded && <div className="empty small">Nothing here yet.</div>}
         </div>
+        <button className={`lib-settings ${route.name === 'settings' ? 'on' : ''}`} onClick={() => go({ name: 'settings' })}>
+          <Icon name="gear" size={18} />
+          Settings
+        </button>
       </div>
     </aside>
   )
@@ -148,6 +164,7 @@ export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Ele
       <div className="topbar-middle">{children}</div>
       <div className="topbar-right">
         <ImportPill />
+        <DownloadPill />
         <UpdateButton />
         <ReleasesBell />
         <ProfileButton />
@@ -405,6 +422,7 @@ export function MusicSidebar(): JSX.Element {
         {item({ name: 'collection', kind: 'albums' }, 'album', 'Albums')}
         {item({ name: 'collection', kind: 'songs' }, 'note', 'Songs')}
         {item({ name: 'liked' }, 'heart', 'Liked Songs')}
+        {item({ name: 'collection', kind: 'downloaded' }, 'download', 'Downloaded')}
         <div className="m-section">
           Playlists
           <IconButton icon="plus" label="New playlist or import" size={14} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
@@ -423,6 +441,7 @@ export function MusicSidebar(): JSX.Element {
         ))}
       </div>
       <ImportPill className="m-import" />
+      <DownloadPill className="m-import" />
       <UpdateButton className="m-update" />
       <button className="m-profile" onClick={() => go({ name: 'settings' })}>
         <Avatar size={28} />

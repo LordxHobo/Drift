@@ -1,12 +1,40 @@
 // Playlists, Liked songs, saved albums, and the Apple Music style library pages.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
-import type { Playlist } from '@shared/types'
-import { accountStore, go, libraryStore, openMenu, useStore } from '../state'
+import type { Playlist, Track } from '@shared/types'
+import { accountStore, drift, downloadsStore, go, libraryStore, openMenu, useStore } from '../state'
 import { playList } from '../player'
 import { Art, Card, LikedCover, PlaylistCover, TrackArt, TrackList, playlistMenu, newPlaylist } from '../ui'
 import { allSongs, artwork, formatTotal, plural, resized } from '../util'
 import { CollectionHeader, FilterField, filterTracks, useMusic } from './common'
+import { formatBytes } from '../downloads'
+
+/** Downloaded songs, newest first (reloaded when downloads change). */
+function useDownloadedTracks(active: boolean): Track[] {
+  const d = useStore(downloadsStore)
+  const [tracks, setTracks] = useState<Track[]>([])
+  useEffect(() => {
+    if (active) void drift.downloadedTracks().then(setTracks)
+  }, [active, d.done.length])
+  return tracks
+}
+
+function DownloadSummary(): JSX.Element | null {
+  const d = useStore(downloadsStore)
+  const left = d.queued.length + d.active.length
+  return (
+    <div className="dl-summary">
+      <span>{plural(d.done.length, 'song')} · {formatBytes(d.bytes)}</span>
+      {left > 0 && <span>Downloading {plural(left, 'more song')}{d.active[0] ? ` · now: ${d.active[0].title}` : ''}</span>}
+      {d.failed.length > 0 && (
+        <span className="dl-failed">
+          {plural(d.failed.length, 'song')} didn’t download.{' '}
+          <button className="link" onClick={() => void drift.retryFailedDownloads()}>Try again</button>
+        </span>
+      )}
+    </div>
+  )
+}
 
 export function PlaylistPage({ id }: { id: string }): JSX.Element {
   const lib = useStore(libraryStore)
@@ -29,6 +57,7 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
         meta={`${plural(p.tracks.length, 'song')}, ${formatTotal(p.tracks)}`}
         tracks={p.tracks}
         context={{ kind: 'playlist', id: p.id, name: p.name }}
+        downloadKey={p.id}
         onMore={(e) => openMenu(e, playlistMenu(p))}
         filter={p.tracks.length > 8 ? <FilterField value={filter} onChange={setFilter} placeholder={p.isAlbum ? 'Find in album' : 'Find in playlist'} /> : null}
       />
@@ -61,6 +90,7 @@ export function LikedPage(): JSX.Element {
         meta={`${plural(lib.liked.length, 'song')}, ${formatTotal(lib.liked)}`}
         tracks={lib.liked}
         context={{ kind: 'liked', id: 'liked', name: 'Liked songs' }}
+        downloadKey="liked"
         filter={lib.liked.length > 8 ? <FilterField value={filter} onChange={setFilter} placeholder="Find in Liked songs" /> : null}
       />
       <TrackList
@@ -87,10 +117,11 @@ function PlaylistCard({ p }: { p: Playlist }): JSX.Element {
   )
 }
 
-export function CollectionPage({ kind }: { kind: 'artists' | 'albums' | 'songs' | 'recent' | 'playlists' }): JSX.Element {
+export function CollectionPage({ kind }: { kind: 'artists' | 'albums' | 'songs' | 'recent' | 'playlists' | 'downloaded' }): JSX.Element {
   const lib = useStore(libraryStore)
   const [filter, setFilter] = useState('')
-  const titles = { artists: 'Artists', albums: 'Albums', songs: 'Songs', recent: 'Recently Played', playlists: 'Playlists' }
+  const titles = { artists: 'Artists', albums: 'Albums', songs: 'Songs', recent: 'Recently Played', playlists: 'Playlists', downloaded: 'Downloaded' }
+  const downloaded = useDownloadedTracks(kind === 'downloaded')
   const q = filter.trim().toLowerCase()
 
   let body: JSX.Element
@@ -123,6 +154,19 @@ export function CollectionPage({ kind }: { kind: 'artists' | 'albums' | 'songs' 
           <div><button className="btn" onClick={() => newPlaylist([])}>New playlist</button></div>
         )}
       </div>
+    )
+  } else if (kind === 'downloaded') {
+    const { list, indexes } = filterTracks(downloaded, filter)
+    body = (
+      <>
+        <DownloadSummary />
+        <TrackList
+          tracks={list}
+          indexes={indexes}
+          context={{ kind: 'playlist', id: 'collection-downloaded', name: 'Downloaded' }}
+          emptyText={filter ? 'No songs match.' : 'Songs you download play without internet. Click the download button on a playlist, or right-click a song and choose Download.'}
+        />
+      </>
     )
   } else {
     const all = kind === 'songs' ? allSongs(lib.liked, lib.playlists) : lib.recent

@@ -72,8 +72,16 @@ export function getLibrary(): Library {
   return library
 }
 
+const libraryListeners: (() => void)[] = []
+
+/** Called after every change, from this computer or another device. */
+export function onLibraryChange(f: () => void): void {
+  libraryListeners.push(f)
+}
+
 function save(local = true): void {
   emit('library', getLibrary())
+  for (const f of libraryListeners) f()
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => writeJSON('library.json', getLibrary()), 300)
   if (local) changed()

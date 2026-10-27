@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, JSX, ReactNode } from 'react'
 import type { Playlist, Track } from '@shared/types'
 import { Icon } from './icons'
+import { DownloadMark, downloadMenuItem, useDownloadSets } from './downloads'
 import {
   accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, updateStore, useStore
 } from './state'
@@ -175,6 +176,7 @@ export function trackMenu(t: Track, opts: { playlistId?: string; index?: number;
     { label: '', separator: true },
     { label: liked ? 'Remove from Liked songs' : 'Save to Liked songs', icon: liked ? 'heartFill' : 'heart', action: () => toggleLike(t) },
     { label: 'Add to playlist', icon: 'plus', submenu: addToPlaylistItems([t]) },
+    downloadMenuItem(t),
     ...(opts.playlistId && opts.index !== undefined
       ? [{ label: 'Remove from this playlist', icon: 'trash', action: () => void drift.removeFromPlaylist(opts.playlistId!, [opts.index!]) }]
       : []),
@@ -214,6 +216,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
   const player = usePlayer()
   const style = useStore(settingsStore).style
   const liked = useStore(libraryStore).liked
+  const dl = useDownloadSets()
   const likedIds = new Set(liked.map((t) => t.id))
   const full = (i: number): number => indexes?.[i] ?? i
   // The short list (search results) always shows the artist under the title.
@@ -269,6 +272,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
                 <span className="t-title">
                   {t.title}
                   {t.upload && <span className="badge">UPLOAD</span>}
+                  <DownloadMark id={t.id} sets={dl} />
                 </span>
                 {!music && (
                   <button className="t-artist link" onClick={() => void goToArtist(t.artist)}>{t.artist}</button>

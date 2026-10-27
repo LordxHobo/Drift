@@ -5,6 +5,7 @@ import { settingsStore, useStore } from '../state'
 import { playList, toggle, usePlayer } from '../player'
 import type { PlayContext } from '../player'
 import { BigPlay, Spinner } from '../ui'
+import { CollectionDownloadStatus, DownloadToggle } from '../downloads'
 import { useArtColor } from '../util'
 
 export function useMusic(): boolean {
@@ -12,7 +13,7 @@ export function useMusic(): boolean {
 }
 
 /** The top of a playlist, album or Liked songs page, in either style. */
-export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle, meta, tracks, context, onMore, buttons, filter }: {
+export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle, meta, tracks, context, onMore, buttons, filter, downloadKey }: {
   cover: ReactNode
   coverURL?: string
   seed: string
@@ -25,6 +26,8 @@ export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle,
   onMore?: (e: React.MouseEvent<HTMLButtonElement>) => void
   buttons?: ReactNode
   filter?: ReactNode
+  /** "liked" or a playlist ID: shows the download button. */
+  downloadKey?: string
 }): JSX.Element {
   const music = useMusic()
   const color = useArtColor(coverURL, seed)
@@ -43,6 +46,7 @@ export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle,
           <h1>{title}</h1>
           {subtitle && <div className="m-header-sub">{subtitle}</div>}
           {meta && <div className="m-header-meta">{kind} · {meta}</div>}
+          {downloadKey && <CollectionDownloadStatus tracks={tracks} collection={downloadKey} />}
           <div className="m-header-buttons">
             <button className="pill" onClick={() => play(false)} disabled={!tracks.length}>
               <Icon name={playingHere && p.playing ? 'pause' : 'play'} size={14} /> {playingHere && p.playing ? 'Pause' : 'Play'}
@@ -50,6 +54,7 @@ export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle,
             <button className="pill" onClick={() => play(true)} disabled={!tracks.length}>
               <Icon name="shuffle" size={14} /> Shuffle
             </button>
+            {downloadKey && <DownloadToggle tracks={tracks} collection={downloadKey} name={title} music />}
             {buttons}
             {onMore && (
               <button className="icon-btn tinted" aria-label="More" title="More" onClick={onMore}>
@@ -82,12 +87,14 @@ export function CollectionHeader({ cover, coverURL, seed, kind, title, subtitle,
         <button className="icon-btn big" aria-label="Shuffle" title="Shuffle" onClick={() => play(true)} disabled={!tracks.length}>
           <Icon name="shuffle" size={26} />
         </button>
+        {downloadKey && <DownloadToggle tracks={tracks} collection={downloadKey} name={title} music={false} />}
         {buttons}
         {onMore && (
           <button className="icon-btn big" aria-label="More" title="More" onClick={onMore}>
             <Icon name="more" size={24} />
           </button>
         )}
+        {downloadKey && <CollectionDownloadStatus tracks={tracks} collection={downloadKey} />}
         {filter && <span className="d-filter">{filter}</span>}
       </div>
     </>

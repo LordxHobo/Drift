@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
-import { accountStore, dialogStore, drift, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
+import { accountStore, dialogStore, downloadsStore, drift, go, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
 import { Avatar, Spinner } from '../ui'
-import { accents, musicRed, timeAgo } from '../util'
+import { accents, musicRed, plural, timeAgo } from '../util'
+import { formatBytes } from '../downloads'
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }): JSX.Element {
   return (
@@ -100,6 +101,11 @@ export function SettingsPage(): JSX.Element {
           </Row>
         </section>
       )}
+
+      <section className="set-section">
+        <h2>Downloads</h2>
+        <DownloadSettings />
+      </section>
 
       <section className="set-section">
         <h2>Updates</h2>
@@ -234,5 +240,40 @@ function Updates({ version }: { version: string }): JSX.Element {
         </button>
       )}
     </Row>
+  )
+}
+
+function DownloadSettings(): JSX.Element {
+  const d = useStore(downloadsStore)
+  return (
+    <>
+      <Row title="Storage used" detail={`${plural(d.done.length, 'song')} on this computer. Downloads aren’t synced; your phone keeps its own.`}>
+        <span className="set-value">{formatBytes(d.bytes)}</span>
+      </Row>
+      <Row title="Folder" detail={d.folder}>
+        <div className="link-buttons tight">
+          <button className="btn" onClick={() => go({ name: 'collection', kind: 'downloaded' })}>Show songs</button>
+          <button className="btn" onClick={() => void drift.openDownloadsFolder()}>Open folder</button>
+        </div>
+      </Row>
+      <Row title="Remove all downloads" detail="Songs keep playing by streaming.">
+        <button
+          className="btn ghost danger-text"
+          disabled={!d.done.length && !d.queued.length && !d.active.length}
+          onClick={() =>
+            dialogStore.set({
+              kind: 'confirm',
+              title: 'Remove all downloads?',
+              message: `${plural(d.done.length, 'song')} (${formatBytes(d.bytes)}) are deleted from this computer, and playlists stop downloading new songs.`,
+              confirm: 'Remove all',
+              danger: true,
+              onDone: () => void drift.removeAllDownloads()
+            })
+          }
+        >
+          Remove all
+        </button>
+      </Row>
+    </>
   )
 }

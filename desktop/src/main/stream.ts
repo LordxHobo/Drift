@@ -1,7 +1,8 @@
 // Finding a playable audio link for a song, and passing the audio to the window (drift://stream/<id>).
 import { app, net } from 'electron'
 import { join } from 'node:path'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, openSync, closeSync, readFileSync, statSync, writeSync, writeFileSync } from 'node:fs'
+import { Readable } from 'node:stream'
 import vm from 'node:vm'
 import { Innertube, Platform, UniversalCache } from 'youtubei.js'
 import type { Types } from 'youtubei.js'
@@ -282,7 +283,92 @@ async function preferredId(track: Track): Promise<string> {
 }
 
 /** Gets a song ready to play and says what will actually play. */
+// MARK: Downloaded songs
+
+export interface LocalAudio {
+  path: string
+  mime: string
+  size: number
+}
+
+/** Set by the downloads module: the file of a downloaded song, if there is one. */
+let localLookup: (id: string) => LocalAudio | undefined = () => undefined
+
+export function setLocalLookup(f: (id: string) => LocalAudio | undefined): void {
+  localLookup = f
+}
+
+/**
+ * Saves a song's audio to `path` (via `path`.part, so an interrupted download carries on where it
+ * stopped). Returns what was saved.
+ */
+export async function downloadAudio(
+  track: Track,
+  path: string,
+  onProgress: (received: number, total: number) => void,
+  cancelled: () => boolean
+): Promise<{ mime: string; size: number; playId: string }> {
+  const playId = await preferredId(track)
+  const r = await resolve(playId)
+  const part = path + '.part'
+  let position = existsSync(part) ? statSync(part).size : 0
+  const total = r.size ?? 0
+  if (total && position > total) position = 0
+  const fd = openSync(part, position > 0 ? 'a' : 'w')
+  try {
+    while (!cancelled()) {
+      if (total && position >= total) break
+      const end = total ? Math.min(position + chunk - 1, total - 1) : position + chunk - 1
+      const res = await fetchPiece(playId, position, end)
+      if (!res.body) throw new Error('No audio')
+      const reader = res.body.getReader()
+      let got = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        writeSync(fd, value)
+        got += value.byteLength
+        position += value.byteLength
+        onProgress(position, total)
+        if (cancelled()) {
+          await reader.cancel().catch(() => undefined)
+          break
+        }
+      }
+      // Size unknown: a short piece means the end of the file.
+      if (!total && got < chunk) break
+      if (got === 0) throw new Error('The download stopped')
+    }
+  } finally {
+    closeSync(fd)
+  }
+  if (cancelled()) throw new Error('cancelled')
+  return { mime: r.mime, size: position, playId }
+}
+
+function serveFile(local: LocalAudio, rangeHeader: string | null): Response {
+  const [start, askedEnd] = parseRange(rangeHeader)
+  if (start >= local.size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${local.size}` } })
+  const end = Math.min(askedEnd ?? local.size - 1, local.size - 1)
+  const body = Readable.toWeb(createReadStream(local.path, { start, end })) as ReadableStream<Uint8Array>
+  return new Response(body, {
+    status: 206,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': local.mime,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(end - start + 1),
+      'Content-Range': `bytes ${start}-${end}/${local.size}`
+    }
+  })
+}
+
 export async function prepare(track: Track): Promise<StreamInfo> {
+  // Downloaded: plays from the computer, no internet needed.
+  const local = localLookup(track.id)
+  if (local) {
+    return { playId: track.id, mime: local.mime, bitrate: track.duration ? Math.round((local.size * 8) / track.duration) : 0, size: local.size, duration: track.duration ?? undefined, client: 'Downloaded', note: 'Downloaded on this computer' }
+  }
   const playId = await preferredId(track)
   const r = await resolve(playId)
   return {
@@ -322,6 +408,8 @@ export async function handleStream(request: Request): Promise<Response> {
   const id = new URL(request.url).pathname.replace(/^\/+/, '')
   if (process.env.DRIFT_DEBUG) console.log('[stream]', id, request.headers.get('range'))
   if (!/^[\w-]{6,20}$/.test(id)) return new Response('Bad song', { status: 400 })
+  const local = localLookup(id)
+  if (local) return serveFile(local, request.headers.get('range'))
   const [start, askedEnd] = parseRange(request.headers.get('range'))
 
   let r: Resolved
