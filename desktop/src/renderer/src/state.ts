@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AlbumRef, ArtistRef, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -33,6 +33,9 @@ export const accountStore = new Store<Account>({ linked: false, syncing: false }
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })
 export const platformStore = new Store<string>('win32')
 export const updateStore = new Store<UpdateState>({ phase: 'idle' })
+export const importStore = new Store<ImportState>({ phase: 'idle', total: 0, processed: 0, missing: [] })
+/** The Spotify import window. */
+export const importOpenStore = new Store(false)
 
 export async function loadAll(): Promise<void> {
   const [lib, settings, account, pairing, info, update] = await Promise.all([
@@ -40,6 +43,8 @@ export async function loadAll(): Promise<void> {
   ])
   updateStore.set(update)
   drift.on('update', (v) => updateStore.set(v))
+  importStore.set(await drift.importState())
+  drift.on('import', (v) => importStore.set(v))
   libraryStore.set(lib)
   settingsStore.set(settings)
   accountStore.set(account)

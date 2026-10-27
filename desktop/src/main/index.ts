@@ -8,6 +8,7 @@ import * as account from './account'
 import { handleStream, prepare } from './stream'
 import { lyrics } from './lyrics'
 import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
+import * as spotify from './spotify'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -124,6 +125,11 @@ const api: DriftApi = {
   openExternal: async (url) => {
     if (/^https:\/\//.test(url)) await shell.openExternal(url)
   },
+
+  startImport: async (link) => void spotify.startImport(link),
+  importState: async () => spotify.getImportState(),
+  retryMissing: async () => void spotify.retryMissing(),
+  clearImport: async () => spotify.clearImport(),
 
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),

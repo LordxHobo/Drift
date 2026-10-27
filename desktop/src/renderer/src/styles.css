@@ -2811,3 +2811,132 @@ kbd {
   border-radius: 7px;
   color: #fff;
 }
+
+/* Spotify import */
+.dialog.import {
+  width: 560px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.import-head h3 {
+  margin: 0;
+}
+.dialog.import p {
+  line-height: 1.5;
+  font-size: 14px;
+}
+.import-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.import-input .btn {
+  height: 40px;
+}
+.import-note {
+  font-size: 12px !important;
+  margin-top: 14px;
+}
+.import-progress,
+.import-done {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.import-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+}
+.import-done .import-title svg {
+  color: var(--accent);
+}
+.import-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.import-bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.import-bar > div.indeterminate {
+  width: 30% !important;
+  animation: slide 1.2s ease-in-out infinite;
+}
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+.import-missing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.import-missing-buttons {
+  display: flex;
+  gap: 6px;
+}
+.import-missing {
+  overflow-y: auto;
+  max-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  user-select: text;
+}
+.import-missing-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 0.8fr;
+  gap: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.import-missing-row:last-child {
+  border-bottom: 0;
+}
+.import-missing-row .n,
+.import-missing-row .a {
+  color: var(--muted);
+}
+.import-missing-row .t,
+.import-missing-row .a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: var(--surface2);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.m-import {
+  margin: 6px 10px 0;
+  justify-content: center;
+  border-radius: 7px;
+}

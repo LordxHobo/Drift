@@ -12,6 +12,7 @@ import { AlbumPage, ArtistPage, HomePage, SearchBox, SearchPage } from './views/
 import { CollectionPage, LikedPage, PlaylistPage } from './views/collections'
 import { SongPage } from './views/details'
 import { SettingsPage } from './views/settings'
+import { ImportDialog } from './views/import'
 
 function useDark(): boolean {
   const appearance = useStore(settingsStore).appearance
@@ -129,6 +130,7 @@ export function App(): JSX.Element {
         </div>
         <FullPlayer />
         <ContextMenu />
+        <ImportDialog />
         <DialogHost />
         <Toast />
       </div>
@@ -150,6 +152,7 @@ export function App(): JSX.Element {
       </div>
       <DriftPlayerBar />
       <ContextMenu />
+      <ImportDialog />
       <DialogHost />
       <Toast />
     </div>

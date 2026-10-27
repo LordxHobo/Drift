@@ -9,6 +9,7 @@ import {
   Art, BigPlay, Card, LikedCover, PlaylistCover, Shelf, TrackArt, TrackList, addToPlaylistItems, playlistMenu, trackMenu
 } from '../ui'
 import { greeting, plural, resized, artwork, formatTotal } from '../util'
+import { openImport } from './import'
 import { CollectionHeader, Failed, Loading, cleanError, useMusic } from './common'
 
 // MARK: Home
@@ -49,10 +50,11 @@ export function HomePage(): JSX.Element {
       {empty && (
         <div className="welcome">
           <h2>Welcome to Drift</h2>
-          <p>Search for any song, or link your phone in Settings to bring your playlists, liked songs and followed artists over.</p>
+          <p>Search for any song, link your phone in Settings to bring your playlists, liked songs and followed artists over, or import a playlist from Spotify.</p>
           <div className="welcome-buttons">
             <button className="btn primary" onClick={() => go({ name: 'search' })}>Search</button>
             <button className="btn" onClick={() => go({ name: 'settings' })}>Link your phone</button>
+            <button className="btn" onClick={openImport}>Import from Spotify</button>
           </div>
         </div>
       )}

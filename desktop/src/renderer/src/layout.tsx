@@ -6,12 +6,18 @@ import {
   accountStore, back, forward, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal
 } from './state'
-import type { Route } from './state'
+import type { MenuItem, Route } from './state'
 import { jumpTo, playList, removeFromQueue, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
+import { ImportPill, openImport } from './views/import'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
+
+const createItems = (): MenuItem[] => [
+  { label: 'New playlist…', icon: 'plus', action: () => newPlaylist([]) },
+  { label: 'Import from Spotify…', icon: 'list', action: openImport }
+]
 
 const same = (a: Route, b: Route): boolean => JSON.stringify(a) === JSON.stringify(b)
 
@@ -55,7 +61,7 @@ export function DriftSidebar(): JSX.Element {
             <Icon name="library" size={20} />
             Your Library
           </span>
-          <IconButton icon="plus" label="New playlist" size={18} onClick={() => newPlaylist([])} />
+          <IconButton icon="plus" label="New playlist or import" size={18} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
         </div>
         <div className="chips">
           {(['playlists', 'albums', 'artists'] as const).map((f) => (
@@ -141,6 +147,7 @@ export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Ele
       </div>
       <div className="topbar-middle">{children}</div>
       <div className="topbar-right">
+        <ImportPill />
         <UpdateButton />
         <ReleasesBell />
         <ProfileButton />
@@ -190,6 +197,7 @@ function ProfileButton(): JSX.Element {
           ...(account.linked
             ? [{ label: account.username ? `Signed in as ${account.username}` : 'Linked with your phone', icon: 'phone', disabled: true }]
             : [{ label: 'Link your phone…', icon: 'phone', action: () => go({ name: 'settings' }) }]),
+          { label: 'Import from Spotify…', icon: 'plus', action: openImport },
           { label: 'Settings', icon: 'gear', action: () => go({ name: 'settings' }) }
         ])
       }
@@ -399,7 +407,7 @@ export function MusicSidebar(): JSX.Element {
         {item({ name: 'liked' }, 'heart', 'Liked Songs')}
         <div className="m-section">
           Playlists
-          <IconButton icon="plus" label="New playlist" size={14} onClick={() => newPlaylist([])} />
+          <IconButton icon="plus" label="New playlist or import" size={14} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
         </div>
         {item({ name: 'collection', kind: 'playlists' }, 'grid', 'All Playlists')}
         {lists.map((p: Playlist) => (
@@ -414,6 +422,7 @@ export function MusicSidebar(): JSX.Element {
           </button>
         ))}
       </div>
+      <ImportPill className="m-import" />
       <UpdateButton className="m-update" />
       <button className="m-profile" onClick={() => go({ name: 'settings' })}>
         <Avatar size={28} />

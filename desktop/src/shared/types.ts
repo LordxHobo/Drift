@@ -167,6 +167,31 @@ export interface UpdateState {
   url?: string
 }
 
+/** A song that couldn't be found when importing. */
+export interface MissingSong {
+  title: string
+  artist: string
+  duration?: number | null
+}
+
+export interface ImportState {
+  phase: 'idle' | 'reading' | 'matching' | 'done' | 'failed'
+  listName?: string
+  total: number
+  processed: number
+  missing: MissingSong[]
+  playlistId?: string
+  /** Only the first 100 songs could be read (albums, or playlists when the full page didn't work). */
+  hitLimit?: boolean
+  startedAt?: number
+  /** When matching started (for the time estimate). */
+  matchStart?: number
+  error?: string
+  /** Songs found again by "Look for these again". */
+  foundAgain?: number
+  retrying?: boolean
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -212,19 +237,25 @@ export interface DriftApi {
 
   openExternal(url: string): Promise<void>
 
+  startImport(link: string): Promise<void>
+  importState(): Promise<ImportState>
+  retryMissing(): Promise<void>
+  clearImport(): Promise<void>
+
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
   'prepare', 'lyrics', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
-  'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate'
+  'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
+  'startImport', 'importState', 'retryMissing', 'clearImport'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */
