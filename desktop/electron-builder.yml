@@ -1,0 +1,36 @@
+appId: com.lordxhobo.drift.desktop
+productName: Drift
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - build/icon.png
+  - package.json
+asar: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: Drift-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Drift
+linux:
+  executableName: drift
+  target: [AppImage, deb]
+  category: Audio
+  icon: build/icon.png
+  maintainer: LordxHobo
+  artifactName: Drift-${version}.${ext}
+mac:
+  target: [dmg]
+  category: public.app-category.music
+  icon: build/icon.png
+  artifactName: Drift-${version}.${ext}
+  identity: null
+publish: null

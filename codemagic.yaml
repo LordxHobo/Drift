@@ -13,6 +13,13 @@ workflows:
       branch_patterns:
         - pattern: main
           include: true
+    # Changes to the desktop app alone don't need an iPhone build.
+    when:
+      changeset:
+        includes:
+          - '.'
+        excludes:
+          - 'desktop/**'
     scripts:
       - name: Generate Xcode project
         script: |

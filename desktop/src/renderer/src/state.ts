@@ -1,0 +1,178 @@
+// Small shared stores for the window: library, settings, account, navigation and pop-ups.
+import { useSyncExternalStore } from 'react'
+import type { Account, AlbumRef, ArtistRef, Library, PairingState, Settings, Track } from '@shared/types'
+
+export class Store<T> {
+  private listeners = new Set<() => void>()
+  constructor(private value: T) {}
+  get = (): T => this.value
+  set(v: T): void {
+    this.value = v
+    for (const l of this.listeners) l()
+  }
+  update(f: (v: T) => T): void {
+    this.set(f(this.value))
+  }
+  subscribe = (l: () => void): (() => void) => {
+    this.listeners.add(l)
+    return () => this.listeners.delete(l)
+  }
+}
+
+export function useStore<T>(s: Store<T>): T {
+  return useSyncExternalStore(s.subscribe, s.get)
+}
+
+export const drift = window.drift
+
+export const libraryStore = new Store<Library>({ liked: [], playlists: [], artists: [], recent: [] })
+export const settingsStore = new Store<Settings>({
+  style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, volume: 0.8, openAtLogin: false
+})
+export const accountStore = new Store<Account>({ linked: false, syncing: false })
+export const pairingStore = new Store<PairingState>({ phase: 'idle' })
+export const platformStore = new Store<string>('win32')
+
+export async function loadAll(): Promise<void> {
+  const [lib, settings, account, pairing, info] = await Promise.all([
+    drift.library(), drift.settings(), drift.account(), drift.pairing(), drift.appInfo()
+  ])
+  libraryStore.set(lib)
+  settingsStore.set(settings)
+  accountStore.set(account)
+  pairingStore.set(pairing)
+  platformStore.set(info.platform)
+  drift.on('library', (v) => libraryStore.set(v))
+  drift.on('settings', (v) => settingsStore.set(v))
+  drift.on('account', (v) => accountStore.set(v))
+  drift.on('pairing', (v) => pairingStore.set(v))
+}
+
+export function setSettings(change: Partial<Settings>): void {
+  settingsStore.update((s) => ({ ...s, ...change }))
+  void drift.setSettings(change)
+}
+
+// MARK: Navigation
+
+export type Route =
+  | { name: 'home' }
+  | { name: 'search'; q?: string }
+  | { name: 'artist'; id: string; hint?: ArtistRef }
+  | { name: 'album'; id: string; hint?: AlbumRef }
+  | { name: 'playlist'; id: string }
+  | { name: 'liked' }
+  | { name: 'collection'; kind: 'artists' | 'albums' | 'songs' | 'recent' | 'playlists' }
+  | { name: 'song'; track: Track }
+  | { name: 'lyrics' }
+  | { name: 'settings' }
+
+interface Nav {
+  stack: Route[]
+  index: number
+}
+
+export const navStore = new Store<Nav>({ stack: [{ name: 'home' }], index: 0 })
+
+export function useRoute(): Route {
+  const n = useStore(navStore)
+  return n.stack[n.index]
+}
+
+export function go(route: Route): void {
+  navStore.update((n) => {
+    const cur = n.stack[n.index]
+    if (JSON.stringify(cur) === JSON.stringify(route)) return n
+    // Typing in search replaces the search page instead of piling up history.
+    if (cur.name === 'search' && route.name === 'search') {
+      const stack = n.stack.slice(0, n.index + 1)
+      stack[n.index] = route
+      return { stack, index: n.index }
+    }
+    const stack = [...n.stack.slice(0, n.index + 1), route].slice(-60)
+    return { stack, index: stack.length - 1 }
+  })
+  document.querySelector('.main-scroll')?.scrollTo({ top: 0 })
+}
+
+export function back(): void {
+  navStore.update((n) => (n.index > 0 ? { ...n, index: n.index - 1 } : n))
+}
+
+export function forward(): void {
+  navStore.update((n) => (n.index < n.stack.length - 1 ? { ...n, index: n.index + 1 } : n))
+}
+
+// MARK: Side panel (lyrics, queue, details)
+
+export type Panel = 'none' | 'lyrics' | 'queue'
+export const panelStore = new Store<Panel>(readLocal<Panel>('panel', 'none'))
+panelStore.subscribe(() => writeLocal('panel', panelStore.get()))
+
+export function togglePanel(p: Panel): void {
+  panelStore.update((cur) => (cur === p ? 'none' : p))
+}
+
+/** The full-screen player (Apple Music style). */
+export const fullPlayerStore = new Store(false)
+
+// MARK: Pop-ups
+
+export interface MenuItem {
+  label: string
+  icon?: string
+  danger?: boolean
+  disabled?: boolean
+  checked?: boolean
+  action?: () => void
+  submenu?: MenuItem[]
+  separator?: boolean
+}
+
+export const menuStore = new Store<{ x: number; y: number; items: MenuItem[] } | null>(null)
+
+export function openMenu(e: { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuItem[]): void {
+  e.preventDefault?.()
+  e.stopPropagation?.()
+  menuStore.set({ x: e.clientX, y: e.clientY, items })
+}
+
+export function openMenuAt(el: HTMLElement, items: MenuItem[]): void {
+  const r = el.getBoundingClientRect()
+  menuStore.set({ x: r.left, y: r.bottom + 4, items })
+}
+
+export type Dialog =
+  | { kind: 'prompt'; title: string; value: string; placeholder?: string; confirm: string; onDone: (v: string) => void }
+  | { kind: 'confirm'; title: string; message: string; confirm: string; danger?: boolean; onDone: () => void }
+
+export const dialogStore = new Store<Dialog | null>(null)
+
+export const toastStore = new Store<{ id: number; text: string } | null>(null)
+let toastTimer: number | undefined
+
+export function toast(text: string): void {
+  const id = Date.now()
+  toastStore.set({ id, text })
+  clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => toastStore.set(null), 3200)
+}
+
+// MARK: Local conveniences
+
+export function readLocal<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(`drift.${key}`)
+    return v == null ? fallback : (JSON.parse(v) as T)
+  } catch {
+    return fallback
+  }
+}
+
+export function writeLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(`drift.${key}`, JSON.stringify(value))
+  } catch {
+    // storage full or unavailable
+  }
+}

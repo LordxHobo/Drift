@@ -3,6 +3,10 @@ name: Build
 on:
   push:
     branches: [main]
+    # The desktop app has its own workflow (desktop.yml).
+    paths-ignore:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
 jobs:
