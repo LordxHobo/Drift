@@ -88,5 +88,6 @@ export async function checkForUpdates(): Promise<void> {
 }
 
 export function installUpdate(): void {
-  if (state.phase === 'ready') autoUpdater.quitAndInstall(false, true)
+  // Silent: no installer window; Drift opens again by itself when it's done.
+  if (state.phase === 'ready') autoUpdater.quitAndInstall(true, true)
 }

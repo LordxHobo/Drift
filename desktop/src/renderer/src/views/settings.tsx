@@ -217,11 +217,11 @@ function Updates({ version }: { version: string }): JSX.Element {
     u.phase === 'checking' ? 'Checking…'
     : u.phase === 'none' ? 'Drift is up to date.'
     : u.phase === 'downloading' ? `Downloading Drift ${u.version ?? ''}… ${u.percent ?? 0}%`
-    : u.phase === 'ready' ? `Drift ${u.version} is ready. It installs when you restart Drift.`
+    : u.phase === 'ready' ? `Drift ${u.version} is ready. It installs by itself once nothing has played for a minute, or restart now.`
     : u.phase === 'available' ? `Drift ${u.version} is out. Download it and replace this version.`
     : u.phase === 'error' ? `Couldn’t check for updates: ${u.message ?? 'unknown error'}`
     : u.phase === 'dev' ? u.message ?? ''
-    : 'New versions download by themselves and install the next time Drift starts.'
+    : 'New versions download in the background and install by themselves while nothing is playing.'
   return (
     <Row title={`Drift ${version}`} detail={status}>
       {u.phase === 'ready' ? (
