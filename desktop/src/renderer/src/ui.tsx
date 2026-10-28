@@ -7,7 +7,7 @@ import { editPlaylist } from './views/editPlaylist'
 import { openReplace } from './views/replace'
 import type { SongPlace } from './views/replace'
 import { addedText } from './sort'
-import type { Sort, SortKey } from './sort'
+import type { Sort, SortClick, SortKey } from './sort'
 import {
   accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, updateStore, useStore
 } from './state'
@@ -221,11 +221,25 @@ export interface TrackListProps {
   showAdded?: boolean
   /** Clickable column headers (playlists and Liked songs). */
   sort?: Sort
-  onSort?: (key: SortKey) => void
+  onSort?: (key: SortClick) => void
+}
+
+/** One button for Title and Artist: Title A→Z, Title Z→A, Artist A→Z, Artist Z→A, then your order. */
+function NameSortButton({ sort, onSort }: { sort?: Sort; onSort: (key: SortClick) => void }): JSX.Element {
+  const on = sort?.key === 'title' || sort?.key === 'artist'
+  const label = sort?.key === 'artist' ? 'Artist' : 'Title'
+  const next = !on ? 'Title A to Z' : sort.key === 'title' ? (sort.dir === 'asc' ? 'Title Z to A' : 'Artist A to Z') : sort.dir === 'asc' ? 'Artist Z to A' : 'your order'
+  return (
+    <button className={`sort-head ${on ? 'on' : ''}`} onClick={() => onSort('name')} title={`Click to sort: ${next}`}>
+      {label}
+      {on && <span className="sort-dir">{sort.dir === 'asc' ? 'A–Z' : 'Z–A'}</span>}
+      {on && <Icon name={sort.dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={12} />}
+    </button>
+  )
 }
 
 /** A column header that sorts the list when clicked. */
-function SortHeader({ k, label, sort, onSort, className }: { k: SortKey; label: ReactNode; sort?: Sort; onSort?: (key: SortKey) => void; className?: string }): JSX.Element {
+function SortHeader({ k, label, sort, onSort, className }: { k: SortKey; label: ReactNode; sort?: Sort; onSort?: (key: SortClick) => void; className?: string }): JSX.Element {
   if (!onSort) return <span className={className}>{label}</span>
   const on = sort?.key === k
   const hint =
@@ -269,9 +283,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
           <SortHeader k="title" label="Song" sort={props.sort} onSort={props.onSort} className="c-title" />
         ) : (
           <span className="c-title head-pair">
-            <SortHeader k="title" label="Title" sort={props.sort} onSort={props.onSort} />
-            {props.onSort && <span className="head-dot">·</span>}
-            {props.onSort && <SortHeader k="artist" label="Artist" sort={props.sort} onSort={props.onSort} />}
+            {props.onSort ? <NameSortButton sort={props.sort} onSort={props.onSort} /> : <span>Title</span>}
             {props.onSort && <span className="head-dot">·</span>}
             {props.onSort && <SortHeader k="album" label="Album" sort={props.sort} onSort={props.onSort} />}
           </span>

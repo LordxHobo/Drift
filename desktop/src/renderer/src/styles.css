@@ -4112,3 +4112,8 @@ kbd {
 .danger-text {
   color: #f87171;
 }
+.sort-dir {
+  font-weight: 600;
+  opacity: 0.7;
+  font-size: 11px;
+}

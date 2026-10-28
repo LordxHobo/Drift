@@ -6,17 +6,35 @@ import { readLocal, writeLocal } from './state'
 
 export type SortKey = 'title' | 'artist' | 'album' | 'added'
 export type Sort = { key: SortKey; dir: 'asc' | 'desc' } | null
+/** What a header click asks for: one column, or 'name' (the Title/Artist button). */
+export type SortClick = SortKey | 'name'
+
+/** The Title/Artist button's steps: Title A→Z, Title Z→A, Artist A→Z, Artist Z→A, your order. */
+const nameSteps: Sort[] = [
+  { key: 'title', dir: 'asc' },
+  { key: 'title', dir: 'desc' },
+  { key: 'artist', dir: 'asc' },
+  { key: 'artist', dir: 'desc' },
+  null
+]
 
 /**
  * The sort for one list (remembered per list). Clicking a header: A→Z, then Z→A, then your own
  * order again. Date added starts with the newest.
  */
-export function useSort(listId: string): [Sort, (key: SortKey) => void] {
+export function useSort(listId: string): [Sort, (key: SortClick) => void] {
   const storageKey = `sort.${listId}`
   const [sort, setSort] = useState<Sort>(() => readLocal<Sort>(storageKey, null))
-  const cycle = (key: SortKey): void => {
-    const first = key === 'added' ? 'desc' : 'asc'
-    const next: Sort = sort?.key !== key ? { key, dir: first } : sort.dir === first ? { key, dir: first === 'asc' ? 'desc' : 'asc' } : null
+  const cycle = (key: SortClick): void => {
+    let next: Sort
+    if (key === 'name') {
+      const at = nameSteps.findIndex((s) => s?.key === sort?.key && s?.dir === sort?.dir)
+      // From another column (or your order), start at Title A→Z.
+      next = sort && (sort.key === 'title' || sort.key === 'artist') && at >= 0 ? nameSteps[at + 1] : nameSteps[0]
+    } else {
+      const first = key === 'added' ? 'desc' : 'asc'
+      next = sort?.key !== key ? { key, dir: first } : sort.dir === first ? { key, dir: first === 'asc' ? 'desc' : 'asc' } : null
+    }
     setSort(next)
     writeLocal(storageKey, next)
   }
