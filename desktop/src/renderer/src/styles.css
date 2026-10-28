@@ -3314,3 +3314,138 @@ kbd {
 .podcasts .welcome {
   margin-bottom: 10px;
 }
+
+/* Playlist editing */
+.track-row[data-drop='before'] {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.track-row[data-drop='after'] {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.track-row[draggable='true'] {
+  cursor: default;
+}
+.cover-edit {
+  position: relative;
+  display: block;
+  border-radius: 6px;
+}
+.cover-edit-hint,
+.edit-cover-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: inherit;
+}
+.cover-edit:hover .cover-edit-hint,
+.edit-cover:hover .edit-cover-hint {
+  opacity: 1;
+}
+.dialog.edit-playlist {
+  width: 560px;
+}
+.edit-body {
+  display: flex;
+  gap: 18px;
+}
+.edit-cover {
+  position: relative;
+  border-radius: 6px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+.edit-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.swatches.wrap {
+  flex-wrap: wrap;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text2);
+  cursor: pointer;
+}
+.check-row input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+.small-link {
+  font-size: 13px;
+  color: var(--muted);
+  align-self: flex-start;
+}
+
+/* Connections */
+.conn-card {
+  border-bottom: 1px solid var(--line);
+}
+.conn-card .set-row {
+  border-bottom: 0;
+}
+.conn-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 16px;
+}
+.conn-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.conn-fields label em {
+  font-style: normal;
+  color: var(--accent);
+}
+.conn-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.conn-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.conn-status.ok .dot {
+  background: #22c55e;
+}
+.conn-status.error {
+  color: #f87171;
+}
+.conn-status.error .dot {
+  background: #f87171;
+}
+.topbar {
+  transition: background 0.2s;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.topbar.scrolled {
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(12px);
+  right: 12px;
+}

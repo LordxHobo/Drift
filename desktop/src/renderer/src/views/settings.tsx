@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
-import { accountStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
+import { accountStore, connectionsStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
 import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
@@ -99,14 +99,25 @@ export function SettingsPage(): JSX.Element {
         </Row>
       </section>
 
-      {platform !== 'linux' && (
-        <section className="set-section">
-          <h2>Computer</h2>
+      <section className="set-section">
+        <h2>Computer</h2>
+        {platform !== 'darwin' && (
+          <Row title="Keep playing in the tray when closed" detail="Closing the window keeps the music going; Drift stays in the tray (near the clock). Quit from the tray icon.">
+            <Toggle on={s.closeToTray} onChange={(v) => setSettings({ closeToTray: v })} label="Keep playing in the tray when closed" />
+          </Row>
+        )}
+        {platform !== 'linux' && (
           <Row title="Open Drift when you sign in">
             <Toggle on={s.openAtLogin} onChange={(v) => setSettings({ openAtLogin: v })} label="Open Drift when you sign in" />
           </Row>
-        </section>
-      )}
+        )}
+      </section>
+
+      <section className="set-section">
+        <h2>Connections</h2>
+        <OrbitSettings />
+        <DiscordSettings />
+      </section>
 
       <section className="set-section">
         <h2>Downloads</h2>
@@ -302,6 +313,93 @@ function ShareActivity(): JSX.Element | null {
           void drift.setShareActivity(v)
         }}
       />
+    </div>
+  )
+}
+
+function StatusLine({ state, message }: { state: string; message?: string }): JSX.Element | null {
+  if (state === 'off' || !message) return null
+  return <div className={`conn-status ${state}`}>{state === 'waiting' ? <Spinner size={11} /> : <span className="dot" />} {message}</div>
+}
+
+function OrbitSettings(): JSX.Element {
+  const s = useStore(settingsStore)
+  const c = useStore(connectionsStore).orbit
+  const [url, setUrl] = useState(s.orbitUrl)
+  const [token, setToken] = useState('')
+  useEffect(() => setUrl(s.orbitUrl), [s.orbitUrl])
+  return (
+    <div className="conn-card">
+      <Row title="Orbit" detail="Show what you’re listening to on your Orbit server, next to your name.">
+        <Toggle on={s.orbitEnabled} onChange={(v) => setSettings({ orbitEnabled: v })} label="Share with Orbit" />
+      </Row>
+      {s.orbitEnabled && (
+        <div className="conn-fields">
+          <label>
+            <span>Server address</span>
+            <input className="field" value={url} placeholder="https://orbit.example.com" onChange={(e) => setUrl(e.target.value)} onBlur={() => url !== s.orbitUrl && setSettings({ orbitUrl: url.trim() })} />
+          </label>
+          <label>
+            <span>Token {c.hasToken && <em>(saved)</em>}</span>
+            <input
+              className="field"
+              type="password"
+              value={token}
+              placeholder={c.hasToken ? '••••••••  (paste a new one to replace it)' : 'Paste the token from Orbit'}
+              onChange={(e) => setToken(e.target.value)}
+              onBlur={() => {
+                if (token.trim()) {
+                  void drift.setOrbitToken(token.trim())
+                  setToken('')
+                }
+              }}
+            />
+          </label>
+          <div className="link-buttons tight">
+            <button
+              className="btn"
+              onClick={() => {
+                if (url !== s.orbitUrl) setSettings({ orbitUrl: url.trim() })
+                const saving = token.trim() ? drift.setOrbitToken(token.trim()) : Promise.resolve()
+                setToken('')
+                void saving.then(() => drift.testOrbit())
+              }}
+            >
+              Test connection
+            </button>
+            {c.hasToken && <button className="btn ghost" onClick={() => void drift.setOrbitToken('')}>Remove token</button>}
+          </div>
+          <StatusLine state={c.state} message={c.message} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DiscordSettings(): JSX.Element {
+  const s = useStore(settingsStore)
+  const c = useStore(connectionsStore).discord
+  const [id, setId] = useState(s.discordAppId)
+  useEffect(() => setId(s.discordAppId), [s.discordAppId])
+  return (
+    <div className="conn-card">
+      <Row title="Discord" detail="“Listening to” on your Discord profile, through the Discord app on this computer.">
+        <Toggle on={s.discordEnabled} onChange={(v) => setSettings({ discordEnabled: v })} label="Show on Discord" />
+      </Row>
+      {s.discordEnabled && (
+        <div className="conn-fields">
+          <label>
+            <span>Application ID</span>
+            <input className="field" value={id} inputMode="numeric" placeholder="e.g. 1234567890123456789" onChange={(e) => setId(e.target.value.replace(/\D/g, ''))} onBlur={() => id !== s.discordAppId && setSettings({ discordAppId: id })} />
+          </label>
+          <p className="set-detail">
+            Discord needs an application to show the status under. Make one at{' '}
+            <button className="link" onClick={() => void drift.openExternal('https://discord.com/developers/applications')}>discord.com/developers</button>{' '}
+            (New Application, name it “Drift”, which is what Discord shows), then copy its Application ID here.
+          </p>
+          <StatusLine state={c.state} message={c.message} />
+        </div>
+      )}
     </div>
   )
 }

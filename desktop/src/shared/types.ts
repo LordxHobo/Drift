@@ -36,6 +36,16 @@ export interface Playlist {
   cover?: string | null
 }
 
+/** What the Edit playlist window can change. */
+export interface PlaylistChange {
+  name?: string
+  coverStyle?: CoverStyle
+  colorIndex?: number
+  /** Base64 JPEG, or null to remove the photo. */
+  cover?: string | null
+  isPublic?: boolean
+}
+
 export interface ArtistRef {
   id: string
   name: string
@@ -120,6 +130,34 @@ export interface Settings {
   /** Skip sponsor reads and reminders in episodes (SponsorBlock). */
   skipSponsors: boolean
   podcastSpeed: number
+  /** Share what's playing with an Orbit server. */
+  orbitEnabled: boolean
+  /** e.g. https://orbit.example.com or http://192.168.1.20:3000 */
+  orbitUrl: string
+  /** Show what's playing on Discord (needs the Discord app on this computer). */
+  discordEnabled: boolean
+  discordAppId: string
+  /** Closing the window keeps Drift playing in the tray (Windows and Linux). */
+  closeToTray: boolean
+}
+
+/** What the player is doing, for friends, Orbit, Discord and the tray. */
+export interface PlayerPresence {
+  track: Track | null
+  playing: boolean
+  /** Seconds. */
+  position: number
+  duration: number
+}
+
+export interface ConnectionState {
+  state: 'off' | 'ok' | 'error' | 'waiting'
+  message?: string
+}
+
+export interface ConnectionsStatus {
+  orbit: ConnectionState & { hasToken: boolean }
+  discord: ConnectionState
 }
 
 export interface Account {
@@ -301,6 +339,7 @@ export interface DriftApi {
   removeFromPlaylist(id: string, indexes: number[]): Promise<void>
   movePlaylistTrack(id: string, from: number, to: number): Promise<void>
   renamePlaylist(id: string, name: string): Promise<void>
+  updatePlaylist(id: string, change: PlaylistChange): Promise<void>
   deletePlaylist(id: string): Promise<void>
   saveAlbum(page: AlbumPage): Promise<string>
   follow(artist: ArtistRef, page: ArtistPage | null): Promise<void>
@@ -344,7 +383,10 @@ export interface DriftApi {
   sharedPlaylistTracks(ownerId: string, id: string): Promise<Track[]>
   setShareActivity(on: boolean): Promise<void>
   setPrivateSession(on: boolean): Promise<void>
-  publishActivity(track: Track | null, playing: boolean): Promise<void>
+  playerState(state: PlayerPresence): Promise<void>
+  connections(): Promise<ConnectionsStatus>
+  setOrbitToken(token: string): Promise<void>
+  testOrbit(): Promise<void>
 
   podcasts(): Promise<PodcastsState>
   searchPodcasts(query: string): Promise<{ channels: PodcastChannel[]; episodes: Track[] }>
@@ -361,19 +403,19 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
   'prepare', 'lyrics', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
-  'movePlaylistTrack', 'renamePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
+  'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
   'startImport', 'importState', 'retryMissing', 'clearImport',
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
-  'setShareActivity', 'setPrivateSession', 'publishActivity',
+  'setShareActivity', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]

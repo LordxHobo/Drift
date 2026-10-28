@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -28,7 +28,8 @@ export const drift = window.drift
 export const libraryStore = new Store<Library>({ liked: [], playlists: [], artists: [], recent: [] })
 export const settingsStore = new Store<Settings>({
   style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, volume: 0.8, openAtLogin: false,
-  skipNonMusic: true, skipSponsors: true, podcastSpeed: 1
+  skipNonMusic: true, skipSponsors: true, podcastSpeed: 1, orbitEnabled: false, orbitUrl: '', discordEnabled: false,
+  discordAppId: '', closeToTray: true
 })
 export const accountStore = new Store<Account>({ linked: false, syncing: false })
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })
@@ -37,6 +38,7 @@ export const updateStore = new Store<UpdateState>({ phase: 'idle' })
 export const importStore = new Store<ImportState>({ phase: 'idle', total: 0, processed: 0, missing: [] })
 export const downloadsStore = new Store<DownloadsState>({ done: [], queued: [], active: [], keep: [], bytes: 0, folder: '', rate: 0, failed: [] })
 export const podcastsStore = new Store<PodcastsState>({ subscriptions: [], progress: {}, feeds: {}, refreshing: false })
+export const connectionsStore = new Store<ConnectionsStatus>({ orbit: { state: 'off', hasToken: false }, discord: { state: 'off' } })
 /** Your Drift profile (when linked with the phone). */
 export const meStore = new Store<UserProfile | null>(null)
 /** Hide what you listen to until Drift closes. */
@@ -50,6 +52,8 @@ export async function loadAll(): Promise<void> {
   ])
   updateStore.set(update)
   drift.on('update', (v) => updateStore.set(v))
+  connectionsStore.set(await drift.connections())
+  drift.on('connections', (v) => connectionsStore.set(v))
   podcastsStore.set(await drift.podcasts())
   drift.on('podcasts', (v) => podcastsStore.set(v))
   downloadsStore.set(await drift.downloads())

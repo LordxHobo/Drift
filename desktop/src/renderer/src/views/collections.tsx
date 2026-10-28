@@ -8,6 +8,8 @@ import { Art, Card, LikedCover, PlaylistCover, TrackArt, TrackList, playlistMenu
 import { allSongs, artwork, formatTotal, plural, resized } from '../util'
 import { CollectionHeader, FilterField, filterTracks, useMusic } from './common'
 import { formatBytes } from '../downloads'
+import { editPlaylist } from './editPlaylist'
+import { Icon } from '../icons'
 
 /** Downloaded songs, newest first (reloaded when downloads change). */
 function useDownloadedTracks(active: boolean): Track[] {
@@ -48,7 +50,12 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
   return (
     <div className="page">
       <CollectionHeader
-        cover={<PlaylistCover p={p} size={music ? 230 : 200} radius={music ? 10 : 6} />}
+        cover={
+          <button className="cover-edit" onClick={() => editPlaylist(p.id)} title="Edit details">
+            <PlaylistCover p={p} size={music ? 230 : 200} radius={music ? 10 : 6} />
+            <span className="cover-edit-hint"><Icon name="edit" size={26} /></span>
+          </button>
+        }
         coverURL={p.tracks[0] ? artwork(p.tracks[0], 120) : undefined}
         seed={p.id}
         kind={p.isAlbum ? 'Album' : 'Playlist'}

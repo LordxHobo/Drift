@@ -12,6 +12,9 @@ import * as spotify from './spotify'
 import * as downloads from './downloads'
 import * as social from './social'
 import * as podcasts from './podcasts'
+import * as presence from './presence'
+import { setToken, testOrbit } from './orbit'
+import { createTray } from './tray'
 import { searchPodcasts, videoFromLink } from './youtube'
 
 protocol.registerSchemesAsPrivileged([
@@ -48,6 +51,13 @@ function createWindow(): void {
     }
   })
   win.once('ready-to-show', () => win?.show())
+  // Closing the window keeps Drift playing in the tray (Windows and Linux), unless turned off.
+  win.on('close', (e) => {
+    if (!quitting && process.platform !== 'darwin' && store.getSettings().closeToTray) {
+      e.preventDefault()
+      win?.hide()
+    }
+  })
 
   // Links open in the browser, never inside Drift.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -105,6 +115,7 @@ const api: DriftApi = {
   removeFromPlaylist: async (id, indexes) => store.removeFromPlaylist(id, indexes),
   movePlaylistTrack: async (id, from, to) => store.movePlaylistTrack(id, from, to),
   renamePlaylist: async (id, name) => store.renamePlaylist(id, name),
+  updatePlaylist: async (id, change) => store.updatePlaylist(id, change),
   deletePlaylist: async (id) => store.deletePlaylist(id),
   saveAlbum: async (page) => store.saveAlbum(page),
   follow: async (artist, page) => store.follow(artist, page),
@@ -116,6 +127,7 @@ const api: DriftApi = {
   setSettings: async (change) => {
     const s = store.setSettings(change)
     updateTitleBar()
+    if (Object.keys(change).some((k) => k.startsWith('orbit') || k.startsWith('discord'))) presence.settingsChanged()
     return s
   },
 
@@ -153,8 +165,14 @@ const api: DriftApi = {
   sharedPlaylists: (u) => social.sharedPlaylists(u),
   sharedPlaylistTracks: (owner, id) => social.sharedPlaylistTracks(owner, id),
   setShareActivity: (on) => social.setShareActivity(on),
-  setPrivateSession: async (on) => social.setPrivateSession(on),
-  publishActivity: (t, playing) => social.publishActivity(t, playing),
+  setPrivateSession: async (on) => presence.setPrivateSession(on),
+  playerState: async (p) => presence.playerState(p),
+  connections: async () => presence.connections(),
+  setOrbitToken: async (t) => {
+    setToken(t)
+    presence.settingsChanged()
+  },
+  testOrbit: () => testOrbit(),
 
   podcasts: async () => podcasts.getPodcasts(),
   searchPodcasts: (q) => searchPodcasts(q),
@@ -175,11 +193,14 @@ for (const name of apiMethods) {
   ipcMain.handle(`drift:${name}`, (_e, ...args: unknown[]) => (api[name] as (...a: unknown[]) => unknown)(...args))
 }
 
-app.on('second-instance', () => {
-  if (!win) return
+function showWindow(): void {
+  if (!win || win.isDestroyed()) return createWindow()
   if (win.isMinimized()) win.restore()
+  win.show()
   win.focus()
-})
+}
+
+app.on('second-instance', showWindow)
 
 app.whenReady().then(() => {
   protocol.handle('drift', (request) => {
@@ -189,6 +210,7 @@ app.whenReady().then(() => {
   })
   nativeTheme.on('updated', updateTitleBar)
   createWindow()
+  createTray(showWindow)
   account.start()
   startUpdates()
   downloads.startDownloads()
@@ -198,8 +220,10 @@ app.whenReady().then(() => {
   })
 })
 
+let quitting = false
 app.on('before-quit', () => {
-  void social.publishActivity(null, false)
+  quitting = true
+  void presence.stopPresence()
   store.flush()
   downloads.flushDownloads()
   podcasts.flushPodcasts()

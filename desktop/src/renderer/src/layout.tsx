@@ -161,8 +161,18 @@ function LibRow({ on, onClick, onContextMenu, art, title, sub }: {
 /** Back/forward, the search field (on the search page), new releases and your profile. */
 export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Element {
   const nav = useStore(navStore)
+  // A solid background once the page scrolls under it.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const el = document.querySelector('.main .main-scroll')
+    if (!el) return
+    const f = (): void => setScrolled(el.scrollTop > 40)
+    f()
+    el.addEventListener('scroll', f, { passive: true })
+    return () => el.removeEventListener('scroll', f)
+  }, [nav.index])
   return (
-    <div className="topbar">
+    <div className={`topbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="topbar-nav">
         <IconButton icon="back" label="Back" className="round" onClick={back} disabled={nav.index === 0} />
         <IconButton icon="forward" label="Forward" className="round" onClick={forward} disabled={nav.index >= nav.stack.length - 1} />

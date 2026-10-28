@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type {
-  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, Settings, Track
+  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, PlaylistChange, Settings, Track
 } from '@shared/types'
 import { nowApple } from '@shared/types'
 
@@ -39,7 +39,12 @@ const defaultSettings: Settings = {
   openAtLogin: false,
   skipNonMusic: true,
   skipSponsors: true,
-  podcastSpeed: 1
+  podcastSpeed: 1,
+  orbitEnabled: false,
+  orbitUrl: '',
+  discordEnabled: false,
+  discordAppId: '',
+  closeToTray: true
 }
 
 let settings: Settings | undefined
@@ -160,6 +165,17 @@ export function renamePlaylist(id: string, name: string): void {
   const p = playlist(id)
   if (!p || !name.trim()) return
   p.name = name.trim()
+  save()
+}
+
+export function updatePlaylist(id: string, change: PlaylistChange): void {
+  const p = playlist(id)
+  if (!p) return
+  if (change.name !== undefined && change.name.trim()) p.name = change.name.trim()
+  if (change.coverStyle !== undefined) p.coverStyle = change.coverStyle
+  if (change.colorIndex !== undefined) p.colorIndex = change.colorIndex
+  if (change.cover !== undefined) p.cover = change.cover
+  if (change.isPublic !== undefined) p.isPublic = change.isPublic
   save()
 }
 

@@ -3,6 +3,7 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 import type { Playlist, Track } from '@shared/types'
 import { Icon } from './icons'
 import { DownloadMark, downloadMenuItem, useDownloadSets } from './downloads'
+import { editPlaylist } from './views/editPlaylist'
 import {
   accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, updateStore, useStore
 } from './state'
@@ -217,6 +218,9 @@ export function TrackList(props: TrackListProps): JSX.Element {
   const style = useStore(settingsStore).style
   const liked = useStore(libraryStore).liked
   const dl = useDownloadSets()
+  // Drag to reorder (in your playlists, when the list isn't filtered).
+  const reorder = !!playlistId && !indexes
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
   const likedIds = new Set(liked.map((t) => t.id))
   const full = (i: number): number => indexes?.[i] ?? i
   // The short list (search results) always shows the artist under the title.
@@ -253,6 +257,25 @@ export function TrackList(props: TrackListProps): JSX.Element {
             onDoubleClick={() => play(i)}
             onKeyDown={(e) => e.key === 'Enter' && play(i)}
             onContextMenu={menu}
+            draggable={reorder}
+            onDragStart={reorder ? (e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              setDrag({ from: i, over: i })
+            } : undefined}
+            onDragOver={reorder && drag ? (e) => {
+              e.preventDefault()
+              const r = e.currentTarget.getBoundingClientRect()
+              const over = e.clientY > r.top + r.height / 2 ? i + 1 : i
+              if (over !== drag.over) setDrag({ ...drag, over })
+            } : undefined}
+            onDrop={reorder && drag ? (e) => {
+              e.preventDefault()
+              const to = drag.over > drag.from ? drag.over - 1 : drag.over
+              if (to !== drag.from) void drift.movePlaylistTrack(playlistId!, drag.from, to)
+              setDrag(null)
+            } : undefined}
+            onDragEnd={() => setDrag(null)}
+            data-drop={drag && drag.over === i && drag.over !== drag.from && drag.over !== drag.from + 1 ? 'before' : drag && i === tracks.length - 1 && drag.over === tracks.length && drag.from !== i ? 'after' : undefined}
           >
             <span className="c-num">
               <span className="num-text">
@@ -508,18 +531,7 @@ export function playlistMenu(p: Playlist): MenuItem[] {
     { label: 'Shuffle', icon: 'shuffle', action: () => playList(p.tracks, -1, { kind: 'playlist', id: p.id, name: p.name }, { shuffle: true }) },
     { label: 'Add to queue', icon: 'list', action: () => addToQueue(p.tracks) },
     { label: '', separator: true },
-    {
-      label: 'Rename…',
-      icon: 'edit',
-      action: () =>
-        dialogStore.set({
-          kind: 'prompt',
-          title: 'Rename playlist',
-          value: p.name,
-          confirm: 'Save',
-          onDone: (name) => void drift.renamePlaylist(p.id, name)
-        })
-    },
+    { label: 'Edit details…', icon: 'edit', action: () => editPlaylist(p.id) },
     {
       label: p.isAlbum ? 'Remove from library' : 'Delete playlist',
       icon: 'trash',
