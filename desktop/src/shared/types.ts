@@ -115,6 +115,11 @@ export interface Settings {
   volume: number
   /** Start Drift when signing in to the computer (Windows and Mac). */
   openAtLogin: boolean
+  /** Skip intros, outros and talking in music videos (SponsorBlock). */
+  skipNonMusic: boolean
+  /** Skip sponsor reads and reminders in episodes (SponsorBlock). */
+  skipSponsors: boolean
+  podcastSpeed: number
 }
 
 export interface Account {
@@ -238,6 +243,38 @@ export interface SharedPlaylist {
   preview: Track[]
 }
 
+/** A YouTube channel followed as a podcast (same shape as the phone's). */
+export interface PodcastChannel {
+  id: string
+  name: string
+  avatarURL?: string | null
+  subtitle?: string | null
+}
+
+/** Where an episode was left off. */
+export interface EpisodeProgress {
+  track: Track
+  position: number
+  duration: number
+  /** Milliseconds since 1970. */
+  updated: number
+  finished: boolean
+}
+
+export interface PodcastsState {
+  subscriptions: PodcastChannel[]
+  progress: Record<string, EpisodeProgress>
+  feeds: Record<string, Track[]>
+  refreshing: boolean
+}
+
+/** A part of a video the SponsorBlock community marked as skippable. */
+export interface SkipSegment {
+  start: number
+  end: number
+  category: string
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -309,12 +346,22 @@ export interface DriftApi {
   setPrivateSession(on: boolean): Promise<void>
   publishActivity(track: Track | null, playing: boolean): Promise<void>
 
+  podcasts(): Promise<PodcastsState>
+  searchPodcasts(query: string): Promise<{ channels: PodcastChannel[]; episodes: Track[] }>
+  channelEpisodes(channel: PodcastChannel): Promise<Track[]>
+  followChannel(channel: PodcastChannel, follow: boolean): Promise<void>
+  refreshPodcasts(force: boolean): Promise<void>
+  episodeProgress(track: Track, position: number, duration: number): Promise<void>
+  markPlayed(track: Track, played: boolean): Promise<void>
+  videoFromLink(link: string): Promise<Track | null>
+  skipSegments(id: string, podcast: boolean): Promise<SkipSegment[]>
+
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -326,7 +373,9 @@ export const apiMethods: (keyof DriftApi)[] = [
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
-  'setShareActivity', 'setPrivateSession', 'publishActivity'
+  'setShareActivity', 'setPrivateSession', 'publishActivity',
+  'podcasts', 'searchPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
+  'videoFromLink', 'skipSegments'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */

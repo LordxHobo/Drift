@@ -1,6 +1,6 @@
 // Playback: queue, shuffle, repeat, media keys, and picking up where you left off.
-import type { StreamInfo, Track } from '@shared/types'
-import { drift, readLocal, settingsStore, setSettings, Store, toast, useStore, writeLocal } from './state'
+import type { SkipSegment, StreamInfo, Track } from '@shared/types'
+import { drift, podcastsStore, readLocal, settingsStore, setSettings, Store, toast, useStore, writeLocal } from './state'
 import { artwork } from './util'
 
 export type Repeat = 'off' | 'all' | 'one'
@@ -125,8 +125,72 @@ export function jumpTo(i: number): void {
   void load(s.queue[i], true)
 }
 
+/** Where to start an episode: a few seconds before where it was left. */
+function resumePosition(t: Track): number {
+  const p = podcastsStore.get().progress[t.id]
+  if (!p || p.finished || p.position < 30) return 0
+  return Math.max(p.position - 3, 0)
+}
+
+// MARK: Skipping (SponsorBlock)
+
+let segments: SkipSegment[] = []
+const skipped = new Set<number>()
+
+function segmentLabel(s: SkipSegment, duration: number): string {
+  switch (s.category) {
+    case 'sponsor':
+      return 'sponsor'
+    case 'selfpromo':
+      return 'self-promotion'
+    case 'interaction':
+      return 'subscribe reminder'
+    default:
+      return s.start < 1 ? 'non-music intro' : duration && s.end > duration - 2 ? 'non-music outro' : 'non-music part'
+  }
+}
+
+function loadSegments(t: Track, playId: string, token: number): void {
+  const st = settingsStore.get()
+  segments = []
+  skipped.clear()
+  if (t.podcast ? !st.skipSponsors : !st.skipNonMusic) return
+  void drift.skipSegments(playId, !!t.podcast).then((list) => {
+    if (token === loadToken) segments = list
+  })
+}
+
+function checkSkip(time: number): void {
+  if (!segments.length) return
+  const seg = segments.find((s) => time >= s.start && time < s.end - 0.5 && !skipped.has(s.start))
+  if (!seg) return
+  skipped.add(seg.start)
+  const d = playerStore.get().duration
+  // A non-music outro at the very end: just go to the next song.
+  if (d && seg.end >= d - 1) {
+    toast(`Skipped ${segmentLabel(seg, d)}`)
+    return next(true)
+  }
+  audio.currentTime = seg.end
+  toast(`Skipped ${segmentLabel(seg, d)} · ${formatSeconds(seg.end - seg.start)}`)
+}
+
+const formatSeconds = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+export const speeds = [0.75, 1, 1.25, 1.5, 1.75, 2]
+
+/** Episode speed (songs always play at normal speed). */
+export function setSpeed(speed: number): void {
+  setSettings({ podcastSpeed: speed })
+  if (playerStore.get().current?.podcast) audio.playbackRate = speed
+}
+
+// MARK: Loading
+
 async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
   const token = ++loadToken
+  saveEpisodeProgress()
+  if (t.podcast && at === 0) at = resumePosition(t)
   audio.pause()
   positionStore.set(at)
   patch({ current: t, loading: true, error: undefined, duration: t.duration ?? 0, info: undefined, playing: autoplay })
@@ -135,7 +199,9 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
     const info = await drift.prepare(t)
     if (token !== loadToken) return
     audio.src = `drift://stream/${info.playId}`
+    audio.playbackRate = t.podcast ? settingsStore.get().podcastSpeed || 1 : 1
     if (at > 0) audio.currentTime = at
+    loadSegments(t, info.playId, token)
     patch({ info, duration: info.duration || t.duration || 0 })
     if (autoplay) {
       await audio.play()
@@ -273,18 +339,41 @@ audio.addEventListener('playing', () => {
   failures = 0
   patch({ playing: true, loading: false, error: undefined })
 })
-audio.addEventListener('pause', () => patch({ playing: false }))
+audio.addEventListener('pause', () => {
+  patch({ playing: false })
+  saveEpisodeProgress()
+})
 audio.addEventListener('waiting', () => patch({ loading: true }))
 audio.addEventListener('canplay', () => patch({ loading: false }))
-audio.addEventListener('ended', () => next(true))
+audio.addEventListener('ended', () => {
+  const t = playerStore.get().current
+  if (t?.podcast) void drift.markPlayed(t, true)
+  next(true)
+})
 audio.addEventListener('loadedmetadata', () => {
   if (Number.isFinite(audio.duration) && audio.duration > 0 && !playerStore.get().info?.duration) {
     patch({ duration: audio.duration })
   }
 })
+let lastProgressSave = 0
+
+/** Remembers where an episode is (every few seconds, on pause and when switching). */
+function saveEpisodeProgress(force = true): void {
+  const s = playerStore.get()
+  const t = s.current
+  if (!t?.podcast || !audio.src) return
+  const d = s.duration || audio.duration
+  if (!Number.isFinite(d) || d <= 0 || audio.currentTime < 1) return
+  if (!force && Date.now() - lastProgressSave < 5000) return
+  lastProgressSave = Date.now()
+  void drift.episodeProgress(t, audio.currentTime, d)
+}
+
 audio.addEventListener('timeupdate', () => {
   positionStore.set(audio.currentTime)
   updatePositionState()
+  checkSkip(audio.currentTime)
+  saveEpisodeProgress(false)
 })
 audio.addEventListener('error', () => {
   const s = playerStore.get()

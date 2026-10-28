@@ -14,6 +14,7 @@ import { SongPage } from './views/details'
 import { SettingsPage } from './views/settings'
 import { ImportDialog } from './views/import'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
+import { ChannelPage, PodcastsPage } from './views/podcasts'
 
 function useDark(): boolean {
   const appearance = useStore(settingsStore).appearance
@@ -51,6 +52,10 @@ function Page({ route }: { route: Route }): JSX.Element {
       return <LyricsView />
     case 'friends':
       return <FriendsPage />
+    case 'podcasts':
+      return <PodcastsPage q={route.q ?? ''} />
+    case 'channel':
+      return <ChannelPage key={route.channel.id} channel={route.channel} />
     case 'user':
       return <UserPage key={route.id} id={route.id} hint={route.hint} />
     case 'shared':

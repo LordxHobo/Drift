@@ -36,7 +36,10 @@ const defaultSettings: Settings = {
   accent: 0,
   preferOfficialAudio: true,
   volume: 0.8,
-  openAtLogin: false
+  openAtLogin: false,
+  skipNonMusic: true,
+  skipSponsors: true,
+  podcastSpeed: 1
 }
 
 let settings: Settings | undefined

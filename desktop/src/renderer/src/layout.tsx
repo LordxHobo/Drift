@@ -3,17 +3,18 @@ import type { JSX } from 'react'
 import type { Playlist } from '@shared/types'
 import { Icon, Logo } from './icons'
 import {
-  accountStore, back, downloadsStore, drift, forward, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
+  accountStore, back, downloadsStore, drift, forward, settingsStore, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal
 } from './state'
 import type { MenuItem, Route } from './state'
-import { jumpTo, playList, removeFromQueue, usePlayer } from './player'
+import { jumpTo, playList, removeFromQueue, setSpeed, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
 import { FriendActivityPanel } from './views/social'
+import { SpeedButton } from './views/podcasts'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 
 const createItems = (): MenuItem[] => [
@@ -57,6 +58,10 @@ export function DriftSidebar(): JSX.Element {
         <button className={`nav-item ${route.name === 'search' ? 'on' : ''}`} onClick={() => go({ name: 'search' })}>
           <Icon name="search" size={22} />
           Search
+        </button>
+        <button className={`nav-item ${route.name === 'podcasts' || route.name === 'channel' ? 'on' : ''}`} onClick={() => go({ name: 'podcasts' })}>
+          <Icon name="podcast" size={22} />
+          Podcasts
         </button>
       </nav>
       <div className="panel lib-panel">
@@ -258,6 +263,7 @@ export function DriftPlayerBar(): JSX.Element {
   const route = useRoute()
   useStore(libraryStore)
   const t = p.current
+  const speed = useStore(settingsStore).podcastSpeed || 1
   return (
     <footer className="playerbar">
       <div className="pb-left">
@@ -284,6 +290,7 @@ export function DriftPlayerBar(): JSX.Element {
         {p.error && <div className="pb-error" title={p.error}>{p.error}</div>}
       </div>
       <div className="pb-right">
+        {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
         <IconButton icon="queue" label="Queue" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
         <Volume />
@@ -445,6 +452,7 @@ export function MusicSidebar(): JSX.Element {
       </div>
       <div className="m-scroll">
         {item({ name: 'home' }, 'homeLine', 'Home')}
+        {item({ name: 'podcasts' }, 'podcast', 'Podcasts')}
         {item({ name: 'friends' }, 'person', 'Friends')}
         <div className="m-section">Library</div>
         {item({ name: 'collection', kind: 'recent' }, 'clock', 'Recently Played')}
@@ -487,6 +495,7 @@ export function MusicTopPlayer(): JSX.Element {
   const panel = useStore(panelStore)
   const nav = useStore(navStore)
   const t = p.current
+  const speed = useStore(settingsStore).podcastSpeed || 1
   return (
     <header className="m-top">
       <div className="m-top-nav">
@@ -517,6 +526,7 @@ export function MusicTopPlayer(): JSX.Element {
         )}
       </div>
       <div className="m-top-right">
+        {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <Volume />
         <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
         <IconButton icon="queue" label="Up next" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />

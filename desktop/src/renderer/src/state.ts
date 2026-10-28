@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, DownloadsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AlbumRef, ArtistRef, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -27,7 +27,8 @@ export const drift = window.drift
 
 export const libraryStore = new Store<Library>({ liked: [], playlists: [], artists: [], recent: [] })
 export const settingsStore = new Store<Settings>({
-  style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, volume: 0.8, openAtLogin: false
+  style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, volume: 0.8, openAtLogin: false,
+  skipNonMusic: true, skipSponsors: true, podcastSpeed: 1
 })
 export const accountStore = new Store<Account>({ linked: false, syncing: false })
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })
@@ -35,6 +36,7 @@ export const platformStore = new Store<string>('win32')
 export const updateStore = new Store<UpdateState>({ phase: 'idle' })
 export const importStore = new Store<ImportState>({ phase: 'idle', total: 0, processed: 0, missing: [] })
 export const downloadsStore = new Store<DownloadsState>({ done: [], queued: [], active: [], keep: [], bytes: 0, folder: '', rate: 0, failed: [] })
+export const podcastsStore = new Store<PodcastsState>({ subscriptions: [], progress: {}, feeds: {}, refreshing: false })
 /** Your Drift profile (when linked with the phone). */
 export const meStore = new Store<UserProfile | null>(null)
 /** Hide what you listen to until Drift closes. */
@@ -48,6 +50,8 @@ export async function loadAll(): Promise<void> {
   ])
   updateStore.set(update)
   drift.on('update', (v) => updateStore.set(v))
+  podcastsStore.set(await drift.podcasts())
+  drift.on('podcasts', (v) => podcastsStore.set(v))
   downloadsStore.set(await drift.downloads())
   drift.on('downloads', (v) => downloadsStore.set(v))
   importStore.set(await drift.importState())
@@ -88,6 +92,8 @@ export type Route =
   | { name: 'lyrics' }
   | { name: 'settings' }
   | { name: 'friends' }
+  | { name: 'podcasts'; q?: string }
+  | { name: 'channel'; channel: PodcastChannel }
   | { name: 'user'; id: string; hint?: UserProfile }
   | { name: 'shared'; playlist: SharedPlaylist }
 

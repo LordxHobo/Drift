@@ -3200,3 +3200,117 @@ kbd {
   margin-top: 12px;
   padding-bottom: 0;
 }
+
+/* Podcasts */
+.episode {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+.episode:hover {
+  background: var(--hover);
+}
+.episode-thumb {
+  position: relative;
+  width: 128px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface2);
+}
+.episode-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.episode-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.episode:hover .episode-play,
+.episode.current .episode-play {
+  opacity: 1;
+}
+.episode-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.episode-title {
+  font-weight: 650;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.episode.current .episode-title {
+  color: var(--accent);
+}
+.episode.finished .episode-title {
+  color: var(--muted);
+}
+.episode-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.episode-meta .link:hover {
+  color: var(--text);
+}
+.episode-played {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.episode-progress {
+  height: 3px;
+  max-width: 220px;
+  border-radius: 2px;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.episode-progress div {
+  height: 100%;
+  background: var(--accent);
+}
+.episode-more {
+  opacity: 0;
+}
+.episode:hover .episode-more {
+  opacity: 1;
+}
+.speed-btn {
+  min-width: 42px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.speed-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.podcasts .welcome {
+  margin-bottom: 10px;
+}

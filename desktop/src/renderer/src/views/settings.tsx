@@ -91,6 +91,12 @@ export function SettingsPage(): JSX.Element {
         <Row title="Prefer album versions" detail="When a song is a music video, play the album version instead (no intros or skits), like on your phone.">
           <Toggle on={s.preferOfficialAudio} onChange={(v) => setSettings({ preferOfficialAudio: v })} label="Prefer album versions" />
         </Row>
+        <Row title="Skip non-music parts" detail="Jumps past intros, outros and talking in music videos, using parts marked by the SponsorBlock community.">
+          <Toggle on={s.skipNonMusic} onChange={(v) => setSettings({ skipNonMusic: v })} label="Skip non-music parts" />
+        </Row>
+        <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
+          <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
+        </Row>
       </section>
 
       {platform !== 'linux' && (

@@ -11,6 +11,8 @@ import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './
 import * as spotify from './spotify'
 import * as downloads from './downloads'
 import * as social from './social'
+import * as podcasts from './podcasts'
+import { searchPodcasts, videoFromLink } from './youtube'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -154,6 +156,16 @@ const api: DriftApi = {
   setPrivateSession: async (on) => social.setPrivateSession(on),
   publishActivity: (t, playing) => social.publishActivity(t, playing),
 
+  podcasts: async () => podcasts.getPodcasts(),
+  searchPodcasts: (q) => searchPodcasts(q),
+  channelEpisodes: (c) => podcasts.episodes(c),
+  followChannel: async (c, follow) => podcasts.followChannel(c, follow),
+  refreshPodcasts: (force) => podcasts.refresh(force),
+  episodeProgress: async (t, position, duration) => podcasts.updateProgress(t, position, duration),
+  markPlayed: async (t, played) => podcasts.markPlayed(t, played),
+  videoFromLink: (link) => videoFromLink(link),
+  skipSegments: (id, podcast) => podcasts.skipSegments(id, podcast),
+
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),
   installUpdate: async () => installUpdate()
@@ -180,6 +192,7 @@ app.whenReady().then(() => {
   account.start()
   startUpdates()
   downloads.startDownloads()
+  podcasts.startPodcasts()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -189,6 +202,7 @@ app.on('before-quit', () => {
   void social.publishActivity(null, false)
   store.flush()
   downloads.flushDownloads()
+  podcasts.flushPodcasts()
 })
 app.on('window-all-closed', () => {
   store.flush()
