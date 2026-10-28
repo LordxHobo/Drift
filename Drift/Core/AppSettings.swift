@@ -47,6 +47,8 @@ final class AppSettings {
     var skipNonMusic: Bool { didSet { defaults.set(skipNonMusic, forKey: "skipNonMusic") } }
     /// Search YouTube Music "songs" (album audio) instead of all results incl. music videos.
     var preferOfficialAudio: Bool { didSet { defaults.set(preferOfficialAudio, forKey: "preferOfficialAudio") } }
+    /// Play the explicit (uncensored) version of a song when there is one.
+    var preferExplicit: Bool { didSet { defaults.set(preferExplicit, forKey: "preferExplicit") } }
     var downloadOverCellular: Bool { didSet { defaults.set(downloadOverCellular, forKey: "downloadOverCellular") } }
     /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
     /// Move on when a song ends in a long stretch of silence.
@@ -79,6 +81,7 @@ final class AppSettings {
         dataSaver = d.bool(forKey: "dataSaver")
         skipNonMusic = d.object(forKey: "skipNonMusic") as? Bool ?? true
         preferOfficialAudio = d.object(forKey: "preferOfficialAudio") as? Bool ?? true
+        preferExplicit = d.object(forKey: "preferExplicit") as? Bool ?? true
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")
         lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true

@@ -2,40 +2,53 @@ import Foundation
 
 /// Music videos often have intros, outros and edits. When a song is a music video and YouTube Music
 /// has the album version of it, Drift plays that instead (same song, studio audio, real length).
+/// And when the version about to play is clean (censored), Drift plays the explicit one instead.
 actor AudioVersion {
     static let shared = AudioVersion()
 
-    private let defaultsKey = "audioVersion.map.v2"
-    /// Video ID → album-audio video ID ("" = it already is the album audio, or there is none).
-    private var map: [String: String]
+    /// One remembered list per combination of the two settings.
+    private var mode = ""
+    private var defaultsKey: String { "audioVersion.map.v3.\(mode)" }
+    /// Video ID → video ID to play ("" = play it as it is).
+    private var map: [String: String] = [:]
     private var pending: [String: Task<String?, Never>] = [:]
     /// What the last lookup found, per song (shown in the player's stream info).
     private var notes: [String: String] = [:]
 
     func note(_ id: String) -> String { notes[id] ?? "Not looked up" }
 
-    private init() {
-        map = (UserDefaults.standard.dictionary(forKey: "audioVersion.map.v2") as? [String: String]) ?? [:]
+    private init() {}
+
+    private func use(mode new: String) {
+        guard new != mode else { return }
+        mode = new
+        map = (UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String]) ?? [:]
+        notes.removeAll()
     }
 
-    /// The ID to actually play for a song (the album version when there is one).
+    /// The ID to actually play for a song (the album and/or explicit version when there is one).
     func preferred(_ track: Track) async -> String {
         let id = track.id
         if track.upload == true {
             notes[id] = "YouTube upload (not on YouTube Music)"
             return id
         }
-        guard AppSettings.shared.preferOfficialAudio, !track.isEpisode else {
-            notes[id] = "Off (Prefer official audio is off)"
+        let official = AppSettings.shared.preferOfficialAudio
+        let explicit = AppSettings.shared.preferExplicit
+        guard official || explicit, !track.isEpisode else {
+            notes[id] = "Off (official audio and explicit versions are off)"
             return id
         }
+        use(mode: (official ? "album" : "") + (explicit ? "explicit" : ""))
         if let known = map[id] {
-            if notes[id] == nil { notes[id] = known.isEmpty ? "Remembered: keep this video" : "Remembered: album version" }
+            if notes[id] == nil { notes[id] = known.isEmpty ? "Remembered: keep this one" : "Remembered: other version" }
             return known.isEmpty ? id : known
         }
         if let task = pending[id] { return await task.value ?? id }
         let task = Task<String?, Never> {
-            let answer: (String, String)?? = try? await withTimeout(4) { try await Self.lookup(track) }
+            let answer: (String, String)?? = try? await withTimeout(7) {
+                try await Self.choose(track, official: official, explicit: explicit)
+            }
             guard let pair = answer ?? nil else { return nil }
             await self.setNote(id, pair.1)
             return pair.0
@@ -57,10 +70,64 @@ actor AudioVersion {
     private func setNote(_ id: String, _ text: String) { notes[id] = text }
 
     private static let atv = "MUSIC_VIDEO_TYPE_ATV"
+    private static let songsParams = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
+
+    /// Which video IDs are explicit, as learned along the way.
+    private final class Known: @unchecked Sendable {
+        var explicit: [String: Bool] = [:]
+    }
+
+    /// The album version (if wanted), then its explicit version (if wanted and it's clean).
+    private static func choose(_ track: Track, official: Bool, explicit: Bool) async throws -> (String, String)? {
+        let known = Known()
+        var play = track.id
+        var note = "Album versions off"
+        if official {
+            guard let found = try await lookup(track, known) else { return nil }
+            (play, note) = found
+        }
+        if explicit {
+            if let other = try? await explicitVersion(track, playing: play, known, onlySongs: !official) {
+                play = other
+                note += "; explicit version found (this one was clean)"
+            } else if known.explicit[play] == true || track.explicit == true {
+                note += "; explicit"
+            }
+        }
+        return (play, note)
+    }
+
+    /// The explicit version of a song when the one about to play is clean.
+    /// `onlySongs`: leave music videos alone (official audio is off).
+    private static func explicitVersion(_ track: Track, playing playID: String, _ known: Known, onlySongs: Bool) async throws -> String? {
+        if known.explicit[playID] == true || track.explicit == true { return nil }
+        let title = YTMusic.withoutCleanTag(track.title)
+        guard !title.isEmpty else { return nil }
+        let json = try await YTMusic.post("search", ["query": "\(title) \(LyricsService.mainArtist(track.artist))",
+                                                     "params": songsParams])
+        var rows: [(t: Track, song: Bool)] = []
+        YTMusic.collect(json) { r in
+            guard let t = YTMusic.parse(r, requireDuration: false) else { return }
+            known.explicit[t.id] = t.explicit == true
+            rows.append((t, firstValue(r, "musicVideoType") as? String == atv))
+        }
+        if known.explicit[playID] == true { return nil }
+        if onlySongs, !rows.contains(where: { $0.t.id == track.id && $0.song }) { return nil }
+        // Compare lengths with what was going to play (the album version can be shorter than a music video).
+        var ref = track
+        ref.title = title
+        ref.duration = rows.first(where: { $0.t.id == playID })?.t.duration ?? (playID == track.id ? track.duration : nil)
+        var best: (id: String, diff: Double)?
+        for (t, song) in rows where song && t.explicit == true && t.id != playID && YTMusic.sameSong(ref, t) {
+            let diff = (ref.duration != nil && t.duration != nil) ? abs(ref.duration! - t.duration!) : 5
+            if best == nil || diff < best!.diff { best = (t.id, diff) }
+        }
+        return best?.id
+    }
 
     /// 1. YouTube Music's own link between a music video and its album version.
     /// 2. Otherwise, a "songs" search for the same title and artist, keeping only album audio.
-    private static func lookup(_ track: Track) async throws -> (String, String)? {
+    private static func lookup(_ track: Track, _ known: Known) async throws -> (String, String)? {
         let id = track.id
         var ownType: String?
         var linkNote = "YouTube Music link: no answer"
@@ -75,6 +142,7 @@ actor AudioVersion {
         ]), let first = firstQueueItem(json) {
             var candidates: [[String: Any]] = []
             collect(first, into: &candidates)
+            for c in candidates { if let v = c["videoId"] as? String { known.explicit[v] = YTMusic.isExplicit(c) } }
             let types = candidates.map { ($0["videoId"] as? String, videoType($0)) }
             ownType = types.first(where: { $0.0 == id })?.1
             let short = (ownType ?? "unknown").replacingOccurrences(of: "MUSIC_VIDEO_TYPE_", with: "")
@@ -94,6 +162,7 @@ actor AudioVersion {
         let wantArtist = SongMatcher.normalize(artist)
         var best: (id: String, diff: Double)?
         YTMusic.collect(json) { r in
+            if let t = YTMusic.parse(r, requireDuration: false) { known.explicit[t.id] = t.explicit == true }
             guard let t = YTMusic.parse(r, requireDuration: false), firstValue(r, "musicVideoType") as? String == atv,
                   SongMatcher.normalize(t.title) == wantTitle,
                   wantArtist.isEmpty || SongMatcher.normalize(t.artist).contains(wantArtist) else { return }

@@ -34,6 +34,9 @@ struct SettingsView: View {
                     toggle("Prefer official audio",
                            "Search returns album versions instead of music videos, and a music video plays as its album version when YouTube Music has one (no intros or cut endings).",
                            $settings.preferOfficialAudio)
+                    toggle("Prefer explicit versions",
+                           "When a song has a clean (censored) and an explicit version, always play the explicit one, the way the artist made it.",
+                           $settings.preferExplicit)
                     Text("Audio is streamed directly, so YouTube ads never play.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)

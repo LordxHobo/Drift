@@ -16,6 +16,8 @@ export interface Track {
   published?: number | null
   /** A regular YouTube upload rather than a YouTube Music song. */
   upload?: boolean | null
+  /** Marked explicit on YouTube Music (the "E" badge). */
+  explicit?: boolean | null
   [extra: string]: unknown
 }
 
@@ -122,6 +124,8 @@ export interface Settings {
   appearance: Appearance
   accent: number
   preferOfficialAudio: boolean
+  /** Play the explicit (uncensored) version of a song when there is one. */
+  preferExplicit: boolean
   volume: number
   /** Start Drift when signing in to the computer (Windows and Mac). */
   openAtLogin: boolean

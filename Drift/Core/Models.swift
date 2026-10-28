@@ -15,6 +15,8 @@ struct Track: Codable, Hashable, Identifiable {
     var published: Date?
     /// Not on YouTube Music: a regular YouTube upload (often a fan upload) found for an imported song.
     var upload: Bool?
+    /// Marked explicit on YouTube Music (the "E" badge).
+    var explicit: Bool?
 
     var isEpisode: Bool { podcast == true }
 

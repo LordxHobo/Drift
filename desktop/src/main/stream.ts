@@ -7,7 +7,7 @@ import vm from 'node:vm'
 import { Innertube, Platform, UniversalCache } from 'youtubei.js'
 import type { Types } from 'youtubei.js'
 import type { StreamInfo, Track } from '@shared/types'
-import { albumVersion } from './ytmusic'
+import { albumVersion, explicitVersion } from './ytmusic'
 import { getSettings } from './store'
 
 // YouTube scrambles part of each audio link; the code that unscrambles it comes from YouTube's own
@@ -290,19 +290,42 @@ export async function resolve(id: string, force = false): Promise<Resolved> {
 
 // MARK: Album versions (remembered on this computer)
 
-const versionFile = (): string => join(app.getPath('userData'), 'album-versions.json')
+/** One remembered list per combination of the two settings (album versions, explicit versions). */
+const versionFile = (mode: string): string => join(app.getPath('userData'), `song-versions-${mode}.json`)
 let versions: Record<string, string> | undefined
+let versionsMode = ''
 const notes = new Map<string, string>()
 
-function loadVersions(): Record<string, string> {
+function loadVersions(mode: string): Record<string, string> {
+  if (versionsMode !== mode) {
+    versionsMode = mode
+    versions = undefined
+    notes.clear()
+  }
   if (!versions) {
     try {
-      versions = JSON.parse(readFileSync(versionFile(), 'utf8'))
+      versions = JSON.parse(readFileSync(versionFile(mode), 'utf8'))
     } catch {
       versions = {}
     }
   }
   return versions!
+}
+
+/** The album version (if wanted), then its explicit version (if wanted and it's clean). */
+async function chooseVersion(track: Track, official: boolean, explicit: boolean): Promise<[string, string]> {
+  const known = new Map<string, boolean>()
+  let [play, note] = official ? await albumVersion(track, known) : [track.id, 'Album versions off']
+  if (explicit) {
+    const other = await explicitVersion(track, play, known, !official).catch(() => undefined)
+    if (other) {
+      play = other
+      note += '; explicit version found (this one was clean)'
+    } else if (known.get(play) || track.explicit) {
+      note += '; explicit'
+    }
+  }
+  return [play, note]
 }
 
 async function preferredId(track: Track): Promise<string> {
@@ -311,24 +334,26 @@ async function preferredId(track: Track): Promise<string> {
     notes.set(id, 'YouTube upload (not on YouTube Music)')
     return id
   }
-  if (!getSettings().preferOfficialAudio || track.podcast) {
-    notes.set(id, 'Off (Prefer album versions is off)')
+  const { preferOfficialAudio: official, preferExplicit: explicit } = getSettings()
+  if ((!official && !explicit) || track.podcast) {
+    notes.set(id, 'Off (album and explicit versions are off)')
     return id
   }
-  const map = loadVersions()
+  const mode = `${official ? 'album' : ''}${explicit ? 'explicit' : ''}`
+  const map = loadVersions(mode)
   if (id in map) {
-    if (!notes.has(id)) notes.set(id, map[id] ? 'Remembered: album version' : 'Remembered: keep this video')
+    if (!notes.has(id)) notes.set(id, map[id] ? 'Remembered: other version' : 'Remembered: keep this one')
     return map[id] || id
   }
   try {
     const [play, note] = await Promise.race([
-      albumVersion(track),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+      chooseVersion(track, official, explicit),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 7000))
     ])
     notes.set(id, note)
     map[id] = play === id ? '' : play
     if (Object.keys(map).length > 5000) versions = {}
-    writeFileSync(versionFile(), JSON.stringify(versions))
+    writeFileSync(versionFile(mode), JSON.stringify(versions))
     return play
   } catch {
     notes.set(id, 'Lookup failed or timed out')

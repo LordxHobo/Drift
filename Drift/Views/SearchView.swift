@@ -128,7 +128,7 @@ struct SearchView: View {
         .toolbar(.hidden, for: .navigationBar)
         // Opening an artist or channel from the results keeps the search in Recent searches.
         .onDisappear { if hasResults { remember() } }
-        .task(id: "\(mode.rawValue)|\(settings.preferOfficialAudio)|\(query)") {
+        .task(id: "\(mode.rawValue)|\(settings.preferOfficialAudio)|\(settings.preferExplicit)|\(query)") {
             await search()
         }
     }

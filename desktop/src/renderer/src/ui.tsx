@@ -294,6 +294,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
               <span className="title-text">
                 <span className="t-title">
                   {t.title}
+                  {t.explicit && <span className="explicit-mark" title="Explicit" aria-label="Explicit">E</span>}
                   {t.upload && <span className="badge">UPLOAD</span>}
                   <DownloadMark id={t.id} sets={dl} />
                 </span>

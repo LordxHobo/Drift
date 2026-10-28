@@ -93,6 +93,9 @@ export function SettingsPage(): JSX.Element {
         <Row title="Prefer album versions" detail="When a song is a music video, play the album version instead (no intros or skits), like on your phone.">
           <Toggle on={s.preferOfficialAudio} onChange={(v) => setSettings({ preferOfficialAudio: v })} label="Prefer album versions" />
         </Row>
+        <Row title="Prefer explicit versions" detail="When a song has a clean (censored) and an explicit version, always play the explicit one, the way the artist made it.">
+          <Toggle on={s.preferExplicit} onChange={(v) => setSettings({ preferExplicit: v })} label="Prefer explicit versions" />
+        </Row>
         <Row title="Skip non-music parts" detail="Jumps past intros, outros and talking in music videos, using parts marked by the SponsorBlock community.">
           <Toggle on={s.skipNonMusic} onChange={(v) => setSettings({ skipNonMusic: v })} label="Skip non-music parts" />
         </Row>

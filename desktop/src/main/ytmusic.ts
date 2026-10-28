@@ -1,5 +1,6 @@
 // YouTube Music's own web API (the one music.youtube.com uses), the same calls the phone app makes.
 import type { AlbumPage, AlbumRef, ArtistPage, ArtistRef, BrowseRef, SearchResults, Track } from '@shared/types'
+import { getSettings } from './store'
 
 type J = any // raw InnerTube JSON
 
@@ -167,7 +168,25 @@ export function parseTrack(r: J, requireDuration = true): Track | undefined {
   const artist = parts[0] ?? ''
   const second = parts[1]?.toLowerCase() ?? ''
   const album = parts.length > 1 && !second.includes('view') && !second.includes('play') ? parts[1] : undefined
-  return { id, title, artist, album: album ?? null, duration: duration ?? null, artworkURL: thumbnail(r) ?? null }
+  const t: Track = { id, title, artist, album: album ?? null, duration: duration ?? null, artworkURL: thumbnail(r) ?? null }
+  if (isExplicit(r)) t.explicit = true
+  return t
+}
+
+/** YouTube Music's "E" (explicit) badge somewhere on a row. */
+export function isExplicit(r: J): boolean {
+  let found = false
+  const visit = (n: J): void => {
+    if (found || !n || typeof n !== 'object') return
+    if (Array.isArray(n)) return n.forEach(visit)
+    if (n.iconType === 'MUSIC_EXPLICIT_BADGE') {
+      found = true
+      return
+    }
+    for (const k of Object.keys(n)) if (k !== 'menu') visit(n[k])
+  }
+  visit(r)
+  return found
 }
 
 function albumRef(r: J): AlbumRef | undefined {
@@ -194,7 +213,69 @@ async function search(query: string, filter?: string): Promise<Track[]> {
       out.push(t)
     }
   })
-  return out
+  return getSettings().preferExplicit ? withoutCleanTwins(out) : out
+}
+
+// MARK: Explicit versions
+
+/** Words that make a different recording (a remix isn't the explicit version of the original). */
+const variantWords = /\b(remix|mix|live|acoustic|instrumental|sped up|slowed|karaoke|cover|demo|a ?cappella|nightcore|8d|reverb|unplugged|orchestral|piano version)\b/gi
+
+function variants(title: string): string {
+  return [...new Set((title.toLowerCase().match(variantWords) ?? []).map((w) => w.replace(/\s+/g, ' ')))].sort().join('|')
+}
+
+/** Same song and same recording type: only the clean/explicit edit may differ. */
+export function sameSong(a: Track, b: Track, maxDiff = 10): boolean {
+  if (normalize(a.title) !== normalize(b.title) || variants(a.title) !== variants(b.title)) return false
+  const artist = normalize(mainArtist(a.artist))
+  if (artist && !normalize(b.artist).includes(artist) && !normalize(a.artist).includes(normalize(mainArtist(b.artist)))) return false
+  return a.duration == null || b.duration == null || Math.abs(a.duration - b.duration) <= maxDiff
+}
+
+/** "Song (Clean)", "Song - Radio Edit" → "Song", for searching. */
+export function withoutCleanTag(title: string): string {
+  return title
+    .replace(/\s*[([]\s*(clean|clean version|edited|edited version|radio edit|censored|super clean)\s*[)\]]/gi, '')
+    .replace(/\s+-\s+(clean|clean version|edited|radio edit|censored)\s*$/i, '')
+    .trim()
+}
+
+/** Drops a clean song from results when its explicit twin is also there. */
+function withoutCleanTwins(list: Track[]): Track[] {
+  const explicit = list.filter((t) => t.explicit)
+  if (!explicit.length) return list
+  return list.filter((t) => t.explicit || !explicit.some((e) => sameSong(t, e)))
+}
+
+/**
+ * The explicit version of a song when the one about to play is clean. `known` holds what's already
+ * known about which IDs are explicit. `onlySongs`: leave music videos alone (album versions are off).
+ */
+export async function explicitVersion(track: Track, playId: string, known: Map<string, boolean>, onlySongs: boolean): Promise<string | undefined> {
+  if (known.get(playId) || track.explicit) return undefined
+  const title = withoutCleanTag(track.title)
+  if (!title) return undefined
+  const json = await post('search', { query: `${title} ${mainArtist(track.artist)}`, params: params.songs })
+  const rows: { t: Track; song: boolean }[] = []
+  collect(json, (r) => {
+    const t = parseTrack(r, false)
+    if (!t) return
+    known.set(t.id, !!t.explicit)
+    rows.push({ t, song: firstValue(r, 'musicVideoType') === atv })
+  })
+  if (known.get(playId)) return undefined
+  if (onlySongs && !rows.some((r) => r.t.id === track.id && r.song)) return undefined
+  // Compare lengths with what was going to play (the album version can be shorter than a music video).
+  const playing = rows.find((r) => r.t.id === playId)?.t
+  const ref: Track = { ...track, title, duration: playing?.duration ?? (playId === track.id ? track.duration : null) }
+  let best: { id: string; diff: number } | undefined
+  for (const { t, song } of rows) {
+    if (!song || !t.explicit || t.id === playId || !sameSong(ref, t)) continue
+    const diff = ref.duration != null && t.duration != null ? Math.abs(ref.duration - t.duration) : 5
+    if (!best || diff < best.diff) best = { id: t.id, diff }
+  }
+  return best?.id
 }
 
 export async function searchArtists(query: string): Promise<ArtistRef[]> {
@@ -403,7 +484,8 @@ export async function radio(id: string): Promise<Track[]> {
       artist: byline[0] ?? '',
       album: byline.length > 2 ? byline[1] : null,
       duration: parseDuration(text(r.lengthText) ?? '') ?? null,
-      artworkURL: thumbnail(r) ?? (Array.isArray(r.thumbnail?.thumbnails) ? r.thumbnail.thumbnails.at(-1)?.url : null) ?? null
+      artworkURL: thumbnail(r) ?? (Array.isArray(r.thumbnail?.thumbnails) ? r.thumbnail.thumbnails.at(-1)?.url : null) ?? null,
+      ...(isExplicit(r) ? { explicit: true } : {})
     })
   }
   return out
@@ -415,7 +497,7 @@ const atv = 'MUSIC_VIDEO_TYPE_ATV'
  * The album version of a music video, when YouTube Music has one: first its own link between the two,
  * then a "songs" search for the same title and artist. Returns [id to play, what was found].
  */
-export async function albumVersion(track: Track): Promise<[string, string]> {
+export async function albumVersion(track: Track, known: Map<string, boolean> = new Map()): Promise<[string, string]> {
   const id = track.id
   let linkNote = 'YouTube Music link: no answer'
   try {
@@ -434,6 +516,7 @@ export async function albumVersion(track: Track): Promise<[string, string]> {
     })
     if (first) {
       const candidates = panelTracks(first)
+      for (const c of candidates) if (typeof c.videoId === 'string') known.set(c.videoId, isExplicit(c))
       const types = candidates.map((c) => [c.videoId as string | undefined, videoType(c)] as const)
       const own = types.find((t) => t[0] === id)?.[1]
       const short = (own ?? 'unknown').replace('MUSIC_VIDEO_TYPE_', '')
@@ -454,6 +537,7 @@ export async function albumVersion(track: Track): Promise<[string, string]> {
   let best: { id: string; diff: number } | undefined
   collect(json, (r) => {
     const t = parseTrack(r, false)
+    if (t) known.set(t.id, !!t.explicit)
     if (!t || firstValue(r, 'musicVideoType') !== atv) return
     if (normalize(t.title) !== wantTitle) return
     if (wantArtist && !normalize(t.artist).includes(wantArtist)) return

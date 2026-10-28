@@ -3858,3 +3858,21 @@ kbd {
 .mini-video .quality-btn .hd {
   display: none;
 }
+
+/* Explicit "E" mark */
+.explicit-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--muted) 75%, transparent);
+  color: var(--panel, #000);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: 1px;
+  flex: none;
+}

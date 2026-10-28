@@ -35,6 +35,7 @@ const defaultSettings: Settings = {
   appearance: 'device',
   accent: 0,
   preferOfficialAudio: true,
+  preferExplicit: true,
   volume: 0.8,
   openAtLogin: false,
   skipNonMusic: true,

@@ -47,7 +47,63 @@ enum YTMusic {
         collect(json) { renderer in
             if let t = parse(renderer), seen.insert(t.id).inserted { out.append(t) }
         }
-        return out
+        return AppSettings.shared.preferExplicit ? withoutCleanTwins(out) : out
+    }
+
+    // MARK: Explicit versions
+
+    /// YouTube Music's "E" (explicit) badge somewhere on a row.
+    static func isExplicit(_ node: Any) -> Bool {
+        if let d = node as? [String: Any] {
+            if d["iconType"] as? String == "MUSIC_EXPLICIT_BADGE" { return true }
+            for (k, v) in d where k != "menu" { if isExplicit(v) { return true } }
+        } else if let a = node as? [Any] {
+            for v in a { if isExplicit(v) { return true } }
+        }
+        return false
+    }
+
+    /// Words that make a different recording (a remix isn't the explicit version of the original).
+    private static let variantPattern = try! NSRegularExpression(
+        pattern: "\\b(remix|mix|live|acoustic|instrumental|sped up|slowed|karaoke|cover|demo|a ?cappella|nightcore|8d|reverb|unplugged|orchestral|piano version)\\b",
+        options: .caseInsensitive)
+
+    private static func variants(_ title: String) -> String {
+        let s = title.lowercased()
+        let words = variantPattern.matches(in: s, range: NSRange(s.startIndex..., in: s)).compactMap { match -> String? in
+            guard let r = Range(match.range, in: s) else { return nil }
+            return String(s[r])
+        }
+        return Set(words).sorted().joined(separator: "|")
+    }
+
+    /// Same song and same recording type: only the clean/explicit edit may differ.
+    static func sameSong(_ a: Track, _ b: Track, maxDiff: Double = 10) -> Bool {
+        guard SongMatcher.normalize(a.title) == SongMatcher.normalize(b.title), variants(a.title) == variants(b.title) else { return false }
+        let artist = SongMatcher.normalize(LyricsService.mainArtist(a.artist))
+        let other = SongMatcher.normalize(LyricsService.mainArtist(b.artist))
+        if !artist.isEmpty, !SongMatcher.normalize(b.artist).contains(artist), !SongMatcher.normalize(a.artist).contains(other) {
+            return false
+        }
+        guard let x = a.duration, let y = b.duration else { return true }
+        return abs(x - y) <= maxDiff
+    }
+
+    /// "Song (Clean)", "Song - Radio Edit" → "Song", for searching.
+    static func withoutCleanTag(_ title: String) -> String {
+        title
+            .replacingOccurrences(of: "\\s*[\\(\\[]\\s*(clean|clean version|edited|edited version|radio edit|censored|super clean)\\s*[\\)\\]]",
+                                  with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "\\s+-\\s+(clean|clean version|edited|radio edit|censored)\\s*$",
+                                  with: "", options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Drops a clean song from results when its explicit twin is also there.
+    static func withoutCleanTwins(_ list: [Track]) -> [Track] {
+        let explicit = list.filter { $0.explicit == true }
+        guard !explicit.isEmpty else { return list }
+        return list.filter { t in t.explicit == true || !explicit.contains { sameSong(t, $0) } }
     }
 
     // MARK: JSON walking
@@ -116,7 +172,9 @@ enum YTMusic {
             as? [String: Any])?["thumbnails"] as? [[String: Any]]) ?? []
         let art = (thumbs.last?["url"] as? String).flatMap(URL.init(string:))
 
-        return Track(id: videoID, title: title, artist: artist, album: album, duration: duration, artworkURL: art)
+        var t = Track(id: videoID, title: title, artist: artist, album: album, duration: duration, artworkURL: art)
+        if isExplicit(r) { t.explicit = true }
+        return t
     }
 
     static func parseDuration(_ s: String) -> Double? {

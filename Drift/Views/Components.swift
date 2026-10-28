@@ -213,6 +213,9 @@ struct TrackRow: View {
                                     .controlSize(.mini)
                                     .tint(accent)
                             }
+                            if track.explicit == true {
+                                ExplicitMark()
+                            }
                             if track.upload == true {
                                 Text("UPLOAD")
                                     .font(.system(size: 9, weight: .heavy))
@@ -436,5 +439,18 @@ struct DownloadStatusLine: View {
             .minimumScaleFactor(0.8)
             .accessibilityElement(children: .combine)
         }
+    }
+}
+
+
+/// The "E" next to explicit songs.
+struct ExplicitMark: View {
+    var body: some View {
+        Text("E")
+            .font(.system(size: 9, weight: .heavy))
+            .frame(width: 13, height: 13)
+            .background(Theme.muted, in: RoundedRectangle(cornerRadius: 2.5))
+            .foregroundStyle(Theme.bg)
+            .accessibilityLabel("Explicit")
     }
 }

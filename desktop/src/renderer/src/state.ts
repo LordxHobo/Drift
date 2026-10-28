@@ -27,7 +27,7 @@ export const drift = window.drift
 
 export const libraryStore = new Store<Library>({ liked: [], playlists: [], artists: [], recent: [] })
 export const settingsStore = new Store<Settings>({
-  style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, volume: 0.8, openAtLogin: false,
+  style: 'drift', appearance: 'device', accent: 0, preferOfficialAudio: true, preferExplicit: true, volume: 0.8, openAtLogin: false,
   skipNonMusic: true, skipSponsors: true, podcastSpeed: 1, orbitEnabled: false, orbitUrl: '', discordEnabled: false,
   discordAppId: '', closeToTray: true, podcastVideo: false, videoQuality: 720
 })
