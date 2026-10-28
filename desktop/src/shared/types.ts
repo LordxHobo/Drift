@@ -188,6 +188,14 @@ export interface LyricLine {
   text: string
 }
 
+/** A chapter of an episode. */
+export interface Chapter {
+  title: string
+  /** Seconds from the start. */
+  start: number
+  thumbnail?: string
+}
+
 export type Lyrics =
   | { kind: 'synced'; lines: LyricLine[]; source: string }
   | { kind: 'plain'; text: string; source: string }
@@ -335,6 +343,10 @@ export interface DriftApi {
   radio(trackId: string): Promise<Track[]>
   prepare(track: Track): Promise<StreamInfo>
   lyrics(track: Track): Promise<Lyrics>
+  /** An episode's chapters (from YouTube, or the timestamps in its description). */
+  chapters(id: string): Promise<Chapter[]>
+  /** The video heights an episode offers (e.g. [360, 720, 1080]). */
+  videoQualities(id: string): Promise<number[]>
 
   library(): Promise<Library>
   setLiked(track: Track, liked: boolean): Promise<void>
@@ -413,7 +425,7 @@ export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
-  'prepare', 'lyrics', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
+  'prepare', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',

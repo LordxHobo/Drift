@@ -3,10 +3,91 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon } from './icons'
-import { back, fullPlayerStore, go, setSettings, settingsStore, useRoute, useStore } from './state'
+import { back, drift, fullPlayerStore, go, panelStore, setSettings, settingsStore, useRoute, useStore } from './state'
 import { usePlayer } from './player'
-import { useVideoReady, videoEl } from './video'
+import { bestQuality, useVideoReady, videoEl } from './video'
 import { IconButton, Spinner, TrackArt } from './ui'
+import { ChapterList, CurrentChapter, useChapters } from './chapters'
+
+const qualityCache = new Map<string, number[]>()
+
+/** The heights this episode's video comes in. */
+function useQualities(id: string | undefined): number[] {
+  const [list, setList] = useState<number[]>(() => (id && qualityCache.get(id)) || [])
+  useEffect(() => {
+    if (!id) return setList([])
+    const known = qualityCache.get(id)
+    if (known) return setList(known)
+    let live = true
+    setList([])
+    drift
+      .videoQualities(id)
+      .then((q) => {
+        if (q.length) qualityCache.set(id, q)
+        if (live) setList(q)
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [id])
+  return list
+}
+
+const label = (h: number): string => (h >= 2160 ? '4K' : h >= 1440 ? '1440p' : `${h}p`)
+
+/** The quality button on the video, with its list (drawn inside the video, so it works in full screen too). */
+function QualityPicker(): JSX.Element | null {
+  const p = usePlayer()
+  const want = useStore(settingsStore).videoQuality || 720
+  const options = useQualities(p.info?.playId ?? p.current?.id)
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent): void => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [open])
+  // What's actually playing: the sharpest at or under the setting (or the lowest there is).
+  const playing = options.filter((h) => h <= want).at(-1) ?? options[0]
+  return (
+    <div className="quality" ref={box} onDoubleClick={(e) => e.stopPropagation()}>
+      <button className={`quality-btn ${open ? 'on' : ''}`} title="Video quality" aria-label="Video quality" onClick={() => setOpen(!open)}>
+        {playing ? label(playing) : label(want)}
+        {playing && playing >= 720 && <span className="hd">HD</span>}
+      </button>
+      {open && (
+        <div className="quality-menu" role="menu">
+          <div className="quality-head">Quality</div>
+          {options.length === 0 && <div className="quality-none"><Spinner size={14} /></div>}
+          {options
+            .slice()
+            .reverse()
+            .map((h) => (
+              <button
+                key={h}
+                role="menuitemradio"
+                aria-checked={h === playing}
+                className={h === playing ? 'on' : ''}
+                onClick={() => {
+                  // The highest choice means "always the sharpest".
+                  setSettings({ videoQuality: h === options.at(-1) ? bestQuality : h })
+                  setOpen(false)
+                }}
+              >
+                <span className="quality-check">{h === playing ? <Icon name="check" size={14} /> : null}</span>
+                {label(h)}
+                {h >= 720 && <span className="hd">HD</span>}
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /** Shows the one video element here (it moves between places without reloading). */
 export function VideoSurface({ className, onExpand }: { className?: string; onExpand?: () => void }): JSX.Element {
@@ -29,6 +110,7 @@ export function VideoSurface({ className, onExpand }: { className?: string; onEx
         </div>
       )}
       <div className="video-tools">
+        <QualityPicker />
         {onExpand && <IconButton icon="expand" label="Bigger" size={16} onClick={onExpand} />}
         <IconButton icon="fullscreen" label="Full screen" size={16} onClick={fullscreen} />
       </div>
@@ -48,6 +130,10 @@ export function VideoPage(): JSX.Element {
   const p = usePlayer()
   const on = useVideoOn()
   const t = p.current
+  const { chapters } = useChapters(t)
+  // Not twice: the side panel may already be showing them.
+  const panelShows = useStore(panelStore) === 'lyrics'
+  const showChapters = chapters.length > 0 && !panelShows
   return (
     <div className="video-page">
       <div className="lv-head">
@@ -56,13 +142,24 @@ export function VideoPage(): JSX.Element {
           <div className="lv-now">
             <div>
               <div className="lv-title">{t.title}</div>
-              <div className="lv-artist">{t.artist}</div>
+              <div className="lv-artist">
+                {t.artist}
+                <CurrentChapter className="lv-chapter" />
+              </div>
             </div>
           </div>
         )}
       </div>
       {on ? (
-        <VideoSurface className="big" />
+        <div className="video-body">
+          <VideoSurface className="big" />
+          {showChapters && (
+            <aside className="video-chapters">
+              <div className="lp-label">CHAPTERS</div>
+              <ChapterList track={t} size="small" />
+            </aside>
+          )}
+        </div>
       ) : (
         <div className="empty">
           {t?.podcast ? (

@@ -10,6 +10,7 @@ import type { MenuItem, Route } from './state'
 import { jumpTo, playList, removeFromQueue, setSpeed, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
+import { ChapterList, CurrentChapter } from './chapters'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
@@ -303,30 +304,40 @@ export function DriftPlayerBar(): JSX.Element {
       <div className="pb-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
-        <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
+        <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />
         <IconButton icon="queue" label="Queue" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
         <Volume />
-        <IconButton icon="expand" label="Full-screen lyrics" active={route.name === 'lyrics'} size={16} onClick={() => (route.name === 'lyrics' ? back() : go({ name: 'lyrics' }))} />
+        <IconButton icon="expand" label={t?.podcast ? 'Full-screen chapters' : 'Full-screen lyrics'} active={route.name === 'lyrics'} size={16} onClick={() => (route.name === 'lyrics' ? back() : go({ name: 'lyrics' }))} />
       </div>
     </footer>
+  )
+}
+
+/** The lyrics button, which shows chapters instead while an episode plays. */
+function LyricsButton({ podcast, active }: { podcast: boolean; active: boolean }): JSX.Element {
+  return podcast ? (
+    <IconButton icon="chapters" label="Chapters" active={active} size={18} onClick={() => togglePanel('lyrics')} />
+  ) : (
+    <IconButton icon="lyrics" label="Lyrics" active={active} size={18} onClick={() => togglePanel('lyrics')} />
   )
 }
 
 export function SidePanel(): JSX.Element | null {
   const panel = useStore(panelStore)
   const route = useRoute()
+  const podcast = !!usePlayer().current?.podcast
   if (panel === 'none' || route.name === 'lyrics') return null
   return (
     <aside className="panel side-panel">
       <div className="side-head">
         <div className="side-tabs">
-          <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>Lyrics</button>
+          <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>{podcast ? 'Chapters' : 'Lyrics'}</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up next</button>
           <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? <LyricsPanel /> : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? (podcast ? <ChaptersPanel /> : <LyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
     </aside>
   )
 }
@@ -350,6 +361,25 @@ function LyricsPanel(): JSX.Element {
         <div className="lp-label">LYRICS</div>
         <LyricsLines track={t} size="small" />
       </div>
+    </div>
+  )
+}
+
+function ChaptersPanel(): JSX.Element {
+  const t = usePlayer().current
+  return (
+    <div className="lyrics-panel">
+      {t && (
+        <div className="lp-now">
+          <TrackArt track={t} size={56} radius={6} />
+          <div>
+            <div className="lp-title">{t.title}</div>
+            <div className="lp-artist">{t.artist}</div>
+          </div>
+        </div>
+      )}
+      <div className="lp-label chapters-label">CHAPTERS</div>
+      <ChapterList track={t} size="small" />
     </div>
   )
 }
@@ -407,7 +437,7 @@ export function LyricsView(): JSX.Element {
   return (
     <div className="lyrics-view" style={{ background: color }}>
       <div className="lv-head">
-        <IconButton icon="minimize" label="Close lyrics" className="round" onClick={back} />
+        <IconButton icon="minimize" label={t?.podcast ? 'Close chapters' : 'Close lyrics'} className="round" onClick={back} />
         {t && (
           <div className="lv-now">
             <TrackArt track={t} size={44} radius={4} />
@@ -418,7 +448,7 @@ export function LyricsView(): JSX.Element {
           </div>
         )}
       </div>
-      <LyricsLines track={t} size="large" />
+      {t?.podcast ? <ChapterList track={t} size="large" /> : <LyricsLines track={t} size="large" />}
     </div>
   )
 }
@@ -541,7 +571,7 @@ export function MusicTopPlayer(): JSX.Element {
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
         <Volume />
-        <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
+        <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />
         <IconButton icon="queue" label="Up next" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
       </div>
     </header>
@@ -577,6 +607,7 @@ export function FullPlayer(): JSX.Element | null {
             <div>
               <div className="fp-title">{t.title}</div>
               <button className="fp-artist link" onClick={() => { fullPlayerStore.set(false); void goToArtist(t.artist) }}>{t.artist}</button>
+              {t.podcast && <CurrentChapter className="fp-chapter" />}
             </div>
             <button className="icon-btn fp-more" aria-label="More" onClick={(e) => openMenu(e, trackMenu(t))}>
               <Icon name="more" size={18} />
@@ -587,7 +618,7 @@ export function FullPlayer(): JSX.Element | null {
           <Volume />
         </div>
         <div className="fp-right">
-          <LyricsLines track={t} size="large" />
+          {t.podcast ? <ChapterList track={t} size="large" /> : <LyricsLines track={t} size="large" />}
         </div>
       </div>
     </div>
@@ -596,18 +627,20 @@ export function FullPlayer(): JSX.Element | null {
 
 export function MusicSidePanel(): JSX.Element | null {
   const panel = useStore(panelStore)
+  const current = usePlayer().current
+  const podcast = !!current?.podcast
   if (panel === 'none') return null
   return (
     <aside className="m-panel">
       <div className="side-head">
         <div className="seg">
-          <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>Lyrics</button>
+          <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>{podcast ? 'Chapters' : 'Lyrics'}</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up Next</button>
           <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? <MusicLyricsPanel /> : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? (podcast ? <div className="m-lyrics"><ChapterList track={current} size="small" /></div> : <MusicLyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
     </aside>
   )
 }

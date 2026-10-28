@@ -118,6 +118,7 @@ async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise
     throw new NotPlayable(json?.playabilityStatus?.reason || `Not playable (${status ?? 'no answer'})`)
   }
   const formats: any[] = json?.streamingData?.adaptiveFormats ?? []
+  noteHeights(id, formats.filter((f) => typeof f.url === 'string' && String(f.mimeType ?? '').startsWith('video/')).map((f) => Number(f.height ?? 0)))
   const rate = (f: any): number => Number(f.averageBitrate ?? f.bitrate ?? 0)
   const seconds = Number(json?.videoDetails?.lengthSeconds) || undefined
   let pick: any
@@ -149,6 +150,21 @@ async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise
     client: 'VISIONOS (quick)',
     expires: Math.min(expire || Infinity, Date.now() + 3 * 3600_000) - 60_000
   }
+}
+
+/** The video heights each episode offers, learned while finding its sound. */
+const heights = new Map<string, number[]>()
+
+function noteHeights(id: string, list: number[]): void {
+  const clean = [...new Set(list.filter((h) => h > 0))].sort((a, b) => a - b)
+  if (clean.length) heights.set(id, clean)
+}
+
+/** The qualities to offer for an episode's video (lowest first). */
+export async function videoQualities(id: string): Promise<number[]> {
+  if (!heights.has(id)) await resolve(id).catch(() => undefined)
+  if (!heights.has(id)) await resolve(`${id}#v720`).catch(() => undefined)
+  return heights.get(id) ?? []
 }
 
 /** What to get: the audio, or the video picture (without sound) up to a height. */
@@ -228,6 +244,7 @@ async function resolveFresh(key: string): Promise<Resolved> {
       const status = info.playability_status?.status
       if (status && status !== 'OK') continue
       const formats = info.streaming_data?.adaptive_formats ?? []
+      if (!heights.has(id)) noteHeights(id, formats.filter((f) => f.has_video && !f.has_audio).map((f) => f.height ?? 0))
       const format =
         want.kind === 'video'
           ? pickVideo(

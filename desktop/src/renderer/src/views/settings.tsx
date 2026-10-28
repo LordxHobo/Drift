@@ -6,6 +6,7 @@ import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
 import { editProfileStore } from './editProfile'
+import { bestQuality } from '../video'
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }): JSX.Element {
   return (
@@ -99,13 +100,17 @@ export function SettingsPage(): JSX.Element {
           <Toggle on={s.podcastVideo} onChange={(v) => setSettings({ podcastVideo: v })} label="Show video for podcasts" />
         </Row>
         {s.podcastVideo && (
-          <Row title="Video quality">
+          <Row title="Video quality" detail="The most to use. You can also change it on the video itself.">
             <div className="seg">
-              {[480, 720, 1080].map((q) => (
-                <button key={q} className={(s.videoQuality || 720) === q ? 'on' : ''} onClick={() => setSettings({ videoQuality: q })}>
-                  {q}p
-                </button>
-              ))}
+              {[360, 480, 720, 1080, bestQuality].map((q) => {
+                const v = s.videoQuality || 720
+                const on = q === bestQuality ? v > 1080 : v === q || (q === 360 && v < 360)
+                return (
+                  <button key={q} className={on ? 'on' : ''} onClick={() => setSettings({ videoQuality: q })}>
+                    {q === bestQuality ? 'Best' : `${q}p`}
+                  </button>
+                )
+              })}
             </div>
           </Row>
         )}

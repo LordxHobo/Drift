@@ -1,5 +1,5 @@
 // Regular YouTube search (not YouTube Music), used to find songs that aren't on YouTube Music.
-import type { PodcastChannel, Track } from '@shared/types'
+import type { Chapter, PodcastChannel, Track } from '@shared/types'
 import { appleEpoch } from '@shared/types'
 import { dig, parseDuration, text } from './ytmusic'
 
@@ -265,4 +265,118 @@ export async function videoFromLink(link: string): Promise<Track | null> {
   if (res.status !== 200) return null
   const o = (await res.json()) as { title: string; author_name?: string }
   return { id, title: o.title, artist: o.author_name ?? 'YouTube', duration: null, artworkURL: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`, podcast: true }
+}
+
+// MARK: Chapters
+
+/** "1:02:03" or "12:34" → seconds. */
+function clock(s: string): number | undefined {
+  const parts = s.split(':').map(Number)
+  if (parts.length < 2 || parts.length > 3 || parts.some((n) => !Number.isFinite(n))) return undefined
+  // Seconds (and minutes, when there are hours) stay under 60.
+  if (parts.slice(1).some((n) => n >= 60)) return undefined
+  return parts.reduce((total, n) => total * 60 + n, 0)
+}
+
+const thumbOf = (node: J): string | undefined => {
+  const list = dig(node, ['thumbnail', 'thumbnails'])
+  return Array.isArray(list) ? fixURL(list.at(-1)?.url) ?? undefined : undefined
+}
+
+/** The chapters YouTube shows on the progress bar (written by the creator, or made automatically). */
+function playerBarChapters(json: J): Chapter[] {
+  const found: Chapter[][] = []
+  const visit = (node: J): void => {
+    if (Array.isArray(node)) return node.forEach(visit)
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node.chapters) && node.chapters.some((c: J) => c?.chapterRenderer)) {
+      found.push(
+        node.chapters
+          .map((c: J) => c?.chapterRenderer)
+          .filter(Boolean)
+          .map((c: J) => ({ title: viewText(c.title) ?? '', start: Number(c.timeRangeStartMillis ?? 0) / 1000, thumbnail: thumbOf(c) }))
+      )
+      return
+    }
+    for (const v of Object.values(node)) visit(v)
+  }
+  visit(json)
+  return found.sort((a, b) => b.length - a.length)[0] ?? []
+}
+
+/** The chapters list in the description panel ("In this video"). */
+function panelChapters(json: J): Chapter[] {
+  const out: Chapter[] = []
+  for (const panel of json?.engagementPanels ?? []) {
+    const p = panel?.engagementPanelSectionListRenderer
+    const id = String(p?.targetId ?? p?.panelIdentifier ?? '')
+    if (!/chapters/i.test(id) || /key-moments|auto/i.test(id)) continue
+    const visit = (node: J): void => {
+      if (Array.isArray(node)) return node.forEach(visit)
+      if (!node || typeof node !== 'object') return
+      const m = node.macroMarkersListItemRenderer
+      if (m) {
+        const start = clock(viewText(m.timeDescription) ?? '')
+        if (start !== undefined) out.push({ title: viewText(m.title) ?? '', start, thumbnail: thumbOf(m) })
+        return
+      }
+      for (const v of Object.values(node)) visit(v)
+    }
+    visit(p)
+  }
+  return out
+}
+
+/** Timestamps in the description ("0:00 Intro"), the way YouTube makes chapters from them. */
+export function descriptionChapters(description: string): Chapter[] {
+  const out: Chapter[] = []
+  const stamp = /(?:^|[\s([])((?:\d{1,2}:)?\d{1,2}:\d{2})(?=$|[\s)\]:.,-])/
+  for (const raw of description.split('\n')) {
+    const line = raw.trim()
+    const m = stamp.exec(line)
+    if (!m) continue
+    const start = clock(m[1])
+    if (start === undefined) continue
+    const title = (line.slice(0, m.index) + ' ' + line.slice(m.index + m[0].length))
+      .replace(/^[\s\-–—:|•·.)\]]+|[\s\-–—:|•·.([]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+    out.push({ title: title || `Part ${out.length + 1}`, start })
+  }
+  // Like YouTube: starts at 0:00, at least three, in order.
+  if (out.length < 3 || out[0].start !== 0) return []
+  for (let i = 1; i < out.length; i++) if (out[i].start <= out[i - 1].start) return []
+  return out
+}
+
+function descriptionOf(json: J): string {
+  let best = ''
+  const visit = (node: J): void => {
+    if (Array.isArray(node)) return node.forEach(visit)
+    if (!node || typeof node !== 'object') return
+    const r = node.videoSecondaryInfoRenderer
+    if (r) {
+      const s = r.attributedDescription?.content ?? viewText(r.description) ?? ''
+      if (s.length > best.length) best = s
+      return
+    }
+    for (const v of Object.values(node)) visit(v)
+  }
+  visit(json)
+  return best
+}
+
+const chapterCache = new Map<string, Chapter[]>()
+
+/** An episode's chapters: from YouTube, or from the timestamps in its description. */
+export async function chapters(id: string): Promise<Chapter[]> {
+  const known = chapterCache.get(id)
+  if (known) return known
+  const json = await post('next', { videoId: id, contentCheckOk: true, racyCheckOk: true })
+  let list = playerBarChapters(json)
+  if (list.length < 2) list = panelChapters(json)
+  if (list.length < 2) list = descriptionChapters(descriptionOf(json))
+  list = list.filter((c, i) => i === 0 || c.start > list[i - 1].start).map((c, i) => ({ ...c, title: c.title || `Chapter ${i + 1}` }))
+  chapterCache.set(id, list)
+  return list
 }

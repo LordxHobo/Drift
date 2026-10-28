@@ -3,6 +3,9 @@
 import { settingsStore, Store, useStore } from './state'
 import { audioElement, playerStore } from './player'
 
+/** "Best" quality: the sharpest the episode has. */
+export const bestQuality = 4320
+
 export const videoEl = document.createElement('video')
 videoEl.muted = true
 videoEl.playsInline = true

@@ -4,10 +4,13 @@ import { Icon } from './icons'
 import { cycleRepeat, next, previous, seek, setShuffle, setVolume, toggle, toggleMute, usePlayer, usePosition } from './player'
 import { formatTime } from './util'
 import { Spinner } from './ui'
+import { chapterMask, useChapterMarks } from './chapters'
 
 /** A draggable bar (song position or volume). */
-export function Slider({ value, max, onChange, onCommit, label, className }: {
+export function Slider({ value, max, onChange, onCommit, label, className, mask }: {
   value: number; max: number; onChange?: (v: number) => void; onCommit: (v: number) => void; label: string; className?: string
+  /** CSS mask for the bar (chapter gaps). */
+  mask?: string
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
@@ -54,7 +57,7 @@ export function Slider({ value, max, onChange, onCommit, label, className }: {
       }}
       onPointerCancel={() => setDrag(null)}
     >
-      <div className="slider-track">
+      <div className="slider-track" style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}>
         <div className="slider-fill" style={{ width: `${pct}%` }} />
       </div>
       <div className="slider-knob" style={{ left: `${pct}%` }} />
@@ -66,13 +69,15 @@ export function Progress({ showTimes = true, className }: { showTimes?: boolean;
   const p = usePlayer()
   const position = usePosition()
   const [preview, setPreview] = useState<number | null>(null)
+  const marks = useChapterMarks()
   return (
     <div className={`progress ${className ?? ''}`}>
       {showTimes && <span className="time">{formatTime(preview ?? position)}</span>}
       <Slider
         value={position}
         max={p.duration}
-        label="Song position"
+        label={p.current?.podcast ? 'Episode position' : 'Song position'}
+        mask={chapterMask(marks, p.duration)}
         onChange={setPreview}
         onCommit={(v) => {
           setPreview(null)
