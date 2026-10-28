@@ -118,6 +118,9 @@ export function ImportDialog(): JSX.Element | null {
             </div>
             <div className="set-detail">Into “{s.listName}”.{s.foundAgain ? ` ${plural(s.foundAgain, 'more song')} found on the second look.` : ''}</div>
             {s.hitLimit && <div className="set-detail">Only the first 100 songs could be read from Spotify (albums, and playlists Spotify wouldn’t open fully).</div>}
+            {!s.hitLimit && s.spotifyTotal != null && s.spotifyTotal > s.total && (
+              <div className="set-detail">Spotify gave {s.total} of the playlist’s {s.spotifyTotal} songs. Importing again may get the rest.</div>
+            )}
             {s.missing.length > 0 && (
               <>
                 <div className="import-missing-head">

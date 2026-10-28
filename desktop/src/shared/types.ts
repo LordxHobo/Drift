@@ -242,6 +242,8 @@ export interface ImportState {
   playlistId?: string
   /** Only the first 100 songs could be read (albums, or playlists when the full page didn't work). */
   hitLimit?: boolean
+  /** How many songs Spotify says the playlist has, when fewer could be read. */
+  spotifyTotal?: number
   startedAt?: number
   /** When matching started (for the time estimate). */
   matchStart?: number

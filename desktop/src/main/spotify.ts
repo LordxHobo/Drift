@@ -1,5 +1,7 @@
 // Importing a public Spotify playlist or album (the same approach as the phone's importer).
-import { BrowserWindow, net, session } from 'electron'
+import { app, BrowserWindow, net, session } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { ImportState, MissingSong, Track } from '@shared/types'
 import * as store from './store'
 import { mainArtist, normalize, searchSongs } from './ytmusic'
@@ -24,9 +26,11 @@ const embedLimit = 100
 
 class ImportError extends Error {}
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
 // MARK: Reading the list
 
-async function read(link: string): Promise<SpotifyList> {
+async function read(link: string): Promise<SpotifyList & { total?: number; limited?: boolean }> {
   let text = link.trim()
   // Share menus sometimes add text around the link.
   const url = /https?:\/\/\S+/.exec(text)
@@ -47,7 +51,8 @@ async function read(link: string): Promise<SpotifyList> {
     const full = await readFullPlaylist(id).catch(() => undefined)
     if (full?.tracks.length) return full
   }
-  return readEmbed(kind, id)
+  const embed = await readEmbed(kind, id)
+  return { ...embed, limited: embed.tracks.length >= embedLimit - 5 }
 }
 
 /** Public playlists and albums from Spotify's embed page (no account needed). */
@@ -99,37 +104,79 @@ function findEntity(html: string): any {
   return undefined
 }
 
+/** What Spotify's page answers for a playlist (any of its playlist requests). */
+interface Page {
+  name?: string
+  total?: number
+  /** Songs from `offset` on; null for things that aren't songs (episodes, local files). */
+  items: (SpotifyTrack | null)[]
+}
+
+function parsePage(json: any): Page | undefined {
+  const pl = json?.data?.playlistV2 ?? json?.data?.playlist
+  if (!pl?.content || !Array.isArray(pl.content.items)) return undefined
+  const items = pl.content.items.map((it: any): SpotifyTrack | null => {
+    const d = it?.itemV2?.data ?? it?.item?.data
+    if (!d?.name || (d.__typename && d.__typename !== 'Track')) return null
+    const artists = (d.artists?.items ?? []).map((a: any) => a?.profile?.name).filter(Boolean)
+    const ms = d.trackDuration?.totalMilliseconds ?? d.duration?.totalMilliseconds ?? 0
+    return { title: d.name, artist: artists[0] ?? '', duration: ms > 0 ? ms / 1000 : undefined }
+  })
+  return { name: pl.name ?? undefined, total: typeof pl.content.totalCount === 'number' ? pl.content.totalCount : undefined, items }
+}
+
+interface SpotifyRequest {
+  url: string
+  body?: string
+  headers: Record<string, string>
+  op: string
+}
+
+function operation(url: string, body?: string): string {
+  try {
+    if (body) return String(JSON.parse(body).operationName ?? '')
+  } catch {
+    // not JSON
+  }
+  try {
+    return new URL(url).searchParams.get('operationName') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function offsetOf(r: { url: string; body?: string }): number {
+  try {
+    const v = r.body ? JSON.parse(r.body).variables : JSON.parse(new URL(r.url).searchParams.get('variables') ?? '{}')
+    return Number(v?.offset) || 0
+  } catch {
+    return 0
+  }
+}
+
+/** A short record of the last import's reading, for finding out what went wrong. */
+const log: string[] = []
+const note = (line: string): void => {
+  log.push(`${new Date().toISOString().slice(11, 19)} ${line}`)
+}
+function saveLog(): void {
+  try {
+    writeFileSync(join(app.getPath('userData'), 'spotify-import.log'), log.join('\n') + '\n')
+  } catch {
+    // not important
+  }
+}
+
 /**
- * A whole playlist of any length: Spotify's page is opened in a hidden window, its own request for
- * the song list is noted, then repeated inside the page for each next page of songs. No account or
- * developer keys needed.
+ * A whole playlist of any length. Spotify's page is opened in a hidden window and everything it
+ * loads about the playlist is read. Missing songs are then asked for with the page's own request
+ * (page by page), and if that still leaves gaps, the page is scrolled so it loads the rest itself.
+ * No account or developer keys needed.
  */
-async function readFullPlaylist(id: string): Promise<SpotifyList> {
+export async function readFullPlaylist(id: string): Promise<SpotifyList & { total?: number }> {
   const partition = `spotify-import-${Date.now()}` // in memory only, gone afterwards
   const ses = session.fromPartition(partition)
   ses.setUserAgent(chromeUA)
-  const pending = new Map<number, { url: string; body?: string }>()
-  let captured: { url: string; body?: string; headers: Record<string, string> } | undefined
-  let ready: () => void = () => {}
-  const gotRequest = new Promise<void>((r) => (ready = r))
-  const filter = { urls: ['https://*.spotify.com/*'] }
-
-  ses.webRequest.onBeforeRequest(filter, (d, cb) => {
-    if (!captured && d.url.includes('pathfinder')) {
-      const body = d.uploadData?.map((u) => (u.bytes ? Buffer.from(u.bytes).toString('utf8') : '')).join('') || undefined
-      if (/fetchPlaylist/.test(`${body ?? ''} ${d.url}`)) pending.set(d.id, { url: d.url, body })
-    }
-    cb({})
-  })
-  ses.webRequest.onBeforeSendHeaders(filter, (d, cb) => {
-    const p = pending.get(d.id)
-    if (p && !captured) {
-      captured = { ...p, headers: d.requestHeaders }
-      ready()
-    }
-    cb({ requestHeaders: d.requestHeaders })
-  })
-
   const win = new BrowserWindow({
     show: false,
     width: 1280,
@@ -138,74 +185,186 @@ async function readFullPlaylist(id: string): Promise<SpotifyList> {
   })
   win.webContents.setAudioMuted(true)
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  let name: string | undefined
+  let total: number | undefined
+  const songs = new Map<number, SpotifyTrack | null>()
+  const requests: SpotifyRequest[] = []
+  const watched = new Map<string, SpotifyRequest>()
+  let changed = 0
+  let firstPage: () => void = () => {}
+  const gotFirst = new Promise<void>((r) => (firstPage = r))
+
+  const add = (page: Page, offset: number, from: string): number => {
+    name ??= page.name
+    if (page.total != null) total = page.total
+    let fresh = 0
+    page.items.forEach((t, i) => {
+      if (!songs.has(offset + i)) fresh++
+      songs.set(offset + i, t)
+    })
+    if (fresh) changed = Date.now()
+    note(`${from}: offset ${offset}, ${page.items.length} items (${fresh} new), total ${page.total ?? '?'}`)
+    return fresh
+  }
+  const missingFrom = (): number => {
+    for (let i = 0; i < (total ?? 0); i++) if (!songs.has(i)) return i
+    return -1
+  }
+
+  // Watch the page's own requests and answers (Chrome's developer tools protocol, inside Drift).
+  const dbg = win.webContents.debugger
+  log.length = 0
+  try {
+    // The window needs a page before the tools answer (asking earlier never returns).
+    await win.loadURL('about:blank')
+    dbg.attach('1.3')
+    await Promise.race([
+      dbg.sendCommand('Network.enable', { maxPostDataSize: 65536 }),
+      sleep(5000).then(() => {
+        throw new Error('no answer')
+      })
+    ])
+  } catch (e) {
+    note(`debugger unavailable: ${e instanceof Error ? e.message : e}`)
+  }
+  dbg.on('message', (_e, method, params: any) => {
+    if (method === 'Network.requestWillBeSent') {
+      const r = params.request
+      if (!String(r?.url ?? '').includes('pathfinder')) return
+      const body: string | undefined = r.postData ?? (Array.isArray(r.postDataEntries) ? r.postDataEntries.map((e: any) => (e.bytes ? Buffer.from(e.bytes, 'base64').toString('utf8') : '')).join('') : undefined)
+      const op = operation(r.url, body)
+      if (!/playlist/i.test(op)) return
+      const req = { url: r.url, body, headers: r.headers ?? {}, op }
+      watched.set(params.requestId, req)
+      requests.push(req)
+      note(`page asked: ${op}`)
+    } else if (method === 'Network.loadingFinished') {
+      const req = watched.get(params.requestId)
+      if (!req) return
+      watched.delete(params.requestId)
+      dbg
+        .sendCommand('Network.getResponseBody', { requestId: params.requestId })
+        .then((res: any) => {
+          const text = res.base64Encoded ? Buffer.from(res.body, 'base64').toString('utf8') : res.body
+          const page = parsePage(JSON.parse(text))
+          if (page) {
+            add(page, offsetOf(req), `page got ${req.op}`)
+            firstPage()
+          } else {
+            note(`page got ${req.op}: no song list`)
+          }
+        })
+        .catch((e: unknown) => note(`couldn't read answer to ${req.op}: ${e instanceof Error ? e.message : e}`))
+    }
+  })
+
   try {
     void win.loadURL(`https://open.spotify.com/playlist/${id}`)
-    await Promise.race([gotRequest, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25_000))])
-    const result = await win.webContents.executeJavaScript(fetchAllScript(captured!), true)
-    const parsed = JSON.parse(result) as { name?: string; tracks?: { t: string; a: string; ms: number }[] }
-    const tracks = (parsed.tracks ?? []).map((t) => ({ title: t.t, artist: t.a, duration: t.ms > 0 ? t.ms / 1000 : undefined }))
-    return { name: parsed.name ?? 'Spotify import', tracks }
+    await Promise.race([gotFirst, new Promise((_, reject) => setTimeout(() => reject(new Error('Spotify’s page didn’t load the playlist')), 25_000))])
+    await sleep(1500) // let the page finish its first few requests
+
+    // 1. Ask for the missing parts with the page's own request (the one that returned songs).
+    const usable = requests.filter((r) => !/metadata/i.test(r.op))
+    const best = usable.find((r) => /contents/i.test(r.op)) ?? usable.find((r) => r.op === 'fetchPlaylist') ?? usable[0]
+    if (best) {
+      let failures = 0
+      const sizes = [100, 50, 25]
+      let size = 0
+      while (total != null && failures < 6) {
+        const at = missingFrom()
+        if (at < 0) break
+        const limit = sizes[Math.min(size, sizes.length - 1)]
+        const answer = await win.webContents.executeJavaScript(pageScript(best, at, limit), true).catch((e: unknown) => ({ error: String(e) }))
+        const page = answer?.json ? parsePage(answer.json) : undefined
+        if (page && page.items.length) {
+          add(page, at, `asked ${best.op} (limit ${limit})`)
+          failures = 0
+        } else {
+          note(`asked ${best.op} at ${at} (limit ${limit}): ${answer?.status ?? ''} ${answer?.error ?? JSON.stringify(answer?.json)?.slice(0, 300) ?? 'no songs'}`)
+          failures++
+          size++ // try smaller pages
+          await sleep(800)
+        }
+      }
+    } else {
+      note('no usable request seen')
+    }
+
+    // 2. Still gaps: scroll the page so it loads the rest on its own.
+    if (total != null && missingFrom() >= 0) {
+      note(`scrolling for the rest (${songs.size} of ${total})`)
+      const until = Date.now() + 60_000
+      changed = Date.now()
+      while (missingFrom() >= 0 && Date.now() < until && Date.now() - changed < 8000) {
+        await win.webContents.executeJavaScript(scrollScript, true).catch(() => undefined)
+        await sleep(700)
+      }
+    }
+
+    const tracks = [...songs.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t).filter((t): t is SpotifyTrack => !!t)
+    note(`done: ${songs.size} of ${total ?? '?'} places, ${tracks.length} songs`)
+    return { name: name ?? 'Spotify import', tracks, total: total == null ? undefined : songs.size < total ? total : undefined }
+  } catch (e) {
+    note(`failed: ${e instanceof Error ? e.message : e}`)
+    throw e
   } finally {
+    saveLog()
+    try {
+      dbg.detach()
+    } catch {
+      // already gone
+    }
     win.destroy()
     void ses.clearStorageData().catch(() => undefined)
   }
 }
 
-/** Pages through the playlist with the captured request (runs inside Spotify's page). */
-function fetchAllScript(req: { url: string; body?: string; headers: Record<string, string> }): string {
+/** One page of the playlist with the page's own request (runs inside Spotify's page). */
+function pageScript(req: SpotifyRequest, offset: number, limit: number): string {
   // Headers the page isn't allowed to set itself are left out (the browser adds them).
   const headers: Record<string, string> = {}
   for (const [k, v] of Object.entries(req.headers)) {
-    if (!/^(host|origin|referer|cookie|connection|content-length|accept-encoding|user-agent|sec-|proxy-)/i.test(k)) headers[k] = v
+    if (!/^(host|origin|referer|cookie|connection|content-length|accept-encoding|user-agent|sec-|proxy-|:)/i.test(k)) headers[k] = v
   }
   const r = { url: req.url, body: req.body ?? null, headers }
   return `(async () => {
     const r = ${JSON.stringify(r)};
-    const build = (offset, limit) => {
-      if (r.body) {
-        const b = JSON.parse(r.body);
-        b.variables = Object.assign({}, b.variables, { offset, limit });
-        return [r.url, { method: 'POST', headers: r.headers, body: JSON.stringify(b) }];
-      }
+    let url = r.url, init;
+    if (r.body) {
+      const b = JSON.parse(r.body);
+      b.variables = Object.assign({}, b.variables, { offset: ${offset}, limit: ${limit} });
+      init = { method: 'POST', headers: r.headers, body: JSON.stringify(b), credentials: 'include' };
+    } else {
       const u = new URL(r.url);
       const v = JSON.parse(u.searchParams.get('variables') || '{}');
-      v.offset = offset; v.limit = limit;
+      v.offset = ${offset}; v.limit = ${limit};
       u.searchParams.set('variables', JSON.stringify(v));
-      return [u.toString(), { method: 'GET', headers: r.headers }];
-    };
-    let name = null, total = null, offset = 0, limit = 100;
-    const tracks = [];
-    for (let guard = 0; guard < 200; guard++) {
-      let j = null;
-      try {
-        const [url, init] = build(offset, limit);
-        const res = await fetch(url, init);
-        j = await res.json();
-      } catch (e) { j = null; }
-      const pl = j && j.data && (j.data.playlistV2 || j.data.playlist);
-      if (!pl || !pl.content) {
-        if (limit !== 25 && offset === 0) { limit = 25; continue; }
-        break;
-      }
-      if (!name && pl.name) name = pl.name;
-      total = pl.content.totalCount;
-      const items = pl.content.items || [];
-      for (const it of items) {
-        const d = it && it.itemV2 && it.itemV2.data;
-        if (!d || !d.name || (d.__typename && d.__typename !== 'Track')) continue;
-        const artists = ((d.artists && d.artists.items) || []).map(a => a && a.profile && a.profile.name).filter(Boolean);
-        tracks.push({ t: d.name, a: artists[0] || '', ms: (d.trackDuration && d.trackDuration.totalMilliseconds) || 0 });
-      }
-      offset += items.length;
-      if (items.length === 0 || (total != null && offset >= total)) break;
+      url = u.toString();
+      init = { method: 'GET', headers: r.headers, credentials: 'include' };
     }
-    return JSON.stringify({ name, total, tracks });
+    try {
+      const res = await fetch(url, init);
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch (e) {}
+      return { status: res.status, json, error: json ? undefined : text.slice(0, 200) };
+    } catch (e) {
+      return { error: String(e) };
+    }
   })()`
 }
 
-// MARK: Finding each song (same rules as the phone's SongMatcher)
+/** Scrolls whatever scrolls on Spotify's page to the bottom (it loads more songs as you go). */
+const scrollScript = `(() => {
+  const all = [document.scrollingElement, ...document.querySelectorAll('*')];
+  for (const el of all) {
+    if (el && el.scrollHeight > el.clientHeight + 200 && el.clientHeight > 200) el.scrollTop = el.scrollTop + el.clientHeight * 0.9;
+  }
+  return true;
+})()`
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+// MARK: Finding each song (same rules as the phone's SongMatcher)
 
 /** Lowercase letters and digits only, keeping words in brackets (for whole video titles). */
 function normalizeLoose(s: string): string {
@@ -329,7 +488,7 @@ export function getImportState(): ImportState {
 
 export function clearImport(): void {
   if (state.phase === 'reading' || state.phase === 'matching') return
-  set({ phase: 'idle', total: 0, processed: 0, missing: [], listName: undefined, playlistId: undefined, error: undefined, hitLimit: false, foundAgain: undefined })
+  set({ phase: 'idle', total: 0, processed: 0, missing: [], listName: undefined, playlistId: undefined, error: undefined, hitLimit: false, spotifyTotal: undefined, foundAgain: undefined })
 }
 
 /** Matches in parallel (6 at a time) and keeps the original order. */
@@ -349,12 +508,12 @@ async function matchAll(tracks: SpotifyTrack[], onEach: () => void): Promise<(Tr
 
 export async function startImport(link: string): Promise<void> {
   if (state.phase === 'reading' || state.phase === 'matching') return
-  set({ phase: 'reading', total: 0, processed: 0, missing: [], listName: undefined, playlistId: undefined, error: undefined, hitLimit: false, startedAt: Date.now(), foundAgain: undefined })
+  set({ phase: 'reading', total: 0, processed: 0, missing: [], listName: undefined, playlistId: undefined, error: undefined, hitLimit: false, spotifyTotal: undefined, startedAt: Date.now(), foundAgain: undefined })
   try {
     const list = await read(link)
     const local = localIndex()
     const id = store.createPlaylist(list.name, [])
-    set({ phase: 'matching', listName: list.name, total: list.tracks.length, hitLimit: list.tracks.length === embedLimit, playlistId: id, matchStart: Date.now() })
+    set({ phase: 'matching', listName: list.name, total: list.tracks.length, hitLimit: !!list.limited, spotifyTotal: list.total, playlistId: id, matchStart: Date.now() })
 
     // Saved in batches of 30, so a big import keeps what it found if Drift is closed.
     const missing: MissingSong[] = []
