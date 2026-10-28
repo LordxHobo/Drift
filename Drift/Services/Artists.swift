@@ -42,6 +42,17 @@ struct AlbumPage {
     var artist: String
     var thumbnail: URL?
     var tracks: [Track]
+    /// The album is marked explicit.
+    var explicit = false
+    /// Other editions (clean/explicit, deluxe…), from "Other versions" on YouTube Music.
+    var otherVersions: [OtherVersion] = []
+    /// Opened the explicit edition instead of this clean one (its browse ID).
+    var cleanID: String?
+}
+
+struct OtherVersion: Hashable {
+    let ref: AlbumRef
+    let explicit: Bool
 }
 
 /// YouTube Music artist pages, discographies and albums.
@@ -156,7 +167,29 @@ enum Artists {
             if t.artworkURL == nil { t.artworkURL = art }
             tracks.append(t)
         }
-        return AlbumPage(title: title, subtitle: subtitle, artist: artist, thumbnail: art, tracks: tracks)
+        var page = AlbumPage(title: title, subtitle: subtitle, artist: artist, thumbnail: art, tracks: tracks)
+        page.explicit = (header.map { YTMusic.isExplicit($0) } ?? false) || tracks.contains { $0.explicit == true }
+        walk(json, key: "musicTwoRowItemRenderer") { r in
+            guard let other = albumRef(r), other.id != ref.id,
+                  !page.otherVersions.contains(where: { $0.ref.id == other.id }) else { return }
+            page.otherVersions.append(OtherVersion(ref: other, explicit: YTMusic.isExplicit(r)))
+        }
+        return page
+    }
+
+    /// The explicit edition of a clean album, when YouTube Music lists one under "Other versions".
+    static func explicitEdition(of page: AlbumPage) async -> (ref: AlbumRef, page: AlbumPage)? {
+        guard !page.explicit else { return nil }
+        let want = SongMatcher.normalize(page.title)
+        func rank(_ o: OtherVersion) -> Int {
+            o.ref.title.lowercased() == page.title.lowercased() ? 2 : SongMatcher.normalize(o.ref.title) == want ? 1 : 0
+        }
+        let candidates = page.otherVersions.filter(\.explicit).sorted { rank($0) > rank($1) }
+        for c in candidates.prefix(3) {
+            guard let other = try? await AlbumCache.shared.page(c.ref) else { continue }
+            if other.explicit || other.tracks.contains(where: { $0.explicit == true }) { return (c.ref, other) }
+        }
+        return nil
     }
 
     // MARK: Parsing helpers
@@ -220,4 +253,24 @@ func resizedImage(_ url: URL?, size: Int) -> URL? {
     guard s.contains("googleusercontent.com") || s.contains("ggpht.com") else { return url }
     let resized = s.replacingOccurrences(of: "=w\\d+-h\\d+", with: "=w\(size)-h\(size)", options: .regularExpression)
     return URL(string: resized) ?? url
+}
+
+/// Album pages seen lately (a clean album's songs all look at the same pages).
+actor AlbumCache {
+    static let shared = AlbumCache()
+    private var pages: [String: AlbumPage] = [:]
+    private var order: [String] = []
+
+    func page(_ ref: AlbumRef) async throws -> AlbumPage {
+        if let known = pages[ref.id] { return known }
+        let page = try await Artists.album(ref, artistName: "")
+        pages[ref.id] = page
+        order.append(ref.id)
+        if order.count > 60 { pages[order.removeFirst()] = nil }
+        return page
+    }
+
+    func page(id: String) async throws -> AlbumPage {
+        try await page(AlbumRef(id: id, title: "", subtitle: "", thumbnail: nil))
+    }
 }

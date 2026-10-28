@@ -301,6 +301,8 @@ struct AlbumView: View {
     let artist: String
     @State private var page: AlbumPage?
     @State private var failed = false
+    /// Show the album asked for, even when it's clean and an explicit edition exists.
+    @State private var exact = false
     @State private var saved = false
     private var player: Player { .shared }
     private var library: Library { .shared }
@@ -380,6 +382,20 @@ struct AlbumView: View {
                     }
                 }
 
+                if page?.cleanID != nil {
+                    HStack(spacing: 8) {
+                        ExplicitMark()
+                        Text("Showing the explicit version.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                        Button("Show clean") {
+                            page = nil
+                            exact = true
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                    }
+                }
+
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                         AlbumTrackRow(number: i + 1, track: t, albumArtist: page?.artist ?? artist) {
@@ -396,11 +412,17 @@ struct AlbumView: View {
         .background(Theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
-        .task {
+        .task(id: exact) {
             guard page == nil else { return }
             do {
-                page = try await Artists.album(album, artistName: artist)
-                if let t = page?.tracks { player.prefetch(Array(t.prefix(2))) }
+                var loaded = try await Artists.album(album, artistName: artist)
+                // A clean album opens as its explicit edition (when that setting is on and there is one).
+                if !exact, AppSettings.shared.preferExplicit, let edition = await Artists.explicitEdition(of: loaded) {
+                    loaded = edition.page
+                    loaded.cleanID = album.id
+                }
+                page = loaded
+                player.prefetch(Array(loaded.tracks.prefix(2)))
             } catch {
                 failed = true
             }

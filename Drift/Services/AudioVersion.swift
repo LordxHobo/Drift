@@ -79,6 +79,8 @@ actor AudioVersion {
     /// Which video IDs are explicit, as learned along the way.
     private final class Known: @unchecked Sendable {
         var explicit: [String: Bool] = [:]
+        /// Video ID → its album's browse ID.
+        var albums: [String: String] = [:]
     }
 
     /// The album version (if wanted), then its explicit version (if wanted and it's clean).
@@ -104,9 +106,51 @@ actor AudioVersion {
     /// The explicit version of a song when the one about to play is clean.
     /// `onlySongs`: leave music videos alone (official audio is off).
     private static func explicitVersion(_ track: Track, playing playID: String, _ known: Known, onlySongs: Bool) async throws -> String? {
-        if known.explicit[playID] == true || track.explicit == true { return nil }
+        if known.explicit[playID] == true || (track.explicit == true && playID == track.id) { return nil }
         let title = YTMusic.withoutCleanTag(track.title)
         guard !title.isEmpty else { return nil }
+
+        // 1. The album route: the song's own album, its explicit edition, then the same song there.
+        //    Exact, and cheap when a whole album plays (its pages are kept for a while).
+        var albumID = known.albums[playID]
+        if albumID == nil, let json = try? await YTMusic.post("next", ["videoId": playID, "isAudioOnly": true]) {
+            var own: [String: Any]?
+            walk(json) { d in
+                if own == nil, let r = d["playlistPanelVideoRenderer"] as? [String: Any], r["videoId"] as? String == playID {
+                    own = r
+                }
+            }
+            if let own {
+                known.explicit[playID] = YTMusic.isExplicit(own)
+                albumID = albumIdOf(own)
+            }
+        }
+        if known.explicit[playID] == true { return nil }
+        if let albumID, let page = try? await AlbumCache.shared.page(id: albumID) {
+            let mine = page.tracks.firstIndex { $0.id == playID }
+            if let mine, page.tracks[mine].explicit == true {
+                known.explicit[playID] = true
+                return nil
+            }
+            if let edition = await Artists.explicitEdition(of: page)?.page {
+                var ref = track
+                ref.title = title
+                if let mine {
+                    ref.title = page.tracks[mine].title
+                    ref.duration = page.tracks[mine].duration ?? track.duration
+                }
+                // Same place on the album first, then by name.
+                var hit: Track?
+                if let mine, edition.tracks.indices.contains(mine), YTMusic.sameSong(ref, edition.tracks[mine], maxDiff: 12) {
+                    hit = edition.tracks[mine]
+                } else {
+                    hit = edition.tracks.first { YTMusic.sameSong(ref, $0, maxDiff: 12) }
+                }
+                if let hit, hit.id != playID { return hit.id }
+            }
+        }
+
+        // 2. Searching for the song and taking the explicit one.
         let json = try await YTMusic.post("search", ["query": "\(title) \(LyricsService.mainArtist(track.artist))",
                                                      "params": songsParams])
         var rows: [(t: Track, song: Bool)] = []
@@ -146,7 +190,11 @@ actor AudioVersion {
         ]), let first = firstQueueItem(json) {
             var candidates: [[String: Any]] = []
             collect(first, into: &candidates)
-            for c in candidates { if let v = c["videoId"] as? String { known.explicit[v] = YTMusic.isExplicit(c) } }
+            for c in candidates {
+                guard let v = c["videoId"] as? String else { continue }
+                known.explicit[v] = YTMusic.isExplicit(c)
+                if let album = albumIdOf(c) { known.albums[v] = album }
+            }
             let types = candidates.map { ($0["videoId"] as? String, videoType($0)) }
             ownType = types.first(where: { $0.0 == id })?.1
             let short = (ownType ?? "unknown").replacingOccurrences(of: "MUSIC_VIDEO_TYPE_", with: "")
@@ -188,6 +236,17 @@ actor AudioVersion {
             for k in d.keys.sorted() { if let v = firstValue(d[k]!, key) { return v } }
         } else if let a = node as? [Any] {
             for v in a { if let found = firstValue(v, key) { return found } }
+        }
+        return nil
+    }
+
+    /// The album a queue entry belongs to (its "Go to album" link in the byline).
+    private static func albumIdOf(_ node: Any) -> String? {
+        if let d = node as? [String: Any] {
+            if let id = (d["browseEndpoint"] as? [String: Any])?["browseId"] as? String, id.hasPrefix("MPRE") { return id }
+            for (k, v) in d where k != "menu" { if let id = albumIdOf(v) { return id } }
+        } else if let a = node as? [Any] {
+            for v in a { if let id = albumIdOf(v) { return id } }
         }
         return nil
     }

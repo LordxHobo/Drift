@@ -37,9 +37,26 @@ enum YTMusic {
         return try JSONSerialization.jsonObject(with: data)
     }
 
+    /// "Videos" filter: music videos.
+    private static let videosParams = "EgWKAQIQAWoMEA4QChADEAQQCRAF"
+
+    /// Every version of a song on YouTube Music (songs, then music videos), clean ones included.
+    static func versions(_ query: String) async throws -> [Track] {
+        async let songs = search(query, params: songsParams, all: true)
+        async let videos = search(query, params: videosParams, all: true)
+        let list = ((try? await songs) ?? []) + ((try? await videos) ?? [])
+        var seen = Set<String>()
+        return list.filter { seen.insert($0.id).inserted }
+    }
+
     static func search(_ query: String, songsOnly: Bool) async throws -> [Track] {
+        try await search(query, params: songsOnly ? songsParams : nil, all: false)
+    }
+
+    /// `all`: keep clean songs even when their explicit twin is there too.
+    private static func search(_ query: String, params: String?, all: Bool) async throws -> [Track] {
         var fields: [String: Any] = ["query": query]
-        if songsOnly { fields["params"] = songsParams }
+        if let params { fields["params"] = params }
         let json = try await post("search", fields)
 
         var out: [Track] = []
@@ -47,7 +64,7 @@ enum YTMusic {
         collect(json) { renderer in
             if let t = parse(renderer), seen.insert(t.id).inserted { out.append(t) }
         }
-        return AppSettings.shared.preferExplicit ? withoutCleanTwins(out) : out
+        return AppSettings.shared.preferExplicit && !all ? withoutCleanTwins(out) : out
     }
 
     // MARK: Explicit versions

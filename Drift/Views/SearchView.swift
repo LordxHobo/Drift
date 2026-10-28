@@ -65,6 +65,9 @@ struct SearchView: View {
     @State private var episodes: [Track] = []
     @State private var loading = false
     @State private var error: String?
+    /// YouTube: the link to the next page of results (nil when there are no more).
+    @State private var more: String?
+    @State private var loadingMore = false
     @FocusState private var focused: Bool
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
@@ -229,6 +232,16 @@ struct SearchView: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
                 .listRowSeparator(.hidden)
             }
+            if mode == .youtube && more != nil {
+                // Loads the next page when it comes into view (a new row each time, so it fires again).
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .id("more-\(results.count)")
+                    .onAppear { Task { await loadMore() } }
+                    .listRowBackground(Theme.bg)
+                    .listRowSeparator(.hidden)
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -351,6 +364,31 @@ struct SearchView: View {
             .padding(.top, 40)
     }
 
+    /// A YouTube video played as a song (audio only, kept as it is).
+    private static func asUpload(_ v: Track) -> Track {
+        var t = v
+        t.podcast = nil
+        t.upload = true
+        return t
+    }
+
+    /// The next page of YouTube results, when the end of the list scrolls into view.
+    private func loadMore() async {
+        guard mode == .youtube, let token = more, !loadingMore else { return }
+        let q = trimmed
+        loadingMore = true
+        defer { loadingMore = false }
+        guard let page = try? await YouTubeSearch.videos(q, more: token), q == trimmed, mode == .youtube else {
+            if q == trimmed { more = nil }
+            return
+        }
+        let seen = Set(results.map(\.id))
+        let fresh = page.videos.filter { !seen.contains($0.id) }.map(Self.asUpload)
+        results += fresh
+        // A page with nothing new means YouTube has run out.
+        more = fresh.isEmpty ? nil : page.more
+    }
+
     private func search() async {
         let q = trimmed
         guard q.count >= 2 else {
@@ -364,6 +402,7 @@ struct SearchView: View {
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
         }
         loading = true
+        more = nil
         defer { loading = false }
         do {
             switch mode {
@@ -379,18 +418,17 @@ struct SearchView: View {
             case .youtube:
                 // Any YouTube video, played as a song (audio only, kept as it is).
                 let found: [Track]
+                var next: String?
                 if isLink {
                     found = (try await YouTubeSearch.resolve(link: q)).map { [$0] } ?? []
                 } else {
-                    found = try await YouTubeSearch.search(q).episodes
+                    let page = try await YouTubeSearch.videos(q)
+                    found = page.videos
+                    next = page.more
                 }
                 guard !Task.isCancelled else { return }
-                results = found.map { v in
-                    var t = v
-                    t.podcast = nil
-                    t.upload = true
-                    return t
-                }
+                results = found.map(Self.asUpload)
+                more = next
                 topArtist = nil
                 player.prefetch(Array(results.prefix(2)))
             case .podcasts:

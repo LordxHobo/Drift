@@ -142,6 +142,17 @@ struct ImportSpotifyView: View {
                 Text("Only the first \(SpotifyReader.embedLimit) songs could be read this time. Try the import again in a moment to get the rest.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
+            } else if let all = importer.spotifyTotal, all > importer.total {
+                Text("Spotify gave \(importer.total) of the playlist’s \(all) songs. Importing again may get the rest.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+            }
+            if importer.hitLimit || importer.spotifyTotal != nil {
+                Button("Copy reading log") {
+                    let url = URL.documentsDirectory.appending(path: "spotify-import.log")
+                    UIPasteboard.general.string = (try? String(contentsOf: url, encoding: .utf8)) ?? "No log"
+                }
+                .font(.system(size: 13, weight: .semibold))
             }
 
             if let id = importer.playlistID {

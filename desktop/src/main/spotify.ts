@@ -339,14 +339,14 @@ function pageScript(req: SpotifyRequest, offset: number, limit: number): string 
     if (r.body) {
       const b = JSON.parse(r.body);
       b.variables = Object.assign({}, b.variables, { offset: ${offset}, limit: ${limit} });
-      init = { method: 'POST', headers: r.headers, body: JSON.stringify(b), credentials: 'include' };
+      init = { method: 'POST', headers: r.headers, body: JSON.stringify(b) };
     } else {
       const u = new URL(r.url);
       const v = JSON.parse(u.searchParams.get('variables') || '{}');
       v.offset = ${offset}; v.limit = ${limit};
       u.searchParams.set('variables', JSON.stringify(v));
       url = u.toString();
-      init = { method: 'GET', headers: r.headers, credentials: 'include' };
+      init = { method: 'GET', headers: r.headers };
     }
     try {
       const res = await fetch(url, init);

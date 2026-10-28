@@ -50,6 +50,28 @@ enum YouTubeSearch {
     }
 
     /// A YouTube link (watch, youtu.be, shorts, live, embed, music.youtube) → video ID.
+    /// Videos only, a page at a time (about 20): the first page for a query, then the next ones
+    /// with the `more` link from the page before. `more` is nil when YouTube has nothing else.
+    static func videos(_ query: String, more: String? = nil) async throws -> (videos: [Track], more: String?) {
+        let body: [String: Any] = more != nil ? ["continuation": more!] : ["query": query]
+        let json = try await post("search", body)
+        var out: [Track] = []
+        var seen = Set<String>()
+        var next: String?
+        walk(json) { key, value in
+            switch key {
+            case "videoRenderer":
+                if let t = parseVideo(value), seen.insert(t.id).inserted { out.append(t) }
+            case "lockupViewModel":
+                if let t = parseLockup(value), seen.insert(t.id).inserted { out.append(t) }
+            case "continuationItemRenderer":
+                if let token = dig(value, ["continuationEndpoint", "continuationCommand", "token"]) as? String { next = token }
+            default: break
+            }
+        }
+        return (out, next)
+    }
+
     static func videoID(fromLink text: String) -> String? {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard s.contains("youtu") else { return nil }
@@ -126,7 +148,8 @@ enum YouTubeSearch {
         if let d = node as? [String: Any] {
             for key in d.keys.sorted() {
                 let v = d[key]!
-                if ["videoRenderer", "channelRenderer", "lockupViewModel"].contains(key), let r = v as? [String: Any] {
+                if ["videoRenderer", "channelRenderer", "lockupViewModel", "continuationItemRenderer"].contains(key),
+                   let r = v as? [String: Any] {
                     found(key, r)
                 } else {
                     walk(v, found)

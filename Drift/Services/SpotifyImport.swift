@@ -7,11 +7,17 @@ struct SpotifyTrack: Hashable {
     let title: String
     let artist: String
     let duration: Double?   // seconds
+    /// When it was added on Spotify (kept as the song's "date added" in Drift).
+    var added: Date? = nil
 }
 
 struct SpotifyList {
     let name: String
     let tracks: [SpotifyTrack]
+    /// How many songs Spotify says the playlist has, when fewer could be read.
+    var total: Int? = nil
+    /// Only the first 100 could be read (Spotify's embed page).
+    var limited = false
 }
 
 enum SpotifyImportError: LocalizedError {
@@ -79,7 +85,7 @@ enum SpotifyReader {
             return SpotifyTrack(title: title, artist: artist, duration: ms.map { $0 / 1000 })
         }
         guard !tracks.isEmpty else { throw SpotifyImportError.notPublic }
-        return SpotifyList(name: name, tracks: tracks)
+        return SpotifyList(name: name, tracks: tracks, limited: tracks.count >= embedLimit - 5)
     }
 
     /// The page keeps its data as JSON in a <script>; Spotify has used three formats for it.
@@ -227,6 +233,8 @@ final class SpotifyImporter {
     private(set) var unmatched: [SpotifyTrack] = []
     private(set) var playlistID: UUID?
     private(set) var hitLimit = false
+    /// Spotify said the playlist has this many songs, but gave fewer.
+    private(set) var spotifyTotal: Int?
     @ObservationIgnored private var matchStart: Date?
 
     /// Rough time left, from how fast songs have been found so far.
@@ -248,7 +256,8 @@ final class SpotifyImporter {
                 let list = try await SpotifyReader.read(link: link)
                 listName = list.name
                 total = list.tracks.count
-                hitLimit = list.tracks.count == SpotifyReader.embedLimit
+                hitLimit = list.limited
+                spotifyTotal = list.total
                 phase = .matching
                 matchStart = Date()
                 // Keep the screen on: iOS pauses Drift when the phone locks and nothing is playing.
@@ -277,7 +286,13 @@ final class SpotifyImporter {
                     for (k, i) in toSearch.enumerated() { matched[i] = searched[k] }
                     var found: [Track] = []
                     for (i, t) in matched.enumerated() {
-                        if let t { found.append(t) } else { unmatched.append(slice[i]) }
+                        if var t {
+                            // Keep Spotify's "date added" (or today's date when there isn't one).
+                            t.added = slice[i].added
+                            found.append(t)
+                        } else {
+                            unmatched.append(slice[i])
+                        }
                     }
                     Library.shared.appendTracks(found, to: id)
                     start += 30
