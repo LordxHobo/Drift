@@ -15,6 +15,7 @@ import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
 import { FriendActivityPanel } from './views/social'
 import { SpeedButton } from './views/podcasts'
+import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 
 const createItems = (): MenuItem[] => [
@@ -301,6 +302,7 @@ export function DriftPlayerBar(): JSX.Element {
       </div>
       <div className="pb-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
+        <VideoButton />
         <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
         <IconButton icon="queue" label="Queue" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
         <Volume />
@@ -537,6 +539,7 @@ export function MusicTopPlayer(): JSX.Element {
       </div>
       <div className="m-top-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
+        <VideoButton />
         <Volume />
         <IconButton icon="lyrics" label="Lyrics" active={panel === 'lyrics'} size={18} onClick={() => togglePanel('lyrics')} />
         <IconButton icon="queue" label="Up next" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
@@ -550,6 +553,7 @@ export function FullPlayer(): JSX.Element | null {
   const open = useStore(fullPlayerStore)
   const p = usePlayer()
   const t = p.current
+  const videoOn = useVideoOn()
   useEffect(() => {
     if (!open) return
     const key = (e: KeyboardEvent): void => {
@@ -568,7 +572,7 @@ export function FullPlayer(): JSX.Element | null {
       <IconButton icon="minimize" label="Close player" className="fp-close" onClick={() => fullPlayerStore.set(false)} />
       <div className="fp-body">
         <div className="fp-left">
-          <TrackArt track={t} px={800} className="fp-art" radius={12} />
+          {videoOn ? <VideoSurface className="fp-video" /> : <TrackArt track={t} px={800} className="fp-art" radius={12} />}
           <div className="fp-meta">
             <div>
               <div className="fp-title">{t.title}</div>

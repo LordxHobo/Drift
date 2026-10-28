@@ -49,6 +49,8 @@ export const usePosition = (): number => useStore(positionStore)
 
 const audio = new Audio()
 audio.preload = 'auto'
+/** The sound (the episode video follows it). */
+export const audioElement = audio
 let loadToken = 0
 /** Songs in a row that didn't load. */
 let failures = 0

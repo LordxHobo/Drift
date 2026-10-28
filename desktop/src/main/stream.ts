@@ -72,7 +72,7 @@ class NotPlayable extends Error {}
  * YouTube's visionOS app gets direct audio links in one request, without the web page or the
  * unscrambling step. This is the phone's quick path, unchanged.
  */
-async function quickResolve(id: string): Promise<Resolved> {
+async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise<Resolved> {
   loadVisitor()
   const client: Record<string, unknown> = {
     clientName: 'VISIONOS',
@@ -119,15 +119,27 @@ async function quickResolve(id: string): Promise<Resolved> {
   }
   const formats: any[] = json?.streamingData?.adaptiveFormats ?? []
   const rate = (f: any): number => Number(f.averageBitrate ?? f.bitrate ?? 0)
-  // Direct-link audio in the original language (no dubbed tracks); AAC first, like the phone.
-  const audio = formats.filter(
-    (f) => typeof f.url === 'string' && String(f.mimeType ?? '').startsWith('audio/') && f.audioTrack?.audioIsDefault !== false
-  )
-  const aac = audio.filter((f) => String(f.mimeType).startsWith('audio/mp4'))
-  const pick = (aac.length ? aac : audio).sort((a, b) => rate(b) - rate(a))[0]
-  if (!pick) throw new NotPlayable('YouTube didn’t offer audio for this song')
-  const expire = Number(new URL(pick.url).searchParams.get('expire') ?? 0) * 1000
   const seconds = Number(json?.videoDetails?.lengthSeconds) || undefined
+  let pick: any
+  if (want.kind === 'video') {
+    pick = pickVideo(
+      formats.filter((f) => typeof f.url === 'string' && String(f.mimeType ?? '').startsWith('video/')),
+      want.maxHeight,
+      (f) => Number(f.height ?? 0),
+      (f) => String(f.mimeType),
+      rate
+    )
+    if (!pick) throw new NotPlayable('YouTube didn’t offer video for this episode')
+  } else {
+    // Direct-link audio in the original language (no dubbed tracks); AAC first, like the phone.
+    const audio = formats.filter(
+      (f) => typeof f.url === 'string' && String(f.mimeType ?? '').startsWith('audio/') && f.audioTrack?.audioIsDefault !== false
+    )
+    const aac = audio.filter((f) => String(f.mimeType).startsWith('audio/mp4'))
+    pick = (aac.length ? aac : audio).sort((a, b) => rate(b) - rate(a))[0]
+    if (!pick) throw new NotPlayable('YouTube didn’t offer audio for this song')
+  }
+  const expire = Number(new URL(pick.url).searchParams.get('expire') ?? 0) * 1000
   return {
     url: pick.url,
     mime: String(pick.mimeType).split(';')[0],
@@ -137,6 +149,23 @@ async function quickResolve(id: string): Promise<Resolved> {
     client: 'VISIONOS (quick)',
     expires: Math.min(expire || Infinity, Date.now() + 3 * 3600_000) - 60_000
   }
+}
+
+/** What to get: the audio, or the video picture (without sound) up to a height. */
+type Want = { kind: 'audio' } | { kind: 'video'; maxHeight: number }
+
+/** The sharpest picture up to the height asked for; H.264 first (easiest on the computer), then VP9, then AV1. */
+function pickVideo<F>(list: F[], maxHeight: number, height: (f: F) => number, mime: (f: F) => string, rate: (f: F) => number): F | undefined {
+  const codec = (f: F): number => (/avc1/.test(mime(f)) ? 0 : /vp0?9/.test(mime(f)) ? 1 : 2)
+  const ok = list.filter((f) => height(f) > 0 && height(f) <= maxHeight)
+  const pool = ok.length ? ok : list.slice().sort((a, b) => height(a) - height(b)).slice(0, 1)
+  return pool.sort((a, b) => height(b) - height(a) || codec(a) - codec(b) || rate(b) - rate(a))[0]
+}
+
+/** Keys: "<id>" for audio, "<id>#v720" for the video picture up to 720p. */
+function parseKey(key: string): { id: string; want: Want } {
+  const m = /^(.+)#v(\d+)$/.exec(key)
+  return m ? { id: m[1], want: { kind: 'video', maxHeight: Number(m[2]) } } : { id: key, want: { kind: 'audio' } }
 }
 
 // MARK: Full extraction (fallback)
@@ -179,11 +208,12 @@ function friendly(message: string): string {
   return message
 }
 
-async function resolveFresh(id: string): Promise<Resolved> {
+async function resolveFresh(key: string): Promise<Resolved> {
+  const { id, want } = parseKey(key)
   await warmUp()
   let firstError: string | undefined
   try {
-    return await quickResolve(id)
+    return await quickResolve(id, want)
   } catch (e) {
     firstError = e instanceof Error ? e.message : String(e)
     // Some songs really aren't playable; the other clients would say the same thing.
@@ -197,17 +227,24 @@ async function resolveFresh(id: string): Promise<Resolved> {
       const info = await tube.getBasicInfo(id, { client })
       const status = info.playability_status?.status
       if (status && status !== 'OK') continue
-      const audio = (info.streaming_data?.adaptive_formats ?? [])
-        .filter((f) => f.has_audio && !f.has_video)
-        .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-      const format = audio[0]
+      const formats = info.streaming_data?.adaptive_formats ?? []
+      const format =
+        want.kind === 'video'
+          ? pickVideo(
+              formats.filter((f) => f.has_video && !f.has_audio),
+              want.maxHeight,
+              (f) => f.height ?? 0,
+              (f) => f.mime_type,
+              (f) => f.bitrate ?? 0
+            )
+          : formats.filter((f) => f.has_audio && !f.has_video).sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0]
       if (!format) continue
       const url = await format.decipher(tube.session.player)
       if (!url) continue
       const expire = Number(new URL(url).searchParams.get('expire') ?? 0) * 1000
       return {
         url,
-        mime: format.mime_type.split(';')[0] || 'audio/mp4',
+        mime: format.mime_type.split(';')[0] || (want.kind === 'video' ? 'video/mp4' : 'audio/mp4'),
         bitrate: format.bitrate,
         size: format.content_length || undefined,
         duration: format.approx_duration_ms ? format.approx_duration_ms / 1000 : undefined,
@@ -405,10 +442,14 @@ async function fetchPiece(id: string, start: number, end: number): Promise<Respo
 }
 
 export async function handleStream(request: Request): Promise<Response> {
-  const id = new URL(request.url).pathname.replace(/^\/+/, '')
-  if (process.env.DRIFT_DEBUG) console.log('[stream]', id, request.headers.get('range'))
-  if (!/^[\w-]{6,20}$/.test(id)) return new Response('Bad song', { status: 400 })
-  const local = localLookup(id)
+  const u = new URL(request.url)
+  const videoId = u.pathname.replace(/^\/+/, '')
+  if (process.env.DRIFT_DEBUG) console.log('[stream]', videoId, u.search, request.headers.get('range'))
+  if (!/^[\w-]{6,20}$/.test(videoId)) return new Response('Bad song', { status: 400 })
+  // ?v=720: the video picture (podcasts with video on), up to that height.
+  const height = Number(u.searchParams.get('v'))
+  const id = height > 0 ? `${videoId}#v${Math.min(2160, Math.max(144, height))}` : videoId
+  const local = height > 0 ? undefined : localLookup(videoId)
   if (local) return serveFile(local, request.headers.get('range'))
   const [start, askedEnd] = parseRange(request.headers.get('range'))
 

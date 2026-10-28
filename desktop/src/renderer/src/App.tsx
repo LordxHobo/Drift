@@ -17,6 +17,7 @@ import { EditPlaylistDialog } from './views/editPlaylist'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 import { ChannelPage, PodcastsPage } from './views/podcasts'
+import { MiniVideo, VideoPage } from './videoView'
 
 function useDark(): boolean {
   const appearance = useStore(settingsStore).appearance
@@ -54,6 +55,8 @@ function Page({ route }: { route: Route }): JSX.Element {
       return <LyricsView />
     case 'friends':
       return <FriendsPage />
+    case 'video':
+      return <VideoPage />
     case 'podcasts':
       return <PodcastsPage q={route.q ?? ''} />
     case 'channel':
@@ -143,6 +146,7 @@ export function App(): JSX.Element {
           </div>
         </div>
         <FullPlayer />
+        <MiniVideo />
         <ContextMenu />
         <ImportDialog />
         <EditPlaylistDialog />
@@ -158,8 +162,8 @@ export function App(): JSX.Element {
       <div className="titlebar" />
       <div className="d-body">
         <DriftSidebar />
-        <main className={`panel main ${route.name === 'lyrics' ? 'lyrics-mode' : ''}`}>
-          {route.name !== 'lyrics' && <TopBar>{route.name === 'search' ? <SearchBox q={route.q ?? ''} /> : null}</TopBar>}
+        <main className={`panel main ${route.name === 'lyrics' || route.name === 'video' ? 'lyrics-mode' : ''}`}>
+          {route.name !== 'lyrics' && route.name !== 'video' && <TopBar>{route.name === 'search' ? <SearchBox q={route.q ?? ''} /> : null}</TopBar>}
           <div className="main-scroll">
             <Page route={route} />
           </div>
@@ -167,6 +171,7 @@ export function App(): JSX.Element {
         <SidePanel />
       </div>
       <DriftPlayerBar />
+      <MiniVideo />
       <ContextMenu />
       <ImportDialog />
       <EditPlaylistDialog />

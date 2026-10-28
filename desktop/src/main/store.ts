@@ -44,7 +44,9 @@ const defaultSettings: Settings = {
   orbitUrl: '',
   discordEnabled: false,
   discordAppId: '',
-  closeToTray: true
+  closeToTray: true,
+  podcastVideo: false,
+  videoQuality: 720
 }
 
 let settings: Settings | undefined

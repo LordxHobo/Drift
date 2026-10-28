@@ -95,6 +95,20 @@ export function SettingsPage(): JSX.Element {
         <Row title="Skip non-music parts" detail="Jumps past intros, outros and talking in music videos, using parts marked by the SponsorBlock community.">
           <Toggle on={s.skipNonMusic} onChange={(v) => setSettings({ skipNonMusic: v })} label="Skip non-music parts" />
         </Row>
+        <Row title="Show video for podcasts" detail="Episodes play with their video (in the player, or in a small window while you browse). Uses more data. Songs stay audio only.">
+          <Toggle on={s.podcastVideo} onChange={(v) => setSettings({ podcastVideo: v })} label="Show video for podcasts" />
+        </Row>
+        {s.podcastVideo && (
+          <Row title="Video quality">
+            <div className="seg">
+              {[480, 720, 1080].map((q) => (
+                <button key={q} className={(s.videoQuality || 720) === q ? 'on' : ''} onClick={() => setSettings({ videoQuality: q })}>
+                  {q}p
+                </button>
+              ))}
+            </div>
+          </Row>
+        )}
         <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
           <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
         </Row>

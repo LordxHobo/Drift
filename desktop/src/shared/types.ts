@@ -139,6 +139,10 @@ export interface Settings {
   discordAppId: string
   /** Closing the window keeps Drift playing in the tray (Windows and Linux). */
   closeToTray: boolean
+  /** Show the video of podcast episodes. */
+  podcastVideo: boolean
+  /** Highest video quality (lines): 480, 720 or 1080. */
+  videoQuality: number
 }
 
 /** What the player is doing, for friends, Orbit, Discord and the tray. */
