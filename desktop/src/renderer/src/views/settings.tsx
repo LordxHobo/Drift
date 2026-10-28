@@ -5,6 +5,7 @@ import { accountStore, connectionsStore, dialogStore, downloadsStore, drift, go,
 import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
+import { editProfileStore } from './editProfile'
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }): JSX.Element {
   return (
@@ -172,6 +173,9 @@ function LinkPhone(): JSX.Element {
         <p className="set-detail">Playlists, albums, liked songs and followed artists stay the same here and on your phone.</p>
         <ShareActivity />
         <div className="link-buttons">
+          <button className="btn" onClick={() => editProfileStore.set(true)}>
+            <Icon name="edit" size={14} /> Edit profile
+          </button>
           <button className="btn" onClick={() => void drift.syncNow()} disabled={account.syncing}>
             {account.syncing ? <Spinner size={14} /> : <Icon name="sync" size={14} />} Sync now
           </button>

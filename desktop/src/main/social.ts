@@ -1,8 +1,8 @@
 // Friends: profiles, following, what people are listening to, and the playlists they show.
 // Same Firestore documents as the phone's SocialStore and PlaylistSharing.
 import type { SharedPlaylist, Track, UserProfile } from '@shared/types'
-import { FV, docName } from './firebase'
-import { linked } from './account'
+import { FV, FirebaseError, docName } from './firebase'
+import { linked, loadProfile } from './account'
 import { emit } from './store'
 
 function need(): NonNullable<ReturnType<typeof linked>> {
@@ -235,4 +235,50 @@ export async function sharedPlaylists(u: UserProfile): Promise<SharedPlaylist[]>
 export async function sharedPlaylistTracks(ownerId: string, id: string): Promise<Track[]> {
   const doc = await need().db.get(`users/${ownerId}/playlists/${id}`)
   return decodeTracks(FV.string(doc?.fields, 'tracks'))
+}
+
+// MARK: Editing your profile (same rules as the phone)
+
+export function usernameProblem(name: string): string | null {
+  if (name.length < 3) return 'At least 3 characters'
+  if (name.length > 20) return 'At most 20 characters'
+  if (!/^[a-z0-9_.]+$/.test(name)) return 'Only letters, numbers, . and _'
+  if (name.startsWith('.') || name.endsWith('.')) return 'Can’t start or end with a dot'
+  return null
+}
+
+/** true = free (or already yours), false = taken, null = couldn't check. */
+export async function usernameAvailable(name: string): Promise<boolean | null> {
+  const { db, uid } = need()
+  try {
+    const doc = await db.get(`usernames/${name}`)
+    if (!doc) return true
+    return FV.string(doc.fields, 'uid') === uid
+  } catch {
+    return null
+  }
+}
+
+export async function updateProfile(change: { username?: string; avatar?: string | null }): Promise<UserProfile | null> {
+  const { db, uid } = need()
+  const mine = await me()
+  if (!mine) throw new Error('No profile found.')
+  if (change.username !== undefined && change.username !== mine.username) {
+    const name = change.username
+    const problem = usernameProblem(name)
+    if (problem) throw new Error(problem)
+    try {
+      await db.patch(`usernames/${name}`, { uid: FV.s(uid) }, { mustNotExist: true })
+    } catch (e) {
+      if (e instanceof FirebaseError && (e.status === 400 || e.status === 409)) throw new Error('That username was just taken.')
+      throw e
+    }
+    await db.patch(`users/${uid}`, { username: FV.s(name), usernameLower: FV.s(name) }, { mask: ['username', 'usernameLower'] })
+    await db.delete(`usernames/${mine.username}`).catch(() => undefined)
+  }
+  if (change.avatar !== undefined) {
+    await db.patch(`users/${uid}`, { avatar: change.avatar ? FV.bytes(change.avatar) : FV.null() }, { mask: ['avatar'] })
+  }
+  await loadProfile()
+  return me()
 }

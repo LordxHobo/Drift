@@ -47,7 +47,7 @@ export function start(): void {
   setInterval(() => void checkNewReleases(false), 3 * 3600_000)
 }
 
-async function loadProfile(): Promise<void> {
+export async function loadProfile(): Promise<void> {
   if (!db || !auth?.uid) return
   try {
     const doc = await db.get(`users/${auth.uid}`)

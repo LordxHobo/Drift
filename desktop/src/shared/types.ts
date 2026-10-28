@@ -382,6 +382,8 @@ export interface DriftApi {
   sharedPlaylists(user: UserProfile): Promise<SharedPlaylist[]>
   sharedPlaylistTracks(ownerId: string, id: string): Promise<Track[]>
   setShareActivity(on: boolean): Promise<void>
+  usernameAvailable(name: string): Promise<boolean | null>
+  updateProfile(change: { username?: string; avatar?: string | null }): Promise<UserProfile | null>
   setPrivateSession(on: boolean): Promise<void>
   playerState(state: PlayerPresence): Promise<void>
   connections(): Promise<ConnectionsStatus>
@@ -415,7 +417,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
-  'setShareActivity', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
+  'setShareActivity', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]

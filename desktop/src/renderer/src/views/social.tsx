@@ -8,6 +8,7 @@ import { playList } from '../player'
 import { Card, PlaylistCover, Spinner, TrackArt, TrackList, trackMenu } from '../ui'
 import { formatTotal, plural } from '../util'
 import { CollectionHeader, Failed, Loading, cleanError, useMusic } from './common'
+import { editProfileStore } from './editProfile'
 
 // MARK: Helpers
 
@@ -281,6 +282,10 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
     }
   }, [id])
 
+  useEffect(() => {
+    if (me && me.id === id) setUser((u) => (u ? { ...u, username: me.username, avatar: me.avatar } : u))
+  }, [me?.username, me?.avatar])
+
   if (error && !user) return <div className="page"><Failed message={error} /></div>
   if (!user) return <div className="page"><Loading /></div>
   const isMe = me?.id === user.id
@@ -289,7 +294,14 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
   return (
     <div className="page user-page">
       <div className="user-head">
-        <UserAvatar user={user} size={160} />
+        {isMe ? (
+          <button className="edit-cover round" onClick={() => editProfileStore.set(true)} title="Edit profile">
+            <UserAvatar user={user} size={160} />
+            <span className="edit-cover-hint"><Icon name="edit" size={24} /></span>
+          </button>
+        ) : (
+          <UserAvatar user={user} size={160} />
+        )}
         <div className="user-text">
           <div className="d-kind">Profile</div>
           <h1>{user.username}</h1>
@@ -299,7 +311,13 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
             <span><b>{user.following.length}</b> following</span>
           </div>
           <div className="user-buttons">
-            {isMe ? <span className="set-detail">This is you. Edit your profile on the phone.</span> : <FollowButton user={user} />}
+            {isMe ? (
+              <button className="btn outline" onClick={() => editProfileStore.set(true)}>
+                <Icon name="edit" size={14} /> Edit profile
+              </button>
+            ) : (
+              <FollowButton user={user} />
+            )}
           </div>
         </div>
       </div>

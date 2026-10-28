@@ -3449,3 +3449,54 @@ kbd {
   backdrop-filter: blur(12px);
   right: 12px;
 }
+
+/* Edit profile */
+.dialog.edit-profile {
+  width: 520px;
+}
+.profile-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.edit-cover.round,
+.edit-cover.round .edit-cover-hint {
+  border-radius: 50%;
+}
+.user-head .edit-cover.round {
+  box-shadow: var(--shadow);
+}
+.username-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 16px;
+}
+.username-field:focus-within {
+  border-color: var(--accent);
+}
+.username-field span {
+  color: var(--muted);
+  font-weight: 700;
+}
+.username-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 600;
+}
+.set-detail.bad {
+  color: #f87171;
+}
+.set-detail.good {
+  color: var(--accent);
+}
