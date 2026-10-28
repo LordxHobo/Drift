@@ -272,6 +272,8 @@ export function TrackList(props: TrackListProps): JSX.Element {
             <SortHeader k="title" label="Title" sort={props.sort} onSort={props.onSort} />
             {props.onSort && <span className="head-dot">·</span>}
             {props.onSort && <SortHeader k="artist" label="Artist" sort={props.sort} onSort={props.onSort} />}
+            {props.onSort && <span className="head-dot">·</span>}
+            {props.onSort && <SortHeader k="album" label="Album" sort={props.sort} onSort={props.onSort} />}
           </span>
         )}
         {music && <SortHeader k="artist" label="Artist" sort={props.sort} onSort={props.onSort} className="c-artist" />}
