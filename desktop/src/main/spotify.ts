@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { ImportState, MissingSong, Track } from '@shared/types'
 import { appleEpoch } from '@shared/types'
 import * as store from './store'
+import * as notices from './notifications'
 import { mainArtist, normalize, searchSongs } from './ytmusic'
 import { searchVideos } from './youtube'
 
@@ -544,6 +545,22 @@ export async function startImport(link: string): Promise<void> {
       if (store.getLibrary().playlists.some((p) => p.id === id)) store.addToPlaylist(id, found, true)
     }
     set({ phase: 'done', missing, processed: list.tracks.length })
+    const total = list.tracks.length
+    const plural = (n: number): string => `${n} ${n === 1 ? 'song' : 'songs'}`
+    if (missing.length) {
+      // Kept under the bell, like the phone's import report.
+      const report = notices.post({
+        kind: 'importReport',
+        title: `${plural(missing.length)} not found in “${list.name}”`,
+        detail: `${total - missing.length} of ${total} songs imported. Open to see, copy or look for the missing ones.`,
+        playlistId: id,
+        listName: list.name,
+        missing
+      })
+      notices.system(`Import finished: ${plural(missing.length)} not found`, `${total - missing.length} of ${total} songs from “${list.name}” are in Drift. Click to see the missing ones.`, report.id)
+    } else {
+      notices.system('Import finished', `All ${plural(total)} from “${list.name}” are in Drift.`)
+    }
   } catch (e) {
     set({ phase: 'failed', error: e instanceof ImportError ? e.message : e instanceof Error ? `Couldn’t import: ${e.message}` : 'Couldn’t import.' })
   }
@@ -559,4 +576,28 @@ export async function retryMissing(): Promise<void> {
   const still = state.missing.filter((_, i) => !results[i])
   if (found.length && store.getLibrary().playlists.some((p) => p.id === state.playlistId)) store.addToPlaylist(state.playlistId, found)
   set({ retrying: false, missing: still, foundAgain: found.length })
+  // Keep the report under the bell the same.
+  const report = notices.getNotifications().find((n) => n.kind === 'importReport' && n.playlistId === state.playlistId)
+  if (report) notices.updateMissing(report.id, still, found.length)
+}
+
+/** Looks for an import report's missing songs again, adds what turns up, and updates the report. */
+export async function retryReport(id: string): Promise<void> {
+  const n = notices.getNotifications().find((x) => x.id === id)
+  if (!n || !n.missing.length || n.retrying) return
+  n.retrying = true
+  store.emit('notifications', notices.getNotifications())
+  try {
+    const songs = n.missing.map((m) => ({ title: m.title, artist: m.artist, duration: m.duration ?? undefined }))
+    const results = await matchAll(songs, () => {})
+    const found = results.filter((t): t is Track => !!t)
+    const still = n.missing.filter((_, i) => !results[i])
+    if (found.length && n.playlistId && store.getLibrary().playlists.some((p) => p.id === n.playlistId)) store.addToPlaylist(n.playlistId, found)
+    notices.updateMissing(id, still, found.length)
+    // The import window shows the same list while it's open.
+    if (state.phase === 'done' && state.playlistId === n.playlistId) set({ missing: still, foundAgain: (state.foundAgain ?? 0) + found.length })
+  } finally {
+    n.retrying = false
+    store.emit('notifications', notices.getNotifications())
+  }
 }

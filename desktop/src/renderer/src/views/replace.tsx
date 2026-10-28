@@ -8,6 +8,7 @@ import { drift, Store, toast, useStore } from '../state'
 import { playList, toggle, usePlayer } from '../player'
 import { Spinner, TrackArt } from '../ui'
 import { formatTime } from '../util'
+import { LoadMore, useYouTubeSearch } from '../ytsearch'
 
 export type SongPlace = { playlistId: string } | { liked: true }
 
@@ -35,13 +36,13 @@ export function ReplaceDialog(): JSX.Element | null {
   }, [req])
 
   const key = `${source}|${query.trim()}`
+  const yt = useYouTubeSearch(query, !!req && source === 'youtube')
   useEffect(() => {
     const q = query.trim()
-    if (!req || q.length < 2) return
+    if (!req || q.length < 2 || source !== 'music') return
     let live = true
     const timer = window.setTimeout(() => {
-      const task = source === 'music' ? drift.versions(q) : drift.searchYouTube(q)
-      task.then((list) => live && setResults({ key, list })).catch(() => live && setResults({ key, error: true }))
+      drift.versions(q).then((list) => live && setResults({ key, list })).catch(() => live && setResults({ key, error: true }))
     }, 400)
     return () => {
       live = false
@@ -52,8 +53,8 @@ export function ReplaceDialog(): JSX.Element | null {
   if (!req) return null
   const close = (): void => replaceStore.set(null)
   const old = req.track
-  const list = results.key === key ? results.list : undefined
-  const failed = results.key === key && results.error
+  const list = source === 'youtube' ? (yt.pages ? yt.list : undefined) : results.key === key ? results.list : undefined
+  const failed = source === 'youtube' ? !!yt.error : results.key === key && results.error
 
   const use = (v: Track): void => {
     // A YouTube Music song comes as it is. A YouTube video keeps the song's own name (upload titles are messy).
@@ -98,7 +99,7 @@ export function ReplaceDialog(): JSX.Element | null {
           ) : !list.length ? (
             <div className="empty small">Nothing found.</div>
           ) : (
-            list.slice(0, 30).map((v) => {
+            (source === 'youtube' ? list : list.slice(0, 40)).map((v) => {
               const current = v.id === old.id
               const previewing = player.current?.id === v.id
               return (
@@ -132,6 +133,7 @@ export function ReplaceDialog(): JSX.Element | null {
               )
             })
           )}
+          {source === 'youtube' && yt.pages > 0 && <LoadMore onVisible={yt.loadMore} loading={yt.loading} done={!yt.more} />}
         </div>
         <p className="replace-hint">
           Click the picture to listen first. The song keeps its place; the version you pick plays exactly as it is.

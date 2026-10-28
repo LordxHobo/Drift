@@ -18,6 +18,15 @@ function load<T>(name: string, fallback: T): T {
   }
 }
 
+/** A saved file as it is (lists too), or the fallback. */
+export function readJSON<T>(name: string, fallback: T): T {
+  try {
+    return JSON.parse(readFileSync(path(name), 'utf8')) as T
+  } catch {
+    return fallback
+  }
+}
+
 export function writeJSON(name: string, value: unknown): void {
   const tmp = path(name + '.tmp')
   writeFileSync(tmp, JSON.stringify(value))

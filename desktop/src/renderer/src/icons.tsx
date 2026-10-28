@@ -49,6 +49,7 @@ const paths: Record<string, JSX.Element> = {
   swap: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5" /></g>,
   chevronUp: <path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />,
   chevronDown: <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />,
+  warning: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 2.5 20h19z" /><path d="M12 10v4.5M12 17.2v.1" /></g>,
   chapters: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3.5 6h2M3.5 12h2M3.5 18h2M9.5 6h11M9.5 12h11M9.5 18h7" /></g>,
   video: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="2.5" y="5" width="14" height="14" rx="2.5" /><path d="m16.5 10.5 5-3v9l-5-3z" /></g>,
   podcast: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></g>,

@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AppNotice, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -39,6 +39,10 @@ export const importStore = new Store<ImportState>({ phase: 'idle', total: 0, pro
 export const downloadsStore = new Store<DownloadsState>({ done: [], queued: [], active: [], keep: [], bytes: 0, folder: '', rate: 0, failed: [] })
 export const podcastsStore = new Store<PodcastsState>({ subscriptions: [], progress: {}, feeds: {}, refreshing: false })
 export const connectionsStore = new Store<ConnectionsStatus>({ orbit: { state: 'off', hasToken: false }, discord: { state: 'off' } })
+/** Drift's notifications on this computer (import reports). */
+export const notificationsStore = new Store<AppNotice[]>([])
+/** Asked to open a notification (clicked in the system's notifications). */
+export const openNoticeStore = new Store<string | null>(null)
 /** Your Drift profile (when linked with the phone). */
 export const meStore = new Store<UserProfile | null>(null)
 /** Hide what you listen to until Drift closes. */
@@ -54,6 +58,9 @@ export async function loadAll(): Promise<void> {
   drift.on('update', (v) => updateStore.set(v))
   connectionsStore.set(await drift.connections())
   drift.on('connections', (v) => connectionsStore.set(v))
+  notificationsStore.set(await drift.notifications())
+  drift.on('notifications', (v) => notificationsStore.set(v))
+  drift.on('openNotice', (v) => openNoticeStore.set(v))
   podcastsStore.set(await drift.podcasts())
   drift.on('podcasts', (v) => podcastsStore.set(v))
   downloadsStore.set(await drift.downloads())

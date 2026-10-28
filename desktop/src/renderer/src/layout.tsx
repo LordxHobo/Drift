@@ -4,8 +4,9 @@ import type { Playlist } from '@shared/types'
 import { Icon, Logo } from './icons'
 import {
   accountStore, back, downloadsStore, drift, forward, settingsStore, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
-  readLocal, togglePanel, useRoute, useStore, writeLocal
+  readLocal, togglePanel, useRoute, useStore, writeLocal, notificationsStore
 } from './state'
+import { reportStore } from './views/report'
 import type { MenuItem, Route } from './state'
 import { jumpTo, playList, removeFromQueue, setSpeed, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
@@ -185,34 +186,42 @@ export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Ele
         <DownloadPill />
         <UpdateButton />
         <FriendsButton />
-        <ReleasesBell />
+        <NoticesBell />
         <ProfileButton />
       </div>
     </div>
   )
 }
 
-function ReleasesBell(): JSX.Element {
+/** Notifications: import reports (songs that weren't found) and new releases from artists you follow. */
+export function NoticesBell(): JSX.Element {
   const lib = useStore(libraryStore)
+  const notices = useStore(notificationsStore)
   const releases = lib.artists.flatMap((a) => a.newReleases).sort((a, b) => b.foundAt - a.foundAt)
   const [seen, setSeen] = useState(() => readLocal('releasesSeen', 0))
-  const unseen = releases.filter((r) => r.foundAt > seen).length
+  const unseen = releases.filter((r) => r.foundAt > seen).length + notices.filter((n) => !n.read).length
   return (
     <button
       className="icon-btn round bell"
-      title="New releases"
-      aria-label={unseen ? `${unseen} new releases` : 'New releases'}
+      title="Notifications"
+      aria-label={unseen ? `${unseen} new notifications` : 'Notifications'}
       onClick={(e) => {
         const newest = releases[0]?.foundAt ?? seen
         setSeen(newest)
         writeLocal('releasesSeen', newest)
-        openMenuAt(e.currentTarget, releases.length
-          ? releases.slice(0, 12).map((r) => ({
-              label: `${r.album.title} · ${r.artistName}`,
-              icon: 'sparkle',
-              action: () => go({ name: 'album', id: r.album.id, hint: r.album })
-            }))
-          : [{ label: 'New releases from artists you follow show up here.', disabled: true }])
+        void drift.markNotificationsRead()
+        const reports: MenuItem[] = notices.slice(0, 8).map((n) => ({
+          label: n.title,
+          icon: n.missing.length ? 'warning' : 'check',
+          action: () => reportStore.set(n.id)
+        }))
+        const fresh: MenuItem[] = releases.slice(0, 12).map((r) => ({
+          label: `${r.album.title} · ${r.artistName}`,
+          icon: 'sparkle',
+          action: () => go({ name: 'album', id: r.album.id, hint: r.album })
+        }))
+        const items = [...reports, ...(reports.length && fresh.length ? [{ label: '', separator: true }] : []), ...fresh]
+        openMenuAt(e.currentTarget, items.length ? items : [{ label: 'Import reports and new releases from artists you follow show up here.', disabled: true }])
       }}
     >
       <Icon name="bell" size={18} />
@@ -570,6 +579,7 @@ export function MusicTopPlayer(): JSX.Element {
       <div className="m-top-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
+        <NoticesBell />
         <Volume />
         <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />
         <IconButton icon="queue" label="Up next" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />

@@ -10,6 +10,7 @@ import { lyrics } from './lyrics'
 import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
 import * as spotify from './spotify'
 import * as downloads from './downloads'
+import * as notices from './notifications'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -23,6 +24,8 @@ protocol.registerSchemesAsPrivileged([
 
 // One Drift at a time: opening it again brings the first window forward.
 if (!app.requestSingleInstanceLock()) app.quit()
+// Windows shows Drift's notifications only for the app ID it was installed with.
+if (process.platform === 'win32') app.setAppUserModelId('com.lordxhobo.drift.desktop')
 
 let win: BrowserWindow | undefined
 
@@ -115,7 +118,7 @@ const api: DriftApi = {
   radio: (id) => yt.radio(id),
   prepare: (t) => prepare(t),
   prefetch: (list) => prefetch(list),
-  searchYouTube: (q) => searchYouTube(q),
+  searchYouTube: (q, more) => searchYouTube(q, more),
   versions: (q) => yt.versions(q),
   replaceTrack: async (place, index, oldId, track) => {
     const wasDownloaded = downloads.getDownloads().done.includes(oldId)
@@ -162,6 +165,10 @@ const api: DriftApi = {
   startImport: async (link) => void spotify.startImport(link),
   importState: async () => spotify.getImportState(),
   retryMissing: async () => void spotify.retryMissing(),
+  notifications: async () => notices.getNotifications(),
+  markNotificationsRead: async () => notices.markAllRead(),
+  removeNotification: async (id) => notices.remove(id),
+  retryReport: (id) => spotify.retryReport(id),
   clearImport: async () => spotify.clearImport(),
 
   downloads: async () => downloads.getDownloads(),
@@ -220,6 +227,7 @@ function showWindow(): void {
 }
 
 app.on('second-instance', showWindow)
+notices.setShowWindow(showWindow)
 
 app.whenReady().then(() => {
   protocol.handle('drift', (request) => {

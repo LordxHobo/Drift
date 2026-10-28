@@ -15,6 +15,7 @@ import { SettingsPage } from './views/settings'
 import { ImportDialog } from './views/import'
 import { EditPlaylistDialog } from './views/editPlaylist'
 import { ReplaceDialog } from './views/replace'
+import { ReportDialog } from './views/report'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 import { ChannelPage, PodcastsPage } from './views/podcasts'
@@ -152,6 +153,7 @@ export function App(): JSX.Element {
         <ImportDialog />
         <EditPlaylistDialog />
         <ReplaceDialog />
+        <ReportDialog />
         <EditProfileDialog />
         <DialogHost />
         <Toast />
@@ -178,6 +180,7 @@ export function App(): JSX.Element {
       <ImportDialog />
       <EditPlaylistDialog />
       <ReplaceDialog />
+      <ReportDialog />
       <EditProfileDialog />
       <DialogHost />
       <Toast />

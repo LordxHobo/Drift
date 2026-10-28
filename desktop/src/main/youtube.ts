@@ -384,7 +384,7 @@ export async function chapters(id: string): Promise<Chapter[]> {
 // MARK: Any YouTube video, played as a song
 
 /** Fan uploads, live sets, mixes… anything on YouTube, or the video behind a pasted link. Audio only. */
-export async function searchYouTube(query: string): Promise<Track[]> {
+export async function searchYouTube(query: string, more?: string): Promise<{ tracks: Track[]; more?: string }> {
   const asSong = (t: Track): Track => ({
     id: t.id,
     title: t.title,
@@ -395,8 +395,23 @@ export async function searchYouTube(query: string): Promise<Track[]> {
   })
   if (videoId(query)) {
     const t = await videoFromLink(query)
-    return t ? [asSong(t)] : []
+    return { tracks: t ? [asSong(t)] : [] }
   }
-  const { episodes } = await searchPodcasts(query)
-  return episodes.map(asSong)
+  // YouTube sends about 20 results at a time, with a link to the next ones.
+  const json = await post('search', more ? { continuation: more } : { query })
+  return { tracks: collectEpisodes(json).map(asSong), more: nextPage(json) }
+}
+
+/** The link to the next page of results (the last one in the answer). */
+function nextPage(json: J): string | undefined {
+  let token: string | undefined
+  const visit = (n: J): void => {
+    if (Array.isArray(n)) return n.forEach(visit)
+    if (!n || typeof n !== 'object') return
+    const t = n.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
+    if (typeof t === 'string') token = t
+    for (const v of Object.values(n)) visit(v)
+  }
+  visit(json)
+  return token
 }

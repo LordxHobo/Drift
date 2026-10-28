@@ -11,6 +11,7 @@ import {
 import { greeting, plural, resized, artwork, formatTotal } from '../util'
 import { openImport } from './import'
 import { CollectionHeader, Failed, Loading, cleanError, useMusic } from './common'
+import { LoadMore, useYouTubeSearch } from '../ytsearch'
 
 // MARK: Home
 
@@ -173,33 +174,20 @@ function SearchTabs(): JSX.Element {
 }
 
 function YouTubeResults({ q }: { q: string }): JSX.Element {
-  const [res, setRes] = useState<{ q: string; list?: Track[]; error?: string } | null>(null)
+  const yt = useYouTubeSearch(q)
   useEffect(() => {
-    let alive = true
-    const timer = window.setTimeout(() => {
-      drift
-        .searchYouTube(q)
-        .then((list) => {
-          if (!alive) return
-          setRes({ q, list })
-          rememberSearch(q)
-        })
-        .catch((e) => alive && setRes({ q, error: cleanError(e) }))
-    }, 350)
-    return () => {
-      alive = false
-      clearTimeout(timer)
-    }
-  }, [q])
-  const mine = res?.q === q ? res : undefined
-  if (mine?.error) return <Failed message={`Search didn’t work: ${mine.error}`} />
-  if (!mine?.list) return <Loading />
-  if (!mine.list.length) return <div className="empty">Nothing on YouTube for “{q}”.</div>
+    if (yt.pages === 1) rememberSearch(q)
+  }, [yt.pages, q])
+  if (yt.error) return <Failed message={`Search didn’t work: ${cleanError(yt.error)}`} />
+  if (!yt.pages) return <Loading />
+  if (!yt.list.length) return <div className="empty">Nothing on YouTube for “{q}”.</div>
   return (
     <section className="section">
       <h2>On YouTube</h2>
-      <p className="section-note">Fan uploads, live sets and mixes that aren’t on YouTube Music. Only the audio plays, exactly as uploaded.</p>
-      <TrackList tracks={mine.list} context={{ kind: 'search', name: q }} showAlbum={false} numbered={false} />
+      <p className="section-note">Fan uploads, live sets and mixes that aren’t on YouTube Music. Only the audio plays, exactly as uploaded. More load as you scroll.</p>
+      <TrackList tracks={yt.list} context={{ kind: 'search', name: q }} showAlbum={false} numbered={false} />
+      <LoadMore onVisible={yt.loadMore} loading={yt.loading} done={!yt.more} />
+      {!yt.more && yt.pages > 1 && <div className="empty small">That’s everything YouTube found.</div>}
     </section>
   )
 }

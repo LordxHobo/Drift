@@ -243,6 +243,21 @@ export interface MissingSong {
   duration?: number | null
 }
 
+/** One of Drift's own notifications (import reports, like on the phone). */
+export interface AppNotice {
+  id: string
+  kind: 'importReport'
+  /** Milliseconds. */
+  date: number
+  title: string
+  detail: string
+  read: boolean
+  playlistId?: string
+  listName?: string
+  missing: MissingSong[]
+  retrying?: boolean
+}
+
 export interface ImportState {
   phase: 'idle' | 'reading' | 'matching' | 'done' | 'failed'
   listName?: string
@@ -362,7 +377,7 @@ export interface DriftApi {
   /** Gets the next songs ready in the background. */
   prefetch(tracks: Track[]): Promise<void>
   /** Any YouTube video (fan uploads, live sets…), or the video behind a pasted link. */
-  searchYouTube(query: string): Promise<Track[]>
+  searchYouTube(query: string, more?: string): Promise<{ tracks: Track[]; more?: string }>
   /** Every version of a song on YouTube Music, clean ones included (for replacing a song). */
   versions(query: string): Promise<Track[]>
   /** Swaps the song at a place in a playlist (or Liked songs) for another version. */
@@ -403,6 +418,11 @@ export interface DriftApi {
   startImport(link: string): Promise<void>
   importState(): Promise<ImportState>
   retryMissing(): Promise<void>
+  notifications(): Promise<AppNotice[]>
+  markNotificationsRead(): Promise<void>
+  removeNotification(id: string): Promise<void>
+  /** Looks for an import report's missing songs again. */
+  retryReport(id: string): Promise<void>
   clearImport(): Promise<void>
 
   downloads(): Promise<DownloadsState>
@@ -446,7 +466,7 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -454,7 +474,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
-  'startImport', 'importState', 'retryMissing', 'clearImport',
+  'startImport', 'importState', 'retryMissing', 'notifications', 'markNotificationsRead', 'removeNotification', 'retryReport', 'clearImport',
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
