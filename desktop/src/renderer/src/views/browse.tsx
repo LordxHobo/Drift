@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import type { AlbumPage as Album, AlbumRef, ArtistPage as Artist, ArtistRef, SearchResults, Track } from '@shared/types'
 import { Icon } from '../icons'
-import { drift, go, libraryStore, openMenu, readLocal, toast, useStore, writeLocal } from '../state'
+import { drift, go, libraryStore, openMenu, readLocal, Store, toast, useStore, writeLocal } from '../state'
 import { playList, usePlayer } from '../player'
 import {
   Art, BigPlay, Card, LikedCover, PlaylistCover, Shelf, TrackArt, TrackList, addToPlaylistItems, playlistMenu, trackMenu
@@ -158,15 +158,62 @@ function rememberSearch(q: string): void {
   writeLocal('searchHistory', [s, ...list].slice(0, 20))
 }
 
+/** Where search looks: YouTube Music, or all of YouTube (fan uploads, live sets, mixes, links). */
+export const searchModeStore = new Store<'music' | 'youtube'>(readLocal('searchMode', 'music'))
+searchModeStore.subscribe(() => writeLocal('searchMode', searchModeStore.get()))
+
+function SearchTabs(): JSX.Element {
+  const mode = useStore(searchModeStore)
+  return (
+    <div className="search-tabs">
+      <button className={`chip ${mode === 'music' ? 'on' : ''}`} onClick={() => searchModeStore.set('music')}>YouTube Music</button>
+      <button className={`chip ${mode === 'youtube' ? 'on' : ''}`} onClick={() => searchModeStore.set('youtube')}>YouTube</button>
+    </div>
+  )
+}
+
+function YouTubeResults({ q }: { q: string }): JSX.Element {
+  const [res, setRes] = useState<{ q: string; list?: Track[]; error?: string } | null>(null)
+  useEffect(() => {
+    let alive = true
+    const timer = window.setTimeout(() => {
+      drift
+        .searchYouTube(q)
+        .then((list) => {
+          if (!alive) return
+          setRes({ q, list })
+          rememberSearch(q)
+        })
+        .catch((e) => alive && setRes({ q, error: cleanError(e) }))
+    }, 350)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [q])
+  const mine = res?.q === q ? res : undefined
+  if (mine?.error) return <Failed message={`Search didn’t work: ${mine.error}`} />
+  if (!mine?.list) return <Loading />
+  if (!mine.list.length) return <div className="empty">Nothing on YouTube for “{q}”.</div>
+  return (
+    <section className="section">
+      <h2>On YouTube</h2>
+      <p className="section-note">Fan uploads, live sets and mixes that aren’t on YouTube Music. Only the audio plays, exactly as uploaded.</p>
+      <TrackList tracks={mine.list} context={{ kind: 'search', name: q }} showAlbum={false} numbered={false} />
+    </section>
+  )
+}
+
 export function SearchPage({ q }: { q: string }): JSX.Element {
   const music = useMusic()
+  const mode = useStore(searchModeStore)
   const [results, setResults] = useState<{ q: string; data?: SearchResults; error?: string } | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [history, setHistory] = useState(() => readLocal<string[]>('searchHistory', []))
   const query = q.trim()
 
   useEffect(() => {
-    if (!query) {
+    if (!query || mode === 'youtube') {
       setResults(null)
       return
     }
@@ -186,12 +233,13 @@ export function SearchPage({ q }: { q: string }): JSX.Element {
       alive = false
       clearTimeout(timer)
     }
-  }, [query])
+  }, [query, mode])
 
   if (!query) {
     return (
       <div className="page">
         {music && <h1 className="page-title">Search</h1>}
+        <SearchTabs />
         {history.length > 0 ? (
           <section>
             <div className="shelf-head">
@@ -221,7 +269,11 @@ export function SearchPage({ q }: { q: string }): JSX.Element {
             </div>
           </section>
         ) : (
-          <div className="empty">Search for songs, artists and albums on YouTube Music.</div>
+          <div className="empty">
+            {mode === 'music'
+              ? 'Search for songs, artists and albums on YouTube Music.'
+              : 'Search all of YouTube for what isn’t on YouTube Music (fan uploads, live sets, mixes), or paste a YouTube link.'}
+          </div>
         )}
       </div>
     )
@@ -231,6 +283,11 @@ export function SearchPage({ q }: { q: string }): JSX.Element {
   const error = results?.q === query ? results.error : undefined
   return (
     <div className="page search-page">
+      <SearchTabs />
+      {mode === 'youtube' ? (
+        <YouTubeResults q={query} />
+      ) : (
+        <>
       {suggestions.length > 0 && (
         <div className="suggestions">
           {suggestions.slice(0, 6).map((s) => (
@@ -239,6 +296,8 @@ export function SearchPage({ q }: { q: string }): JSX.Element {
         </div>
       )}
       {error ? <Failed message={`Search didn’t work: ${error}`} /> : !data ? <Loading /> : <SearchResultsView data={data} q={query} />}
+        </>
+      )}
     </div>
   )
 }
@@ -435,13 +494,13 @@ export function ArtistPage({ id, hint }: { id: string; hint?: ArtistRef }): JSX.
 
 // MARK: Album
 
-export function AlbumPage({ id, hint }: { id: string; hint?: AlbumRef }): JSX.Element {
+export function AlbumPage({ id, hint, exact }: { id: string; hint?: AlbumRef; exact?: boolean }): JSX.Element {
   const lib = useStore(libraryStore)
   const music = useMusic()
   const [page, setPage] = useState<{ id: string; data?: Album; error?: string }>({ id })
   const load = (): void => {
     setPage({ id })
-    drift.album(id).then((data) => setPage({ id, data })).catch((e) => setPage({ id, error: cleanError(e) }))
+    drift.album(id, exact).then((data) => setPage({ id, data })).catch((e) => setPage({ id, error: cleanError(e) }))
   }
   useEffect(load, [id])
   const data = page.id === id ? page.data : undefined
@@ -488,6 +547,13 @@ export function AlbumPage({ id, hint }: { id: string; hint?: AlbumRef }): JSX.El
           { label: 'Download album', icon: 'download', action: () => { void drift.download(data.tracks); toast(`Downloading ${data.title}`) } }
         ]) : undefined}
       />
+      {data?.cleanId && (
+        <div className="album-note">
+          <span className="explicit-mark">E</span>
+          Showing the explicit version.
+          <button className="link" onClick={() => go({ name: 'album', id: data.cleanId!, exact: true })}>Show the clean version</button>
+        </div>
+      )}
       {!data ? <Loading /> : <TrackList tracks={data.tracks} context={{ kind: 'album', id, name: title }} showAlbum={false} showArt={false} />}
     </div>
   )

@@ -10,6 +10,7 @@ import { CollectionHeader, FilterField, filterTracks, useMusic } from './common'
 import { formatBytes } from '../downloads'
 import { editPlaylist } from './editPlaylist'
 import { Icon } from '../icons'
+import { sortTracks, useSort } from '../sort'
 
 /** Downloaded songs, newest first (reloaded when downloads change). */
 function useDownloadedTracks(active: boolean): Track[] {
@@ -44,8 +45,13 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
   const [filter, setFilter] = useState('')
   const music = useMusic()
   const p = lib.playlists.find((x) => x.id === id)
+  const [sort, onSort] = useSort(id)
   if (!p) return <div className="empty">This playlist was deleted.</div>
-  const { list, indexes } = filterTracks(p.tracks, filter)
+  // Albums keep their track order; playlists can be sorted by any column.
+  const sortBy = p.isAlbum ? null : sort
+  const filtered = filterTracks(p.tracks, filter)
+  const { list, indexes } = sortTracks(filtered.list, filtered.indexes, sortBy)
+  const playOrder = sortBy ? sortTracks(p.tracks, undefined, sortBy).list : p.tracks
   const owner = p.isAlbum ? p.albumArtist ?? '' : account.username ?? 'You'
   return (
     <div className="page">
@@ -62,7 +68,7 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
         title={p.name}
         subtitle={owner}
         meta={`${plural(p.tracks.length, 'song')}, ${formatTotal(p.tracks)}`}
-        tracks={p.tracks}
+        tracks={playOrder}
         context={{ kind: 'playlist', id: p.id, name: p.name }}
         downloadKey={p.id}
         onMore={(e) => openMenu(e, playlistMenu(p))}
@@ -74,6 +80,9 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
         playlistId={p.id}
         context={{ kind: 'playlist', id: p.id, name: p.name }}
         showAlbum={!p.isAlbum}
+        showAdded={!p.isAlbum}
+        sort={sortBy}
+        onSort={p.isAlbum ? undefined : onSort}
         emptyText={filter ? 'No songs match.' : 'This playlist is empty. Right-click a song anywhere and choose Add to playlist.'}
       />
     </div>
@@ -85,7 +94,10 @@ export function LikedPage(): JSX.Element {
   const account = useStore(accountStore)
   const [filter, setFilter] = useState('')
   const music = useMusic()
-  const { list, indexes } = filterTracks(lib.liked, filter)
+  const [sort, onSort] = useSort('liked')
+  const filtered = filterTracks(lib.liked, filter)
+  const { list, indexes } = sortTracks(filtered.list, filtered.indexes, sort, true)
+  const playOrder = sort ? sortTracks(lib.liked, undefined, sort, true).list : lib.liked
   return (
     <div className="page">
       <CollectionHeader
@@ -95,7 +107,7 @@ export function LikedPage(): JSX.Element {
         title={music ? 'Liked Songs' : 'Liked songs'}
         subtitle={account.username ?? 'You'}
         meta={`${plural(lib.liked.length, 'song')}, ${formatTotal(lib.liked)}`}
-        tracks={lib.liked}
+        tracks={playOrder}
         context={{ kind: 'liked', id: 'liked', name: 'Liked songs' }}
         downloadKey="liked"
         filter={lib.liked.length > 8 ? <FilterField value={filter} onChange={setFilter} placeholder="Find in Liked songs" /> : null}
@@ -104,6 +116,9 @@ export function LikedPage(): JSX.Element {
         tracks={list}
         indexes={indexes}
         context={{ kind: 'liked', id: 'liked', name: 'Liked songs' }}
+        showAdded
+        sort={sort}
+        onSort={onSort}
         emptyText={filter ? 'No songs match.' : 'Songs you like show up here. Click the heart next to any song.'}
       />
     </div>

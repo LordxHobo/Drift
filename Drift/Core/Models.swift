@@ -17,6 +17,10 @@ struct Track: Codable, Hashable, Identifiable {
     var upload: Bool?
     /// Marked explicit on YouTube Music (the "E" badge).
     var explicit: Bool?
+    /// When it was added to its playlist or Liked songs (shown and sorted on the computer).
+    var added: Date?
+    /// Picked by hand with "Replace with another version": played exactly as it is.
+    var chosen: Bool?
 
     var isEpisode: Bool { podcast == true }
 

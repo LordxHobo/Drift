@@ -208,6 +208,10 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
     if (autoplay) {
       await audio.play()
       void drift.played(t)
+      // Get the next few songs ready (which version to play, and the next one's audio).
+      const s = playerStore.get()
+      const upcoming = s.queue.slice(s.index + 1, s.index + 4).filter((x) => !x.podcast)
+      if (upcoming.length) void drift.prefetch(upcoming).catch(() => undefined)
     } else {
       patch({ loading: false })
     }

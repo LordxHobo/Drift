@@ -5,7 +5,7 @@ import { apiMethods } from '@shared/types'
 import * as store from './store'
 import * as yt from './ytmusic'
 import * as account from './account'
-import { handleStream, prepare, videoQualities } from './stream'
+import { handleStream, prefetch, prepare, videoQualities } from './stream'
 import { lyrics } from './lyrics'
 import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
 import * as spotify from './spotify'
@@ -15,7 +15,7 @@ import * as podcasts from './podcasts'
 import * as presence from './presence'
 import { setToken, testOrbit } from './orbit'
 import { createTray } from './tray'
-import { chapters, searchPodcasts, videoFromLink } from './youtube'
+import { chapters, searchPodcasts, searchYouTube, videoFromLink } from './youtube'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -97,7 +97,15 @@ const api: DriftApi = {
   suggestions: (q) => yt.suggestions(q).catch(() => []),
   artist: (id, name) => yt.artistPage(id, name),
   findArtist: async (name) => yt.bestArtist(await yt.searchArtists(yt.mainArtist(name)), yt.mainArtist(name)),
-  album: (id) => yt.albumPage(id),
+  album: async (id, exact) => {
+    const page = await yt.albumPage(id)
+    // A clean album opens as its explicit edition (when that setting is on and there is one).
+    if (!exact && store.getSettings().preferExplicit && !page.explicit) {
+      const edition = await yt.explicitEdition(page).catch(() => undefined)
+      if (edition) return { ...edition, cleanId: page.id }
+    }
+    return page
+  },
   findAlbum: async (title, artist) => {
     const list = await yt.searchAlbums(`${title} ${yt.mainArtist(artist)}`)
     const want = yt.normalize(title)
@@ -106,6 +114,13 @@ const api: DriftApi = {
   discography: (ref) => yt.discography(ref),
   radio: (id) => yt.radio(id),
   prepare: (t) => prepare(t),
+  prefetch: (list) => prefetch(list),
+  searchYouTube: (q) => searchYouTube(q),
+  versions: (q) => yt.versions(q),
+  replaceTrack: async (place, index, oldId, track) => {
+    const wasDownloaded = downloads.getDownloads().done.includes(oldId)
+    if (store.replaceTrack(place, index, oldId, track) && wasDownloaded) downloads.download([track])
+  },
   lyrics: (t) => lyrics(t),
   chapters: (id) => chapters(id),
   videoQualities: (id) => videoQualities(id),

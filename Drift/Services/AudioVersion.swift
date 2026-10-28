@@ -29,6 +29,10 @@ actor AudioVersion {
     /// The ID to actually play for a song (the album and/or explicit version when there is one).
     func preferred(_ track: Track) async -> String {
         let id = track.id
+        if track.chosen == true {
+            notes[id] = "Picked with “Replace with another version”"
+            return id
+        }
         if track.upload == true {
             notes[id] = "YouTube upload (not on YouTube Music)"
             return id

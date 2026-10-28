@@ -18,6 +18,10 @@ export interface Track {
   upload?: boolean | null
   /** Marked explicit on YouTube Music (the "E" badge). */
   explicit?: boolean | null
+  /** Picked by hand with "Replace with another version": played exactly as it is. */
+  chosen?: boolean | null
+  /** When it was added to this playlist or Liked songs (seconds since 2001, like the phone). */
+  added?: number | null
   [extra: string]: unknown
 }
 
@@ -99,6 +103,12 @@ export interface AlbumPage {
   artist: string
   thumbnail?: string | null
   tracks: Track[]
+  /** The album is marked explicit. */
+  explicit?: boolean
+  /** Other editions (clean/explicit, deluxe…). */
+  otherVersions?: (AlbumRef & { explicit?: boolean })[]
+  /** Opened the explicit edition instead of this clean one. */
+  cleanId?: string
 }
 
 export interface SearchResults {
@@ -343,11 +353,20 @@ export interface DriftApi {
   suggestions(query: string): Promise<string[]>
   artist(id: string, name?: string): Promise<ArtistPage>
   findArtist(name: string): Promise<ArtistRef | null>
-  album(id: string): Promise<AlbumPage>
+  /** `exact`: the album asked for, even when it's clean and an explicit edition exists. */
+  album(id: string, exact?: boolean): Promise<AlbumPage>
   findAlbum(title: string, artist: string): Promise<AlbumRef | null>
   discography(ref: BrowseRef): Promise<AlbumRef[]>
   radio(trackId: string): Promise<Track[]>
   prepare(track: Track): Promise<StreamInfo>
+  /** Gets the next songs ready in the background. */
+  prefetch(tracks: Track[]): Promise<void>
+  /** Any YouTube video (fan uploads, live sets…), or the video behind a pasted link. */
+  searchYouTube(query: string): Promise<Track[]>
+  /** Every version of a song on YouTube Music, clean ones included (for replacing a song). */
+  versions(query: string): Promise<Track[]>
+  /** Swaps the song at a place in a playlist (or Liked songs) for another version. */
+  replaceTrack(place: { playlistId: string } | { liked: true }, index: number, oldId: string, track: Track): Promise<void>
   lyrics(track: Track): Promise<Lyrics>
   /** An episode's chapters (from YouTube, or the timestamps in its description). */
   chapters(id: string): Promise<Chapter[]>
@@ -431,7 +450,7 @@ export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
-  'prepare', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
+  'prepare', 'prefetch', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',

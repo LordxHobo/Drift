@@ -14,6 +14,7 @@ import { SongPage } from './views/details'
 import { SettingsPage } from './views/settings'
 import { ImportDialog } from './views/import'
 import { EditPlaylistDialog } from './views/editPlaylist'
+import { ReplaceDialog } from './views/replace'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 import { ChannelPage, PodcastsPage } from './views/podcasts'
@@ -40,7 +41,7 @@ function Page({ route }: { route: Route }): JSX.Element {
     case 'artist':
       return <ArtistPage key={route.id} id={route.id} hint={route.hint} />
     case 'album':
-      return <AlbumPage key={route.id} id={route.id} hint={route.hint} />
+      return <AlbumPage key={`${route.id}${route.exact ? '!' : ''}`} id={route.id} hint={route.hint} exact={route.exact} />
     case 'playlist':
       return <PlaylistPage key={route.id} id={route.id} />
     case 'liked':
@@ -150,6 +151,7 @@ export function App(): JSX.Element {
         <ContextMenu />
         <ImportDialog />
         <EditPlaylistDialog />
+        <ReplaceDialog />
         <EditProfileDialog />
         <DialogHost />
         <Toast />
@@ -175,6 +177,7 @@ export function App(): JSX.Element {
       <ContextMenu />
       <ImportDialog />
       <EditPlaylistDialog />
+      <ReplaceDialog />
       <EditProfileDialog />
       <DialogHost />
       <Toast />

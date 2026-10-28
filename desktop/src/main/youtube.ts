@@ -380,3 +380,23 @@ export async function chapters(id: string): Promise<Chapter[]> {
   chapterCache.set(id, list)
   return list
 }
+
+// MARK: Any YouTube video, played as a song
+
+/** Fan uploads, live sets, mixes… anything on YouTube, or the video behind a pasted link. Audio only. */
+export async function searchYouTube(query: string): Promise<Track[]> {
+  const asSong = (t: Track): Track => ({
+    id: t.id,
+    title: t.title,
+    artist: t.artist,
+    duration: t.duration ?? null,
+    artworkURL: `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`,
+    upload: true
+  })
+  if (videoId(query)) {
+    const t = await videoFromLink(query)
+    return t ? [asSong(t)] : []
+  }
+  const { episodes } = await searchPodcasts(query)
+  return episodes.map(asSong)
+}

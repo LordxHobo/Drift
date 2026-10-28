@@ -96,7 +96,7 @@ final class Library {
         if let i = liked.firstIndex(where: { $0.id == t.id }) {
             liked.remove(at: i)
         } else {
-            liked.insert(t, at: 0)
+            liked.insert(Self.dated(t), at: 0)
         }
         save()
     }
@@ -130,7 +130,7 @@ final class Library {
     func createPlaylist(_ name: String, tracks: [Track]) -> Playlist {
         var p = createPlaylist(name)
         guard let i = playlists.firstIndex(where: { $0.id == p.id }) else { return p }
-        playlists[i].tracks = tracks
+        playlists[i].tracks = tracks.map { Self.dated($0, keep: true) }
         p = playlists[i]
         save()
         return p
@@ -158,10 +158,17 @@ final class Library {
     }
 
     /// Adds songs to the end of a playlist, skipping ones already in it (big imports save as they go).
+    /// A song as it goes into a list, dated now (`keep`: imports keep a date they already carry).
+    static func dated(_ t: Track, keep: Bool = false) -> Track {
+        var t = t
+        if !keep || t.added == nil { t.added = Date() }
+        return t
+    }
+
     func appendTracks(_ tracks: [Track], to id: UUID) {
         guard !tracks.isEmpty, let i = playlists.firstIndex(where: { $0.id == id }) else { return }
         var seen = Set(playlists[i].tracks.map(\.id))
-        playlists[i].tracks += tracks.filter { seen.insert($0.id).inserted }
+        playlists[i].tracks += tracks.filter { seen.insert($0.id).inserted }.map { Self.dated($0, keep: true) }
         save()
     }
 
@@ -247,7 +254,7 @@ final class Library {
     func add(_ t: Track, to id: UUID) {
         guard let i = playlists.firstIndex(where: { $0.id == id }),
               !playlists[i].tracks.contains(where: { $0.id == t.id }) else { return }
-        playlists[i].tracks.append(t)
+        playlists[i].tracks.append(Self.dated(t))
         save()
     }
 
@@ -269,6 +276,8 @@ final class Library {
         switch place {
         case .liked:
             guard let i = liked.firstIndex(where: { $0.id == old.id }) else { return }
+            var new = new
+            new.added = liked[i].added
             if liked.contains(where: { $0.id == new.id }) { liked.remove(at: i) } else { liked[i] = new }
         case .playlist(let id):
             guard let p = playlists.firstIndex(where: { $0.id == id }),
@@ -276,6 +285,8 @@ final class Library {
             if playlists[p].tracks.contains(where: { $0.id == new.id }) {
                 playlists[p].tracks.remove(at: i)
             } else {
+                var new = new
+                new.added = playlists[p].tracks[i].added
                 playlists[p].tracks[i] = new
             }
         }

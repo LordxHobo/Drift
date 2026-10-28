@@ -202,7 +202,7 @@ export function searchSongs(query: string, songsOnly = true): Promise<Track[]> {
   return search(query, songsOnly ? params.songs : undefined)
 }
 
-async function search(query: string, filter?: string): Promise<Track[]> {
+async function search(query: string, filter?: string, all = false): Promise<Track[]> {
   const json = await post('search', filter ? { query, params: filter } : { query })
   const out: Track[] = []
   const seen = new Set<string>()
@@ -213,7 +213,14 @@ async function search(query: string, filter?: string): Promise<Track[]> {
       out.push(t)
     }
   })
-  return getSettings().preferExplicit ? withoutCleanTwins(out) : out
+  return getSettings().preferExplicit && !all ? withoutCleanTwins(out) : out
+}
+
+/** Every version of a song on YouTube Music (songs, then music videos), clean ones included. */
+export async function versions(query: string): Promise<Track[]> {
+  const [songs, videos] = await Promise.all([search(query, params.songs, true).catch(() => []), search(query, params.videos, true).catch(() => [])])
+  const seen = new Set<string>()
+  return [...songs, ...videos].filter((t) => !seen.has(t.id) && !!seen.add(t.id))
 }
 
 // MARK: Explicit versions
@@ -252,10 +259,54 @@ function withoutCleanTwins(list: Track[]): Track[] {
  * The explicit version of a song when the one about to play is clean. `known` holds what's already
  * known about which IDs are explicit. `onlySongs`: leave music videos alone (album versions are off).
  */
-export async function explicitVersion(track: Track, playId: string, known: Map<string, boolean>, onlySongs: boolean): Promise<string | undefined> {
-  if (known.get(playId) || track.explicit) return undefined
+export async function explicitVersion(
+  track: Track,
+  playId: string,
+  known: Map<string, boolean>,
+  onlySongs: boolean,
+  albums: Map<string, string> = new Map()
+): Promise<string | undefined> {
+  if (known.get(playId) || (track.explicit && playId === track.id)) return undefined
   const title = withoutCleanTag(track.title)
   if (!title) return undefined
+
+  // 1. The album route: the song's own album, then its explicit edition, then the same song there.
+  //    Exact, and cheap when a whole album plays (its pages are kept for a while).
+  try {
+    let albumId = albums.get(playId)
+    if (!albumId) {
+      const json = await post('next', { videoId: playId, isAudioOnly: true })
+      let own: J
+      walk(json, 'playlistPanelVideoRenderer', (r) => {
+        if (!own && r.videoId === playId) own = r
+      })
+      if (own) {
+        known.set(playId, isExplicit(own))
+        albumId = albumIdOf(own)
+      }
+    }
+    if (known.get(playId)) return undefined
+    if (albumId) {
+      const page = await cachedAlbum(albumId)
+      const mine = page.tracks.findIndex((t) => t.id === playId)
+      if (mine >= 0 && page.tracks[mine].explicit) {
+        known.set(playId, true)
+        return undefined
+      }
+      const edition = await explicitEdition(page)
+      if (edition) {
+        const ref: Track = { ...track, title: mine >= 0 ? page.tracks[mine].title : title, duration: mine >= 0 ? page.tracks[mine].duration : track.duration }
+        // Same place on the album first, then by name.
+        const same = mine >= 0 ? edition.tracks[mine] : undefined
+        const hit = same && sameSong(ref, same, 12) ? same : edition.tracks.find((t) => sameSong(ref, t, 12))
+        if (hit && hit.id !== playId) return hit.id
+      }
+    }
+  } catch {
+    // fall back to searching
+  }
+
+  // 2. Searching for the song and taking the explicit one.
   const json = await post('search', { query: `${title} ${mainArtist(track.artist)}`, params: params.songs })
   const rows: { t: Track; song: boolean }[] = []
   collect(json, (r) => {
@@ -450,7 +501,56 @@ export async function albumPage(id: string): Promise<AlbumPage> {
     if (!t.artworkURL) t.artworkURL = art
     tracks.push(t)
   })
-  return { id, title, subtitle, artist, thumbnail: art, tracks }
+  // "Other versions" (clean or explicit editions, deluxe…), shown under the album on YouTube Music.
+  const otherVersions: (AlbumRef & { explicit?: boolean })[] = []
+  walk(json, 'musicTwoRowItemRenderer', (r) => {
+    const ref = albumRef(r)
+    if (ref && ref.id !== id && !otherVersions.some((o) => o.id === ref.id)) otherVersions.push({ ...ref, explicit: isExplicit(r) })
+  })
+  const explicit = isExplicit(header) || (tracks.length > 0 && tracks.some((t) => t.explicit))
+  const page: AlbumPage = { id, title, subtitle, artist, thumbnail: art, tracks, explicit, otherVersions }
+  albumCache.set(id, page)
+  if (albumCache.size > 60) albumCache.delete(albumCache.keys().next().value!)
+  return page
+}
+
+/** Album pages seen lately (a clean album's songs all look at the same pages). */
+const albumCache = new Map<string, AlbumPage>()
+
+async function cachedAlbum(id: string): Promise<AlbumPage> {
+  return albumCache.get(id) ?? albumPage(id)
+}
+
+/** The explicit edition of a clean album, when YouTube Music lists one under "Other versions". */
+export async function explicitEdition(page: AlbumPage): Promise<AlbumPage | undefined> {
+  if (page.explicit) return undefined
+  const want = normalize(page.title)
+  const candidates = (page.otherVersions ?? []).filter((o) => o.explicit)
+  // Same album name first (the other versions can include deluxe editions).
+  const rank = (o: AlbumRef): number => (o.title.toLowerCase() === page.title.toLowerCase() ? 2 : normalize(o.title) === want ? 1 : 0)
+  candidates.sort((a, b) => rank(b) - rank(a))
+  for (const c of candidates.slice(0, 3)) {
+    const other = await cachedAlbum(c.id).catch(() => undefined)
+    if (other?.tracks.some((t) => t.explicit) || other?.explicit) return other
+  }
+  return undefined
+}
+
+/** The album a row belongs to (its "Go to album" link in the byline). */
+function albumIdOf(r: J): string | undefined {
+  let found: string | undefined
+  const visit = (n: J): void => {
+    if (found || !n || typeof n !== 'object') return
+    if (Array.isArray(n)) return n.forEach(visit)
+    const id = n.browseEndpoint?.browseId
+    if (typeof id === 'string' && id.startsWith('MPRE')) {
+      found = id
+      return
+    }
+    for (const k of Object.keys(n)) if (k !== 'menu') visit(n[k])
+  }
+  visit(r)
+  return found
 }
 
 // MARK: Radio (what plays after the queue ends) and album versions
@@ -497,7 +597,7 @@ const atv = 'MUSIC_VIDEO_TYPE_ATV'
  * The album version of a music video, when YouTube Music has one: first its own link between the two,
  * then a "songs" search for the same title and artist. Returns [id to play, what was found].
  */
-export async function albumVersion(track: Track, known: Map<string, boolean> = new Map()): Promise<[string, string]> {
+export async function albumVersion(track: Track, known: Map<string, boolean> = new Map(), albums: Map<string, string> = new Map()): Promise<[string, string]> {
   const id = track.id
   let linkNote = 'YouTube Music link: no answer'
   try {
@@ -516,7 +616,12 @@ export async function albumVersion(track: Track, known: Map<string, boolean> = n
     })
     if (first) {
       const candidates = panelTracks(first)
-      for (const c of candidates) if (typeof c.videoId === 'string') known.set(c.videoId, isExplicit(c))
+      for (const c of candidates) {
+        if (typeof c.videoId !== 'string') continue
+        known.set(c.videoId, isExplicit(c))
+        const album = albumIdOf(c)
+        if (album) albums.set(c.videoId, album)
+      }
       const types = candidates.map((c) => [c.videoId as string | undefined, videoType(c)] as const)
       const own = types.find((t) => t[0] === id)?.[1]
       const short = (own ?? 'unknown').replace('MUSIC_VIDEO_TYPE_', '')

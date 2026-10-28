@@ -315,9 +315,10 @@ function loadVersions(mode: string): Record<string, string> {
 /** The album version (if wanted), then its explicit version (if wanted and it's clean). */
 async function chooseVersion(track: Track, official: boolean, explicit: boolean): Promise<[string, string]> {
   const known = new Map<string, boolean>()
-  let [play, note] = official ? await albumVersion(track, known) : [track.id, 'Album versions off']
+  const albums = new Map<string, string>()
+  let [play, note] = official ? await albumVersion(track, known, albums) : [track.id, 'Album versions off']
   if (explicit) {
-    const other = await explicitVersion(track, play, known, !official).catch(() => undefined)
+    const other = await explicitVersion(track, play, known, !official, albums).catch(() => undefined)
     if (other) {
       play = other
       note += '; explicit version found (this one was clean)'
@@ -330,6 +331,10 @@ async function chooseVersion(track: Track, official: boolean, explicit: boolean)
 
 async function preferredId(track: Track): Promise<string> {
   const id = track.id
+  if (track.chosen) {
+    notes.set(id, 'Picked with “Replace with another version”')
+    return id
+  }
   if (track.upload) {
     notes.set(id, 'YouTube upload (not on YouTube Music)')
     return id
@@ -440,6 +445,18 @@ function serveFile(local: LocalAudio, rangeHeader: string | null): Response {
       'Content-Range': `bytes ${start}-${end}/${local.size}`
     }
   })
+}
+
+/**
+ * Gets the next songs ready while this one plays: which version to play for the next few, and the
+ * audio link for the very next one, so they start right away.
+ */
+export async function prefetch(tracks: Track[]): Promise<void> {
+  for (const [i, t] of tracks.slice(0, 3).entries()) {
+    if (t.podcast || localLookup(t.id)) continue
+    const playId = await preferredId(t).catch(() => undefined)
+    if (i === 0 && playId) await resolve(playId).catch(() => undefined)
+  }
 }
 
 export async function prepare(track: Track): Promise<StreamInfo> {

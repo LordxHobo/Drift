@@ -112,7 +112,7 @@ function playlist(id: string): Playlist | undefined {
 /** Only what the phone knows about a song (keeps files small and syncs cleanly). */
 function clean(t: Track): Track {
   const out: Track = { id: t.id, title: t.title, artist: t.artist }
-  for (const k of ['album', 'duration', 'artworkURL', 'podcast', 'channelID', 'channelAvatar', 'published', 'upload'] as const) {
+  for (const k of ['album', 'duration', 'artworkURL', 'podcast', 'channelID', 'channelAvatar', 'published', 'upload', 'explicit', 'chosen', 'added'] as const) {
     if (t[k] != null) (out as Record<string, unknown>)[k] = t[k]
   }
   return out
@@ -121,7 +121,7 @@ function clean(t: Track): Track {
 export function setLiked(t: Track, liked: boolean): void {
   const lib = getLibrary()
   const i = lib.liked.findIndex((x) => x.id === t.id)
-  if (liked && i < 0) lib.liked.unshift(clean(t))
+  if (liked && i < 0) lib.liked.unshift({ ...clean(t), added: nowApple() })
   else if (!liked && i >= 0) lib.liked.splice(i, 1)
   else return
   save()
@@ -132,7 +132,7 @@ export function createPlaylist(name: string, tracks: Track[], extra: Partial<Pla
   const p: Playlist = {
     id: randomUUID().toUpperCase(),
     name: name.trim() || `My playlist #${lib.playlists.length + 1}`,
-    tracks: tracks.map(clean),
+    tracks: stamp(tracks),
     colorIndex: lib.playlists.length,
     ...extra
   }
@@ -141,10 +141,29 @@ export function createPlaylist(name: string, tracks: Track[], extra: Partial<Pla
   return p.id
 }
 
-export function addToPlaylist(id: string, tracks: Track[]): void {
+/** Swaps one song for another version, in the same spot (removes it if the new one is already there). */
+export function replaceTrack(place: { playlistId: string } | { liked: true }, index: number, oldId: string, track: Track): boolean {
+  const lib = getLibrary()
+  const list = 'liked' in place ? lib.liked : playlist(place.playlistId)?.tracks
+  if (!list) return false
+  const i = list[index]?.id === oldId ? index : list.findIndex((t) => t.id === oldId)
+  if (i < 0) return false
+  if (list.some((t, j) => j !== i && t.id === track.id)) list.splice(i, 1)
+  else list[i] = { ...clean(track), added: list[i].added ?? null }
+  save()
+  return true
+}
+
+/** Songs as they go into a list, dated now (or with their own date, for imports). */
+function stamp(tracks: Track[], keepDates = false): Track[] {
+  const now = nowApple()
+  return tracks.map((t) => ({ ...clean(t), added: keepDates && t.added != null ? t.added : now }))
+}
+
+export function addToPlaylist(id: string, tracks: Track[], keepDates = false): void {
   const p = playlist(id)
   if (!p) return
-  p.tracks.push(...tracks.map(clean))
+  p.tracks.push(...stamp(tracks, keepDates))
   save()
 }
 

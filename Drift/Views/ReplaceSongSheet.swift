@@ -129,6 +129,7 @@ struct ReplaceSongSheet: View {
         t.upload = true
         t.podcast = nil
         t.album = nil
+        t.chosen = true
         Library.shared.replace(request.track, with: t, in: request.place)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         dismiss()

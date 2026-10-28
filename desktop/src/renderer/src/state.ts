@@ -88,7 +88,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'search'; q?: string }
   | { name: 'artist'; id: string; hint?: ArtistRef }
-  | { name: 'album'; id: string; hint?: AlbumRef }
+  | { name: 'album'; id: string; hint?: AlbumRef; exact?: boolean }
   | { name: 'playlist'; id: string }
   | { name: 'liked' }
   | { name: 'collection'; kind: 'artists' | 'albums' | 'songs' | 'recent' | 'playlists' | 'downloaded' }

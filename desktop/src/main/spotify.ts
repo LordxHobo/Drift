@@ -3,6 +3,7 @@ import { app, BrowserWindow, net, session } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ImportState, MissingSong, Track } from '@shared/types'
+import { appleEpoch } from '@shared/types'
 import * as store from './store'
 import { mainArtist, normalize, searchSongs } from './ytmusic'
 import { searchVideos } from './youtube'
@@ -11,6 +12,8 @@ interface SpotifyTrack {
   title: string
   artist: string
   duration?: number
+  /** When it was added on Spotify (seconds since 2001, like the phone). */
+  added?: number
 }
 
 interface SpotifyList {
@@ -120,7 +123,8 @@ function parsePage(json: any): Page | undefined {
     if (!d?.name || (d.__typename && d.__typename !== 'Track')) return null
     const artists = (d.artists?.items ?? []).map((a: any) => a?.profile?.name).filter(Boolean)
     const ms = d.trackDuration?.totalMilliseconds ?? d.duration?.totalMilliseconds ?? 0
-    return { title: d.name, artist: artists[0] ?? '', duration: ms > 0 ? ms / 1000 : undefined }
+    const when = Date.parse(it?.addedAt?.isoString ?? '')
+    return { title: d.name, artist: artists[0] ?? '', duration: ms > 0 ? ms / 1000 : undefined, added: Number.isFinite(when) ? when / 1000 - appleEpoch : undefined }
   })
   return { name: pl.name ?? undefined, total: typeof pl.content.totalCount === 'number' ? pl.content.totalCount : undefined, items }
 }
@@ -534,10 +538,10 @@ export async function startImport(link: string): Promise<void> {
       toSearch.forEach((i, k) => (matched[i] = searched[k]))
       const found: Track[] = []
       matched.forEach((t, i) => {
-        if (t) found.push(t)
+        if (t) found.push({ ...t, added: slice[i].added ?? null })
         else missing.push({ title: slice[i].title, artist: slice[i].artist, duration: slice[i].duration ?? null })
       })
-      if (store.getLibrary().playlists.some((p) => p.id === id)) store.addToPlaylist(id, found)
+      if (store.getLibrary().playlists.some((p) => p.id === id)) store.addToPlaylist(id, found, true)
     }
     set({ phase: 'done', missing, processed: list.tracks.length })
   } catch (e) {

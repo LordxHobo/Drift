@@ -4,6 +4,10 @@ import type { Playlist, Track } from '@shared/types'
 import { Icon } from './icons'
 import { DownloadMark, downloadMenuItem, useDownloadSets } from './downloads'
 import { editPlaylist } from './views/editPlaylist'
+import { openReplace } from './views/replace'
+import type { SongPlace } from './views/replace'
+import { addedText } from './sort'
+import type { Sort, SortKey } from './sort'
 import {
   accountStore, dialogStore, drift, go, libraryStore, menuStore, openMenu, settingsStore, toast, toastStore, updateStore, useStore
 } from './state'
@@ -168,7 +172,7 @@ export async function goToAlbum(t: Track): Promise<void> {
   else go({ name: 'search', q: `${t.album} ${t.artist}` })
 }
 
-export function trackMenu(t: Track, opts: { playlistId?: string; index?: number; extra?: MenuItem[] } = {}): MenuItem[] {
+export function trackMenu(t: Track, opts: { playlistId?: string; index?: number; place?: SongPlace; extra?: MenuItem[] } = {}): MenuItem[] {
   const liked = isLiked(t.id)
   const items: MenuItem[] = [
     { label: 'Play next', icon: 'queue', action: () => playNext([t]) },
@@ -180,6 +184,9 @@ export function trackMenu(t: Track, opts: { playlistId?: string; index?: number;
     downloadMenuItem(t),
     ...(opts.playlistId && opts.index !== undefined
       ? [{ label: 'Remove from this playlist', icon: 'trash', action: () => void drift.removeFromPlaylist(opts.playlistId!, [opts.index!]) }]
+      : []),
+    ...(opts.place && opts.index !== undefined && !t.podcast
+      ? [{ label: 'Replace with another version…', icon: 'swap', action: () => openReplace(t, opts.place!, opts.index!) }]
       : []),
     { label: '', separator: true },
     { label: 'Go to artist', icon: 'mic', action: () => void goToArtist(t.artist), disabled: !t.artist },
@@ -210,6 +217,27 @@ export interface TrackListProps {
   numbered?: boolean
   compact?: boolean
   emptyText?: string
+  /** A "Date added" column (playlists and Liked songs). */
+  showAdded?: boolean
+  /** Clickable column headers (playlists and Liked songs). */
+  sort?: Sort
+  onSort?: (key: SortKey) => void
+}
+
+/** A column header that sorts the list when clicked. */
+function SortHeader({ k, label, sort, onSort, className }: { k: SortKey; label: ReactNode; sort?: Sort; onSort?: (key: SortKey) => void; className?: string }): JSX.Element {
+  if (!onSort) return <span className={className}>{label}</span>
+  const on = sort?.key === k
+  const hint =
+    k === 'added'
+      ? !on ? 'Sort: newest first' : sort.dir === 'desc' ? 'Sort: oldest first' : 'Back to your order'
+      : !on ? 'Sort: A to Z' : sort.dir === 'asc' ? 'Sort: Z to A' : 'Back to your order'
+  return (
+    <button className={`sort-head ${on ? 'on' : ''} ${className ?? ''}`} onClick={() => onSort(k)} title={hint}>
+      {label}
+      {on && <Icon name={sort.dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={12} />}
+    </button>
+  )
 }
 
 export function TrackList(props: TrackListProps): JSX.Element {
@@ -234,12 +262,21 @@ export function TrackList(props: TrackListProps): JSX.Element {
   }
 
   return (
-    <div className={`tracks ${music ? 'tracks-music' : 'tracks-drift'} ${showAlbum ? '' : 'no-album'} ${props.compact ? 'compact' : ''}`} role="list">
-      <div className="track-head" aria-hidden="true">
+    <div className={`tracks ${music ? 'tracks-music' : 'tracks-drift'} ${showAlbum ? '' : 'no-album'} ${props.showAdded ? 'with-added' : ''} ${props.compact ? 'compact' : ''}`} role="list">
+      <div className="track-head" aria-hidden={props.onSort ? undefined : 'true'}>
         <span className="c-num">{numbered && !music ? '#' : ''}</span>
-        <span className="c-title">{music ? 'Song' : 'Title'}</span>
-        {music && <span className="c-artist">Artist</span>}
-        {showAlbum && <span className="c-album">Album</span>}
+        {music ? (
+          <SortHeader k="title" label="Song" sort={props.sort} onSort={props.onSort} className="c-title" />
+        ) : (
+          <span className="c-title head-pair">
+            <SortHeader k="title" label="Title" sort={props.sort} onSort={props.onSort} />
+            {props.onSort && <span className="head-dot">·</span>}
+            {props.onSort && <SortHeader k="artist" label="Artist" sort={props.sort} onSort={props.onSort} />}
+          </span>
+        )}
+        {music && <SortHeader k="artist" label="Artist" sort={props.sort} onSort={props.onSort} className="c-artist" />}
+        {showAlbum && <SortHeader k="album" label="Album" sort={props.sort} onSort={props.onSort} className="c-album" />}
+        {props.showAdded && <SortHeader k="added" label="Date added" sort={props.sort} onSort={props.onSort} className="c-added" />}
         <span className="c-like" />
         <span className="c-time">{music ? 'Time' : <Icon name="clock" size={16} />}</span>
         <span className="c-more" />
@@ -247,7 +284,11 @@ export function TrackList(props: TrackListProps): JSX.Element {
       {tracks.map((t, i) => {
         const current = player.current?.id === t.id
         const menu = (e: React.MouseEvent): void =>
-          openMenu(e, trackMenu(t, { playlistId, index: playlistId ? full(i) : undefined }))
+          openMenu(e, trackMenu(t, {
+            playlistId,
+            index: playlistId || context.kind === 'liked' ? full(i) : undefined,
+            place: playlistId ? { playlistId } : context.kind === 'liked' ? { liked: true } : undefined
+          }))
         return (
           <div
             key={`${t.id}-${i}`}
@@ -279,7 +320,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
           >
             <span className="c-num">
               <span className="num-text">
-                {current && player.playing ? <EqualizerIcon /> : numbered ? full(i) + 1 : ''}
+                {current && player.playing ? <EqualizerIcon /> : numbered ? (props.sort ? i + 1 : full(i) + 1) : ''}
               </span>
               <button className="row-play" aria-label={`Play ${t.title}`} onClick={() => play(i)}>
                 <Icon name="play" size={14} />
@@ -313,6 +354,7 @@ export function TrackList(props: TrackListProps): JSX.Element {
                 {t.album ? <button className="link" onClick={() => void goToAlbum(t)}>{t.album}</button> : ''}
               </span>
             )}
+            {props.showAdded && <span className="c-added">{addedText(t.added)}</span>}
             <span className="c-like">
               <button
                 className={`like-btn ${likedIds.has(t.id) ? 'on' : ''}`}
