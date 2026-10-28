@@ -3023,3 +3023,180 @@ kbd {
 .lib-settings.on {
   color: var(--text);
 }
+
+/* Friends */
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.friend-row:hover {
+  background: var(--hover);
+}
+.friend-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+.friend-live {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel-raised, var(--panel));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.5px;
+  padding-bottom: 4px;
+}
+.friend-live i {
+  width: 2.5px;
+  background: var(--on-accent);
+  border-radius: 1px;
+  animation: eq 0.9s ease-in-out infinite;
+}
+.friend-live i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.friend-live i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+.friend-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.friend-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.friend-top b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friend-when {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.friend-when.now {
+  color: var(--accent);
+  font-weight: 700;
+}
+.friend-track {
+  font-size: 13px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: left;
+}
+.friend-track.muted {
+  color: var(--muted);
+}
+.friends-panel {
+  display: flex;
+  flex-direction: column;
+}
+.friends-more {
+  margin: 12px 8px;
+  align-self: flex-start;
+}
+.friends-page {
+  max-width: 820px;
+}
+.people-search {
+  max-width: none;
+  margin-bottom: 18px;
+}
+.friends-tabs {
+  padding: 0 0 10px;
+}
+.icon-btn.active-round {
+  color: var(--accent) !important;
+}
+.user-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  margin-bottom: 26px;
+}
+.user-head .avatar {
+  box-shadow: var(--shadow);
+}
+.user-text h1 {
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  margin: 4px 0 10px;
+}
+.app.music .user-text h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.user-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 14px;
+  color: var(--text2);
+}
+.user-buttons {
+  margin-top: 16px;
+}
+.activity-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  max-width: 560px;
+}
+.activity-text {
+  flex: 1;
+  min-width: 0;
+}
+.activity-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.activity-label.now {
+  color: var(--accent);
+}
+.activity-title {
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-artist {
+  color: var(--muted);
+  font-size: 13px;
+}
+.big-play.small {
+  width: 44px;
+  height: 44px;
+}
+.set-row.in-card {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  margin-top: 12px;
+  padding-bottom: 0;
+}

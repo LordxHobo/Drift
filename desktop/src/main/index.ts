@@ -10,6 +10,7 @@ import { lyrics } from './lyrics'
 import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './updater'
 import * as spotify from './spotify'
 import * as downloads from './downloads'
+import * as social from './social'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -141,6 +142,18 @@ const api: DriftApi = {
   openDownloadsFolder: async () => downloads.openFolder(),
   retryFailedDownloads: async () => downloads.retryFailed(),
 
+  me: () => social.me(),
+  friends: () => social.friends(),
+  followers: (id) => social.followers(id),
+  user: (id) => social.user(id),
+  searchUsers: (text) => social.searchUsers(text),
+  followUser: (id, follow) => social.followUser(id, follow),
+  sharedPlaylists: (u) => social.sharedPlaylists(u),
+  sharedPlaylistTracks: (owner, id) => social.sharedPlaylistTracks(owner, id),
+  setShareActivity: (on) => social.setShareActivity(on),
+  setPrivateSession: async (on) => social.setPrivateSession(on),
+  publishActivity: (t, playing) => social.publishActivity(t, playing),
+
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),
   installUpdate: async () => installUpdate()
@@ -173,6 +186,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  void social.publishActivity(null, false)
   store.flush()
   downloads.flushDownloads()
 })

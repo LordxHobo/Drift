@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
-import { accountStore, dialogStore, downloadsStore, drift, go, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
+import { accountStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
 import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
@@ -153,6 +153,7 @@ function LinkPhone(): JSX.Element {
           </div>
         </div>
         <p className="set-detail">Playlists, albums, liked songs and followed artists stay the same here and on your phone.</p>
+        <ShareActivity />
         <div className="link-buttons">
           <button className="btn" onClick={() => void drift.syncNow()} disabled={account.syncing}>
             {account.syncing ? <Spinner size={14} /> : <Icon name="sync" size={14} />} Sync now
@@ -275,5 +276,26 @@ function DownloadSettings(): JSX.Element {
         </button>
       </Row>
     </>
+  )
+}
+
+function ShareActivity(): JSX.Element | null {
+  const me = useStore(meStore)
+  if (!me) return null
+  return (
+    <div className="set-row in-card">
+      <div className="set-text">
+        <div className="set-title">Share what I listen to</div>
+        <div className="set-detail">Friends who follow you see what’s playing. Same setting as on your phone.</div>
+      </div>
+      <Toggle
+        on={me.shareActivity}
+        label="Share what I listen to"
+        onChange={(v) => {
+          meStore.set({ ...me, shareActivity: v })
+          void drift.setShareActivity(v)
+        }}
+      />
+    </div>
   )
 }

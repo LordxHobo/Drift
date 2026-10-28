@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AlbumRef, ArtistRef, DownloadsState, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AlbumRef, ArtistRef, DownloadsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -35,6 +35,10 @@ export const platformStore = new Store<string>('win32')
 export const updateStore = new Store<UpdateState>({ phase: 'idle' })
 export const importStore = new Store<ImportState>({ phase: 'idle', total: 0, processed: 0, missing: [] })
 export const downloadsStore = new Store<DownloadsState>({ done: [], queued: [], active: [], keep: [], bytes: 0, folder: '', rate: 0, failed: [] })
+/** Your Drift profile (when linked with the phone). */
+export const meStore = new Store<UserProfile | null>(null)
+/** Hide what you listen to until Drift closes. */
+export const privateSessionStore = new Store(false)
 /** The Spotify import window. */
 export const importOpenStore = new Store(false)
 
@@ -55,7 +59,13 @@ export async function loadAll(): Promise<void> {
   platformStore.set(info.platform)
   drift.on('library', (v) => libraryStore.set(v))
   drift.on('settings', (v) => settingsStore.set(v))
-  drift.on('account', (v) => accountStore.set(v))
+  drift.on('account', (v) => {
+    const was = accountStore.get().linked
+    accountStore.set(v)
+    if (v.linked && !was) void drift.me().then((m) => meStore.set(m)).catch(() => undefined)
+  })
+  drift.on('me', (v) => meStore.set(v))
+  if (account.linked) void drift.me().then((m) => meStore.set(m)).catch(() => undefined)
   drift.on('pairing', (v) => pairingStore.set(v))
 }
 
@@ -77,6 +87,9 @@ export type Route =
   | { name: 'song'; track: Track }
   | { name: 'lyrics' }
   | { name: 'settings' }
+  | { name: 'friends' }
+  | { name: 'user'; id: string; hint?: UserProfile }
+  | { name: 'shared'; playlist: SharedPlaylist }
 
 interface Nav {
   stack: Route[]
@@ -116,7 +129,7 @@ export function forward(): void {
 
 // MARK: Side panel (lyrics, queue, details)
 
-export type Panel = 'none' | 'lyrics' | 'queue'
+export type Panel = 'none' | 'lyrics' | 'queue' | 'friends'
 export const panelStore = new Store<Panel>(readLocal<Panel>('panel', 'none'))
 panelStore.subscribe(() => writeLocal('panel', panelStore.get()))
 

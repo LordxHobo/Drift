@@ -3,7 +3,7 @@ import type { JSX } from 'react'
 import type { Playlist } from '@shared/types'
 import { Icon, Logo } from './icons'
 import {
-  accountStore, back, downloadsStore, forward, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
+  accountStore, back, downloadsStore, drift, forward, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal
 } from './state'
 import type { MenuItem, Route } from './state'
@@ -13,6 +13,7 @@ import { LyricsLines } from './lyrics'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
+import { FriendActivityPanel } from './views/social'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 
 const createItems = (): MenuItem[] => [
@@ -166,6 +167,7 @@ export function TopBar({ children }: { children?: JSX.Element | null }): JSX.Ele
         <ImportPill />
         <DownloadPill />
         <UpdateButton />
+        <FriendsButton />
         <ReleasesBell />
         <ProfileButton />
       </div>
@@ -202,8 +204,19 @@ function ReleasesBell(): JSX.Element {
   )
 }
 
+function FriendsButton(): JSX.Element {
+  const panel = useStore(panelStore)
+  return (
+    <button className={`icon-btn round ${panel === 'friends' ? 'active-round' : ''}`} title="Friend activity" aria-label="Friend activity" aria-pressed={panel === 'friends'} onClick={() => togglePanel('friends')}>
+      <Icon name="person" size={18} />
+    </button>
+  )
+}
+
 function ProfileButton(): JSX.Element {
   const account = useStore(accountStore)
+  const me = useStore(meStore)
+  const privateSession = useStore(privateSessionStore)
   return (
     <button
       className="profile-btn"
@@ -212,7 +225,22 @@ function ProfileButton(): JSX.Element {
       onClick={(e) =>
         openMenuAt(e.currentTarget, [
           ...(account.linked
-            ? [{ label: account.username ? `Signed in as ${account.username}` : 'Linked with your phone', icon: 'phone', disabled: true }]
+            ? [
+                { label: me ? `Your profile (${me.username})` : 'Your profile', icon: 'person', action: () => me && go({ name: 'user', id: me.id, hint: me }), disabled: !me },
+                { label: 'Friends', icon: 'person', action: () => go({ name: 'friends' }) },
+                {
+                  label: 'Private session',
+                  icon: 'lyrics',
+                  checked: privateSession,
+                  action: () => {
+                    const on = !privateSession
+                    privateSessionStore.set(on)
+                    void drift.setPrivateSession(on)
+                    toast(on ? 'Private session: friends can’t see what you play until Drift closes.' : 'Private session ended.')
+                  }
+                },
+                { label: '', separator: true }
+              ]
             : [{ label: 'Link your phone…', icon: 'phone', action: () => go({ name: 'settings' }) }]),
           { label: 'Import from Spotify…', icon: 'plus', action: openImport },
           { label: 'Settings', icon: 'gear', action: () => go({ name: 'settings' }) }
@@ -275,10 +303,11 @@ export function SidePanel(): JSX.Element | null {
         <div className="side-tabs">
           <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>Lyrics</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up next</button>
+          <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? <LyricsPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? <LyricsPanel /> : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
     </aside>
   )
 }
@@ -416,6 +445,7 @@ export function MusicSidebar(): JSX.Element {
       </div>
       <div className="m-scroll">
         {item({ name: 'home' }, 'homeLine', 'Home')}
+        {item({ name: 'friends' }, 'person', 'Friends')}
         <div className="m-section">Library</div>
         {item({ name: 'collection', kind: 'recent' }, 'clock', 'Recently Played')}
         {item({ name: 'collection', kind: 'artists' }, 'mic', 'Artists')}
@@ -549,10 +579,11 @@ export function MusicSidePanel(): JSX.Element | null {
         <div className="seg">
           <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>Lyrics</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up Next</button>
+          <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? <MusicLyricsPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? <MusicLyricsPanel /> : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
     </aside>
   )
 }

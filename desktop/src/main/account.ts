@@ -19,6 +19,11 @@ function setAccount(change: Partial<Account>): void {
   store.emit('account', account)
 }
 
+/** The linked profile's Firestore access (undefined until linked). */
+export function linked(): { db: Firestore; uid: string } | undefined {
+  return db && auth?.uid ? { db, uid: auth.uid } : undefined
+}
+
 export function getAccount(): Account {
   return account
 }

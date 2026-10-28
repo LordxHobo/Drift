@@ -13,6 +13,7 @@ import { CollectionPage, LikedPage, PlaylistPage } from './views/collections'
 import { SongPage } from './views/details'
 import { SettingsPage } from './views/settings'
 import { ImportDialog } from './views/import'
+import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 
 function useDark(): boolean {
   const appearance = useStore(settingsStore).appearance
@@ -48,6 +49,12 @@ function Page({ route }: { route: Route }): JSX.Element {
       return <SettingsPage />
     case 'lyrics':
       return <LyricsView />
+    case 'friends':
+      return <FriendsPage />
+    case 'user':
+      return <UserPage key={route.id} id={route.id} hint={route.hint} />
+    case 'shared':
+      return <SharedPlaylistPage key={`${route.playlist.ownerId}-${route.playlist.id}`} playlist={route.playlist} />
   }
 }
 

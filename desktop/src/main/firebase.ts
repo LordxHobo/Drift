@@ -128,6 +128,24 @@ export class Firestore {
     if (status !== 200 && status !== 404) throw new FirebaseError(status, errorMessage(body))
   }
 
+  /** Runs a query on a collection and returns the matching documents. */
+  async query(structured: Record<string, unknown>): Promise<any[]> {
+    const [status, body] = await send('POST', `${documentsURL}:runQuery`, { json: { structuredQuery: structured }, token: await this.auth.token() })
+    if (status !== 200) throw new FirebaseError(status, errorMessage(body))
+    return (Array.isArray(body) ? body : []).map((r: any) => r.document).filter(Boolean)
+  }
+
+  /** Several documents at once. */
+  async batchGet(paths: string[]): Promise<any[]> {
+    if (!paths.length) return []
+    const [status, body] = await send('POST', `${documentsURL}:batchGet`, {
+      json: { documents: paths.map((p) => `${documentsPath}/${p}`) },
+      token: await this.auth.token()
+    })
+    if (status !== 200) throw new FirebaseError(status, errorMessage(body))
+    return (Array.isArray(body) ? body : []).map((r: any) => r.found).filter(Boolean)
+  }
+
   async list(path: string, fields: string[] = []): Promise<any[]> {
     const out: any[] = []
     let pageToken: string | undefined
@@ -156,7 +174,13 @@ export const FV = {
     const v = f?.[k]?.integerValue
     return v === undefined ? undefined : Number(v)
   },
-  data: (f: any, k: string): string | undefined => f?.[k]?.bytesValue
+  data: (f: any, k: string): string | undefined => f?.[k]?.bytesValue,
+  null: () => ({ nullValue: null }),
+  strings: (v: string[]) => ({ arrayValue: { values: v.map((x) => ({ stringValue: x })) } }),
+  map: (fields: Record<string, unknown>) => ({ mapValue: { fields } }),
+  stringArray: (f: any, k: string): string[] =>
+    (f?.[k]?.arrayValue?.values ?? []).map((v: any) => v?.stringValue).filter((v: unknown): v is string => typeof v === 'string'),
+  mapFields: (f: any, k: string): any => f?.[k]?.mapValue?.fields
 }
 
 export const docName = (doc: any): string => String(doc?.name ?? '').split('/').pop() ?? ''

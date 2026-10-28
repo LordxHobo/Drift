@@ -208,6 +208,36 @@ export interface DownloadsState {
   failed: { id: string; title: string; error: string }[]
 }
 
+/** A Drift profile as others see it. */
+export interface UserProfile {
+  id: string
+  username: string
+  /** Profile photo as a data URL. */
+  avatar?: string
+  following: string[]
+  shareActivity: boolean
+  nowPlaying?: Track
+  playing: boolean
+  /** Seconds since 1970. */
+  updatedAt?: number
+}
+
+/** A playlist someone shows on their profile. */
+export interface SharedPlaylist {
+  id: string
+  ownerId: string
+  ownerName: string
+  name: string
+  count: number
+  duration: number
+  colorIndex: number
+  style: CoverStyle
+  /** Cover photo (base64 JPEG). */
+  cover?: string
+  /** First songs, for the cover. */
+  preview: Track[]
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -267,12 +297,24 @@ export interface DriftApi {
   openDownloadsFolder(): Promise<void>
   retryFailedDownloads(): Promise<void>
 
+  me(): Promise<UserProfile | null>
+  friends(): Promise<UserProfile[]>
+  followers(id?: string): Promise<UserProfile[]>
+  user(id: string): Promise<UserProfile | null>
+  searchUsers(text: string): Promise<UserProfile[]>
+  followUser(id: string, follow: boolean): Promise<UserProfile | null>
+  sharedPlaylists(user: UserProfile): Promise<SharedPlaylist[]>
+  sharedPlaylistTracks(ownerId: string, id: string): Promise<Track[]>
+  setShareActivity(on: boolean): Promise<void>
+  setPrivateSession(on: boolean): Promise<void>
+  publishActivity(track: Track | null, playing: boolean): Promise<void>
+
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -282,7 +324,9 @@ export const apiMethods: (keyof DriftApi)[] = [
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
   'startImport', 'importState', 'retryMissing', 'clearImport',
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
-  'openDownloadsFolder', 'retryFailedDownloads'
+  'openDownloadsFolder', 'retryFailedDownloads',
+  'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
+  'setShareActivity', 'setPrivateSession', 'publishActivity'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */
