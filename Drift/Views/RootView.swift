@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var podcastsPath = NavigationPath()
     @State private var libraryPath = NavigationPath()
     @State private var ui = UIState.shared
+    /// What's new since the last update (shown once).
+    @State private var patchNotes = PatchNotes.unseen()
     @State private var social = SocialStore.shared
     @Environment(\.scenePhase) private var scenePhase
     private var player: Player { .shared }
@@ -76,6 +78,10 @@ struct RootView: View {
             ReplaceSongSheet(request: r)
         }
         .jamInvites()
+        .sheet(isPresented: Binding(get: { !patchNotes.isEmpty && !social.showOnboarding },
+                                    set: { if !$0 { patchNotes = [] } })) {
+            PatchNotesSheet(entries: patchNotes)
+        }
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onAppear { settings.applyAppearance() }
         .task { await ArtistStore.shared.check() }

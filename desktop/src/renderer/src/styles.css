@@ -4293,3 +4293,40 @@ kbd {
 .jam-join-btn {
   flex: none;
 }
+
+/* What's new */
+.dialog.patch-notes {
+  width: min(480px, calc(100vw - 32px));
+}
+.patch-notes-list {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  margin: 4px 0 8px;
+}
+.patch-notes-list section + section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.patch-notes-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.patch-notes-title {
+  font-weight: 700;
+}
+.patch-notes-date {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.patch-notes-list ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.patch-notes-list li {
+  margin: 5px 0;
+  line-height: 1.45;
+}

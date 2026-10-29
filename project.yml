@@ -17,6 +17,9 @@ targets:
         excludes:
           - Info.plist
       - path: Shared
+      # What's new (the same notes the computer shows).
+      - path: desktop/src/shared/patchNotes.json
+        buildPhase: resources
     dependencies:
       - package: YouTubeKit
       - target: DriftLyrics

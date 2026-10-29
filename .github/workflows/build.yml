@@ -7,6 +7,8 @@ on:
     paths-ignore:
       - 'desktop/**'
       - '.github/workflows/desktop.yml'
+      # …except the patch notes, which the phone shows too.
+      - '!desktop/src/shared/patchNotes.json'
   workflow_dispatch:
 
 jobs:
