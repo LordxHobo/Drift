@@ -6,6 +6,8 @@ directories:
 files:
   - out/**/*
   - build/icon.png
+  - build/icon-music.png
+  - build/icon-music-white.png
   - package.json
 asar: true
 win:

@@ -11,6 +11,7 @@ import { checkForUpdates, getUpdateState, installUpdate, startUpdates } from './
 import * as spotify from './spotify'
 import * as downloads from './downloads'
 import * as notices from './notifications'
+import { applyIcon, iconPath } from './appicon'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -40,7 +41,7 @@ function createWindow(): void {
     show: false,
     title: 'Drift',
     backgroundColor: bar.color,
-    icon: join(__dirname, '../../build/icon.png'),
+    icon: iconPath(),
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 14, y: 12 } }
@@ -147,6 +148,7 @@ const api: DriftApi = {
   setSettings: async (change) => {
     const s = store.setSettings(change)
     updateTitleBar()
+    if ('style' in change || 'musicIcon' in change) applyIcon()
     if (Object.keys(change).some((k) => k.startsWith('orbit') || k.startsWith('discord'))) presence.settingsChanged()
     return s
   },
@@ -238,6 +240,7 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', updateTitleBar)
   createWindow()
   createTray(showWindow)
+  applyIcon()
   account.start()
   startUpdates()
   downloads.startDownloads()

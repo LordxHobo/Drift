@@ -131,6 +131,8 @@ export type Appearance = 'device' | 'dark' | 'light'
 
 export interface Settings {
   style: UIStyle
+  /** The icon in the Apple Music style. */
+  musicIcon: 'pink' | 'white'
   appearance: Appearance
   accent: number
   preferOfficialAudio: boolean

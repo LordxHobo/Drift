@@ -4117,3 +4117,28 @@ kbd {
   opacity: 0.7;
   font-size: 11px;
 }
+
+/* App icon choice (Apple Music style) */
+.icon-choices {
+  display: flex;
+  gap: 14px;
+}
+.icon-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.icon-choice .icon-preview {
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.icon-choice.on {
+  color: var(--text);
+  font-weight: 700;
+}
+.icon-choice.on .icon-preview {
+  box-shadow: 0 0 0 3px var(--accent);
+}

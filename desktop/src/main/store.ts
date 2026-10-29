@@ -45,6 +45,7 @@ const defaultSettings: Settings = {
   accent: 0,
   preferOfficialAudio: true,
   preferExplicit: true,
+  musicIcon: 'pink',
   volume: 0.8,
   openAtLogin: false,
   skipNonMusic: true,

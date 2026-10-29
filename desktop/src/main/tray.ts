@@ -8,9 +8,16 @@ let tray: Tray | undefined
 let show: () => void = () => {}
 let last: PlayerPresence | undefined
 
+const traySize = (): number => (process.platform === 'win32' ? 16 : 22)
+
 function icon(): Electron.NativeImage {
   const img = nativeImage.createFromPath(join(app.getAppPath(), 'build/icon.png'))
-  return img.isEmpty() ? img : img.resize({ width: process.platform === 'win32' ? 16 : 22 })
+  return img.isEmpty() ? img : img.resize({ width: traySize() })
+}
+
+/** The tray shows the same icon as the window (it follows the style). */
+export function setTrayIcon(img: Electron.NativeImage): void {
+  if (tray && !img.isEmpty()) tray.setImage(img.resize({ width: traySize() }))
 }
 
 function media(action: 'toggle' | 'next' | 'previous'): void {

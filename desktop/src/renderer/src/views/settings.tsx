@@ -57,6 +57,18 @@ export function SettingsPage(): JSX.Element {
             </button>
           ))}
         </div>
+        {s.style === 'music' && (
+          <Row title="App icon" detail="The icon on the window, taskbar and tray while Drift runs.">
+            <div className="icon-choices">
+              {(['pink', 'white'] as const).map((k) => (
+                <button key={k} className={`icon-choice ${s.musicIcon === k ? 'on' : ''}`} onClick={() => setSettings({ musicIcon: k })}>
+                  <IconPreview kind={k} />
+                  <span>{k === 'pink' ? 'Pink' : 'White'}</span>
+                </button>
+              ))}
+            </div>
+          </Row>
+        )}
         <Row title="Appearance">
           <div className="seg">
             {(['device', 'dark', 'light'] as const).map((a) => (
@@ -427,5 +439,25 @@ function DiscordSettings(): JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+/** A small drawing of an Apple Music style icon: Drift's four bars, white on pink or pink on white. */
+function IconPreview({ kind }: { kind: 'pink' | 'white' }): JSX.Element {
+  const bars = [[266, 301, 721], [398, 371, 651], [530, 251, 771], [662, 331, 691]]
+  const id = `icon-grad-${kind}`
+  return (
+    <svg viewBox="0 0 1024 1024" width="52" height="52" className="icon-preview" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff5587" />
+          <stop offset="1" stopColor="#ff0046" />
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" rx="230" fill={kind === 'pink' ? `url(#${id})` : '#fff'} />
+      {bars.map(([x, top, bottom]) => (
+        <rect key={x} x={x} y={top} width="96" height={bottom - top} rx="48" fill={kind === 'pink' ? '#fff' : `url(#${id})`} />
+      ))}
+    </svg>
   )
 }
