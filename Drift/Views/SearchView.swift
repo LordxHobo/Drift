@@ -466,12 +466,17 @@ struct SearchView: View {
                     episodes = t.map { [$0] } ?? []
                 } else if let feed = PodcastFeeds.feedLink(q) {
                     // A show's feed link: that show, its episodes ready on its page.
-                    let found = try await PodcastFeeds.show(from: feed)
+                    let found = try? await PodcastFeeds.show(from: feed)
                     guard !Task.isCancelled else { return }
-                    if let found { PodcastStore.shared.showLoaded(found.channel, episodes: found.episodes) }
-                    shows = found.map { [$0.channel] } ?? []
                     channels = []
                     episodes = []
+                    guard let show = found else {
+                        shows = []
+                        error = "Couldn't find a podcast at that link. Paste the show's feed link, its Apple Podcasts page or its SoundCloud profile."
+                        return
+                    }
+                    PodcastStore.shared.showLoaded(show.channel, episodes: show.episodes)
+                    shows = [show.channel]
                 } else {
                     // Apple's podcast directory and YouTube at the same time.
                     async let directory = try? PodcastFeeds.search(q)

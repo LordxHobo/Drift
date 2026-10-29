@@ -71,12 +71,38 @@ enum PodcastFeeds {
         return url
     }
 
-    /// The show behind a feed link, with its episodes.
+    /// The show behind a pasted link, with its episodes: a feed link, a show's Apple Podcasts page,
+    /// or a SoundCloud profile (SoundCloud makes a podcast feed for every profile that has one).
     static func show(from link: URL) async throws -> (channel: PodcastChannel, episodes: [Track])? {
-        let base = PodcastChannel(id: id(link.absoluteString), name: "", avatarURL: nil, subtitle: nil, feedURL: link)
-        let parsed = parse(try await fetch(link), base)
+        guard let feed = try await feedURL(for: link) else { return nil }
+        // Apple's feed link as it is, so the show gets the same id as when found by searching.
+        let base = PodcastChannel(id: id(feed.absoluteString), name: "", avatarURL: nil, subtitle: nil, feedURL: feed)
+        let parsed = parse(try await fetch(feed), base)
         guard !parsed.title.isEmpty || !parsed.episodes.isEmpty else { return nil }
         return (parsed.channel, parsed.episodes)
+    }
+
+    /// Where a pasted link's feed is.
+    static func feedURL(for link: URL) async throws -> URL? {
+        let host = (link.host ?? "").lowercased()
+        if host.hasSuffix("podcasts.apple.com") || host.hasSuffix("itunes.apple.com") {
+            // …/podcast/desnorte/id1517400422 → Apple's directory knows its feed.
+            guard let r = link.path.range(of: "id\\d+", options: .regularExpression) else { return nil }
+            var c = URLComponents(string: "https://itunes.apple.com/lookup")!
+            c.queryItems = [URLQueryItem(name: "id", value: String(link.path[r].dropFirst(2))),
+                            URLQueryItem(name: "entity", value: "podcast")]
+            let (data, _) = try await URLSession.shared.data(from: c.url!)
+            let results = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["results"] as? [[String: Any]]
+            return (results?.first?["feedUrl"] as? String).flatMap(URL.init(string:))
+        }
+        if host.hasSuffix("soundcloud.com") && !host.hasPrefix("feeds.") {
+            // The profile page names its account number, which the feed link is made from.
+            let page = String(decoding: try await fetch(link), as: UTF8.self)
+            guard let r = page.range(of: "soundcloud(://|:)users:\\d+", options: .regularExpression),
+                  let n = page[r].split(separator: ":").last else { return nil }
+            return URL(string: "https://feeds.soundcloud.com/users/soundcloud:users:\(n)/sounds.rss")
+        }
+        return link
     }
 
     /// A followed show's episodes, newest first.

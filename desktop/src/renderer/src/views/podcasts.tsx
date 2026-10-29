@@ -144,13 +144,20 @@ export function PodcastsPage({ q }: { q: string }): JSX.Element {
         void drift.videoFromLink(text).then((v) => alive && setLinkTrack(v)).catch(() => undefined)
       }
       // Shows with their own feed (Apple's directory, or a pasted feed link) and YouTube, side by side.
+      if (link && !/youtu/.test(text)) {
+        // A pasted podcast link: that show, or why not.
+        drift
+          .searchShows(text)
+          .then((s) => alive && setResults({ q: text, channels: s, episodes: [] }))
+          .catch((e) => alive && setResults({ q: text, channels: [], episodes: [], error: cleanError(e) }))
+        return
+      }
       const shows = drift.searchShows(text).catch(() => [] as PodcastChannel[])
-      const youtube = link && !/youtu/.test(text) ? Promise.resolve({ channels: [], episodes: [] }) : drift.searchPodcasts(text)
-      Promise.all([shows, youtube])
-        .then(([s, r]) => alive && setResults({ q: text, channels: [...s, ...r.channels], episodes: r.episodes }))
-        .catch((e) =>
-          void shows.then((s) => alive && setResults({ q: text, channels: s, episodes: [], error: s.length ? undefined : cleanError(e) }))
-        )
+      Promise.all([shows, drift.searchPodcasts(text).catch(() => undefined)]).then(([s, r]) => {
+        if (!alive) return
+        if (!r && !s.length) setResults({ q: text, channels: [], episodes: [], error: 'Check your connection and try again.' })
+        else setResults({ q: text, channels: [...s, ...(r?.channels ?? [])], episodes: r?.episodes ?? [] })
+      })
     }, 400)
     return () => {
       alive = false

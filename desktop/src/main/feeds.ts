@@ -47,7 +47,27 @@ async function fetchFeed(feedURL: string): Promise<string> {
   return res.text()
 }
 
-/** A show from a pasted feed link. */
+/** Where a pasted link's feed is: a feed link, a show's Apple Podcasts page, or a SoundCloud profile. */
+async function feedFor(url: URL): Promise<string | undefined> {
+  const host = url.hostname.toLowerCase()
+  if (host.endsWith('podcasts.apple.com') || host.endsWith('itunes.apple.com')) {
+    // …/podcast/desnorte/id1517400422 → Apple's directory knows its feed.
+    const id = /id(\d+)/.exec(url.pathname)?.[1]
+    if (!id) return undefined
+    const res = await net.fetch(`https://itunes.apple.com/lookup?id=${id}&entity=podcast`)
+    const body = (await res.json()) as { results?: { feedUrl?: string }[] }
+    return body.results?.[0]?.feedUrl || undefined
+  }
+  if (host.endsWith('soundcloud.com') && !host.startsWith('feeds.')) {
+    // The profile page names its account number, which SoundCloud's podcast feed link is made from.
+    const page = await fetchFeed(url.toString())
+    const n = /soundcloud(?::\/\/|:)users:(\d+)/.exec(page)?.[1]
+    return n ? `https://feeds.soundcloud.com/users/soundcloud:users:${n}/sounds.rss` : undefined
+  }
+  return url.toString()
+}
+
+/** A show from a pasted link. */
 export async function showFromLink(link: string): Promise<{ channel: PodcastChannel; episodes: Track[] } | undefined> {
   let url: URL
   try {
@@ -56,7 +76,8 @@ export async function showFromLink(link: string): Promise<{ channel: PodcastChan
     return undefined
   }
   if (!/^https?:$/.test(url.protocol)) return undefined
-  const feed = url.toString()
+  const feed = await feedFor(url)
+  if (!feed) return undefined
   const parsed = parseFeed(await fetchFeed(feed), { id: feedId(feed), name: '', feedURL: feed })
   if (!parsed.title && !parsed.episodes.length) return undefined
   return { channel: parsed.channel, episodes: parsed.episodes }

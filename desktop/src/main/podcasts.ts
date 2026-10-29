@@ -64,7 +64,7 @@ export async function searchShows(q: string): Promise<PodcastChannel[]> {
   if (/^https?:\/\//i.test(text)) {
     if (/youtu\.?be/i.test(text)) return []
     const found = await showFromLink(text).catch(() => undefined)
-    if (!found) return []
+    if (!found) throw new Error("Couldn’t find a podcast at that link. Paste the show’s feed link, its Apple Podcasts page or its SoundCloud profile.")
     linkShows.set(found.channel.id, found.episodes)
     return [found.channel]
   }
