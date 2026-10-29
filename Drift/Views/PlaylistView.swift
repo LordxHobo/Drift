@@ -15,6 +15,8 @@ struct PlaylistView: View {
     /// How the list is sorted (nil = your own order), remembered per list.
     @State private var sort: SongSort?
     @State private var showSortSheet = false
+    /// The Collaborators sheet.
+    @State private var showCollab = false
     private var library: Library { .shared }
     private var player: Player { .shared }
     private var downloads: DownloadManager { .shared }
@@ -128,6 +130,14 @@ struct PlaylistView: View {
             if Theme.isMusic, kind != .downloads {
                 ToolbarItem(placement: .topBarTrailing) { downloadButton(tracks) }
             }
+            if case .playlist(let id) = kind, library.playlist(id)?.isAlbum != true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showCollab = true } label: {
+                        Image(systemName: library.playlist(id)?.collab != nil ? "person.2.fill" : "person.badge.plus")
+                    }
+                    .accessibilityLabel(library.playlist(id)?.collab != nil ? "Collaborators" : "Make collaborative")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if case .playlist(let id) = kind {
                     Button {
@@ -141,6 +151,9 @@ struct PlaylistView: View {
         }
         .sheet(item: $editing) { p in
             EditPlaylistView(playlist: p)
+        }
+        .sheet(isPresented: $showCollab) {
+            if case .playlist(let id) = kind { CollabSheet(playlistID: id) }
         }
         .sheet(isPresented: $showSortSheet) {
             SortSheet(sort: activeSort) { setSort($0) }
@@ -200,6 +213,7 @@ struct PlaylistView: View {
         case .playlist(let id):
             guard let p = library.playlist(id) else { return nil }
             if p.isAlbum == true { return p.albumArtist ?? "Album" }
+            if let c = p.collab { return "Collaborative · \(c.names(me: SocialStore.shared.me?.id))" }
             return SocialStore.shared.me?.username ?? "Playlist"
         case .liked: return SocialStore.shared.me?.username
         case .downloads: return nil
@@ -283,6 +297,15 @@ struct PlaylistView: View {
                 Text(subtitle(tracks, downloadedCount))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.text2)
+                if case .playlist(let id) = kind, let c = library.playlist(id)?.collab {
+                    Button { showCollab = true } label: {
+                        Label("Collaborative · \(c.names(me: SocialStore.shared.me?.id))", systemImage: "person.2.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                }
                 DownloadStatusLine(tracks: kind == .downloads ? [] : tracks)
             }
 

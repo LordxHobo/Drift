@@ -122,7 +122,7 @@ function playlist(id: string): Playlist | undefined {
 /** Only what the phone knows about a song (keeps files small and syncs cleanly). */
 function clean(t: Track): Track {
   const out: Track = { id: t.id, title: t.title, artist: t.artist }
-  for (const k of ['album', 'duration', 'artworkURL', 'podcast', 'channelID', 'channelAvatar', 'published', 'upload', 'explicit', 'chosen', 'added'] as const) {
+  for (const k of ['album', 'duration', 'artworkURL', 'podcast', 'channelID', 'channelAvatar', 'published', 'upload', 'explicit', 'chosen', 'added', 'addedBy'] as const) {
     if (t[k] != null) (out as Record<string, unknown>)[k] = t[k]
   }
   return out
@@ -303,6 +303,23 @@ export function replaceFollowed(list: FollowedArtist[]): void {
     }
     return merged
   })
+  save(false)
+}
+
+/** A collaborative playlist as the server has it now (added at the top of the list when new). */
+export function setCollabPlaylist(p: Playlist): void {
+  const lib = getLibrary()
+  const i = lib.playlists.findIndex((x) => x.id === p.id)
+  if (i >= 0) lib.playlists[i] = { ...lib.playlists[i], ...p }
+  else lib.playlists.unshift(p)
+  save(false)
+}
+
+/** Marks a playlist as collaborative (or not, with null). */
+export function setCollabInfo(id: string, info: Playlist['collab']): void {
+  const p = playlist(id)
+  if (!p) return
+  p.collab = info
   save(false)
 }
 

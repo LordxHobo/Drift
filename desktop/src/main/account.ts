@@ -181,13 +181,13 @@ function currentFingerprint(name: string): string | undefined {
 }
 
 /** Songs as JSON text; very large lists drop artwork links to stay under Firestore's 1 MB limit. */
-function tracksJSON(tracks: Track[]): string {
+export function tracksJSON(tracks: Track[]): string {
   const full = JSON.stringify(tracks)
   if (Buffer.byteLength(full) < 850_000) return full
   return JSON.stringify(tracks.map((t) => ({ ...t, artworkURL: undefined, channelAvatar: undefined })))
 }
 
-function decodeTracks(s: string | undefined): Track[] | undefined {
+export function decodeTracks(s: string | undefined): Track[] | undefined {
   if (!s) return undefined
   try {
     const list = JSON.parse(s)
@@ -207,7 +207,9 @@ async function pull(uid: string): Promise<void> {
     const known = synced[name]
     if (known && known.updatedAt >= updatedAt) continue
     if (FV.bool(doc.fields, 'deleted') === true) {
-      if (name.startsWith('pl-')) store.deletePlaylist(name.slice(3), false)
+      // (Not a collaborative one: those come and go with their shared document.)
+      const id = name.slice(3)
+      if (name.startsWith('pl-') && !store.getLibrary().playlists.some((p) => p.id === id && p.collab)) store.deletePlaylist(id, false)
       synced[name] = { fingerprint: 'deleted', updatedAt }
       continue
     }
@@ -246,6 +248,8 @@ function apply(name: string, f: any): void {
       store.replaceFollowed(remote)
     }
   } else if (name.startsWith('pl-')) {
+    // Collaborative playlists sync through their shared document instead.
+    if (lib.playlists.some((x) => x.id === name.slice(3) && x.collab)) return
     const title = FV.string(f, 'name')
     const tracks = decodeTracks(FV.string(f, 'tracks'))
     if (!title || !tracks) return
@@ -299,7 +303,10 @@ async function push(uid: string): Promise<void> {
     const fp = currentFingerprint(name)
     if (fp) items.push([name, fp])
   }
-  lib.playlists.forEach((p, i) => items.push([`pl-${p.id}`, playlistFingerprint(p, i)]))
+  // Collaborative playlists sync through their shared document instead (see collab.ts).
+  lib.playlists.forEach((p, i) => {
+    if (!p.collab) items.push([`pl-${p.id}`, playlistFingerprint(p, i)])
+  })
 
   for (const [name, fp] of items) {
     if (synced[name]?.fingerprint === fp) continue

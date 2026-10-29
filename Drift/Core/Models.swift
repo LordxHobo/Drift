@@ -21,6 +21,8 @@ struct Track: Codable, Hashable, Identifiable {
     var added: Date?
     /// Picked by hand with "Replace with another version": played exactly as it is.
     var chosen: Bool?
+    /// Collaborative playlists: who added it (their profile ID).
+    var addedBy: String?
 
     var isEpisode: Bool { podcast == true }
 
@@ -60,6 +62,8 @@ struct Playlist: Codable, Hashable, Identifiable {
     /// Saved from an album page (listed under Albums in the Apple Music style).
     var isAlbum: Bool?
     var albumArtist: String?
+    /// Collaborative: shared with friends who can add, remove and move songs too.
+    var collab: CollabInfo?
 
     enum CoverStyle: String, Codable {
         case auto, color, photo
@@ -118,4 +122,20 @@ func formatPublished(_ date: Date?) -> String? {
     let f = DateFormatter()
     f.setLocalizedDateFormatFromTemplate(Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year) ? "d MMM" : "d MMM yyyy")
     return f.string(from: date)
+}
+
+/// Who a collaborative playlist is shared with.
+struct CollabInfo: Codable, Hashable {
+    /// Who made it (their profile ID).
+    var owner: String
+    var members: [String]
+    /// Profile ID → username.
+    var names: [String: String]
+
+    /// "You, mira and echo"
+    func names(me: String?) -> String {
+        let list = members.map { $0 == me ? "You" : (names[$0] ?? "Someone") }
+        guard list.count > 1 else { return list.joined() }
+        return list.dropLast().joined(separator: ", ") + " and " + list.last!
+    }
 }

@@ -16,7 +16,11 @@ struct DriftApp: App {
         WindowGroup {
             RootView()
                 // The home screen icon follows the style (in case it was changed elsewhere).
-                .task { AppIconSwitcher.match() }
+                .task {
+                    AppIconSwitcher.match()
+                    // Collaborative playlists: changes from the others every 30 s while open.
+                    CollabSync.shared.start()
+                }
         }
         // iOS wakes Drift up when background downloads finish.
         .backgroundTask(.urlSession(DownloadManager.sessionID)) {

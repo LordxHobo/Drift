@@ -46,6 +46,28 @@ final class Library {
         try? data.write(to: storeURL, options: .atomic)
         PlaylistSharing.shared.libraryChanged()
         LibrarySync.shared.localChanged()
+        CollabSync.shared.libraryChanged()
+    }
+
+    // MARK: Collaborative playlists (CollabSync)
+
+    /// A collaborative playlist as the server has it now (added at the top of the list when new).
+    func setCollabPlaylist(_ p: Playlist) {
+        if let i = playlists.firstIndex(where: { $0.id == p.id }) {
+            playlists[i].name = p.name
+            playlists[i].tracks = p.tracks
+            playlists[i].collab = p.collab
+        } else {
+            playlists.insert(p, at: 0)
+        }
+        save()
+    }
+
+    /// Marks a playlist as collaborative (or not, with nil).
+    func setCollabInfo(_ id: UUID, _ info: CollabInfo?) {
+        guard let i = playlists.firstIndex(where: { $0.id == id }), playlists[i].collab != info else { return }
+        playlists[i].collab = info
+        save()
     }
 
     // MARK: Changes from your other devices (library sync)

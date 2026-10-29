@@ -11,6 +11,7 @@ import { formatBytes } from '../downloads'
 import { editPlaylist } from './editPlaylist'
 import { Icon } from '../icons'
 import { sortTracks, useSort } from '../sort'
+import { collabNames, openCollab } from './collab'
 
 /** Downloaded songs, newest first (reloaded when downloads change). */
 function useDownloadedTracks(active: boolean): Track[] {
@@ -52,7 +53,11 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
   const filtered = filterTracks(p.tracks, filter)
   const { list, indexes } = sortTracks(filtered.list, filtered.indexes, sortBy)
   const playOrder = sortBy ? sortTracks(p.tracks, undefined, sortBy).list : p.tracks
-  const owner = p.isAlbum ? p.albumArtist ?? '' : account.username ?? 'You'
+  const owner = p.isAlbum
+    ? p.albumArtist ?? ''
+    : p.collab
+      ? `Collaborative · ${collabNames(p, account.uid)}`
+      : account.username ?? 'You'
   return (
     <div className="page">
       <CollectionHeader
@@ -66,7 +71,7 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
         seed={p.id}
         kind={p.isAlbum ? 'Album' : 'Playlist'}
         title={p.name}
-        subtitle={owner}
+        subtitle={p.collab ? <button className="link" onClick={() => openCollab(p.id)} title="Collaborators">{owner}</button> : owner}
         meta={`${plural(p.tracks.length, 'song')}, ${formatTotal(p.tracks)}`}
         tracks={playOrder}
         context={{ kind: 'playlist', id: p.id, name: p.name }}
@@ -81,6 +86,7 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
         context={{ kind: 'playlist', id: p.id, name: p.name }}
         showAlbum={!p.isAlbum}
         showAdded={!p.isAlbum}
+        addedByNames={p.collab?.names}
         sort={sortBy}
         onSort={p.isAlbum ? undefined : onSort}
         emptyText={filter ? 'No songs match.' : 'This playlist is empty. Right-click a song anywhere and choose Add to playlist.'}

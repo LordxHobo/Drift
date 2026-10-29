@@ -4142,3 +4142,56 @@ kbd {
 .icon-choice.on .icon-preview {
   box-shadow: 0 0 0 3px var(--accent);
 }
+
+/* Collaborative playlists */
+.dialog.collab {
+  width: 480px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.collab-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 14px -8px 0;
+}
+.collab-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.collab-row:hover {
+  background: var(--hover);
+}
+.collab-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+}
+.collab-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.collab-owner {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.dialog.collab .dialog-buttons {
+  align-items: center;
+}
+.dialog.collab .spacer {
+  flex: 1;
+}
+.added-by {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 6px;
+}

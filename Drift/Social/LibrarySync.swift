@@ -129,7 +129,8 @@ final class LibrarySync {
         if let fp = currentFingerprint("liked") { items.append(("liked", fp)) }
         if let fp = currentFingerprint("artists") { items.append(("artists", fp)) }
         let playlists = Library.shared.playlists
-        for p in playlists { items.append(("pl-\(p.id.uuidString)", Self.fingerprint(p, playlists))) }
+        // Collaborative playlists sync through their shared document instead (CollabSync).
+        for p in playlists where p.collab == nil { items.append(("pl-\(p.id.uuidString)", Self.fingerprint(p, playlists))) }
 
         for (name, fp) in items where synced[name]?.fingerprint != fp {
             guard let fields = documentFields(name, updatedAt: now) else { continue }
@@ -190,7 +191,7 @@ final class LibrarySync {
     }
 
     /// Songs as JSON text; very large lists drop artwork links to stay under Firestore's 1 MB limit.
-    private static func tracksJSON(_ tracks: [Track]) -> String {
+    static func tracksJSON(_ tracks: [Track]) -> String {
         let enc = JSONEncoder()
         if let d = try? enc.encode(tracks), d.count < 850_000 { return String(decoding: d, as: UTF8.self) }
         let slim = tracks.map { t -> Track in
@@ -203,7 +204,7 @@ final class LibrarySync {
         return String(decoding: d, as: UTF8.self)
     }
 
-    private static func decodeTracks(_ s: String?) -> [Track]? {
+    static func decodeTracks(_ s: String?) -> [Track]? {
         guard let s else { return nil }
         return try? JSONDecoder().decode([Track].self, from: Data(s.utf8))
     }
@@ -257,6 +258,7 @@ final class LibrarySync {
             }
         default:
             guard let id = UUID(uuidString: String(name.dropFirst(3))),
+                  Library.shared.playlist(id)?.collab == nil,
                   let title = FV.string(f, "name"),
                   let tracks = Self.decodeTracks(FV.string(f, "tracks")) else { return }
             var p = Library.shared.playlist(id) ?? Playlist(name: title)
@@ -275,7 +277,7 @@ final class LibrarySync {
 
     private func applyDeletion(_ name: String) {
         guard name.hasPrefix("pl-"), let id = UUID(uuidString: String(name.dropFirst(3))),
-              Library.shared.playlist(id) != nil else { return }
+              let p = Library.shared.playlist(id), p.collab == nil else { return }
         Library.shared.deletePlaylist(id)
     }
 

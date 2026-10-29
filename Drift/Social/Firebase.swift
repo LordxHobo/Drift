@@ -212,15 +212,19 @@ enum Firestore {
         return body as? [String: Any]
     }
 
-    /// Create or update. `mask` limits the update to those fields; `mustNotExist` makes it create-only.
+    /// Create or update. `mask` limits the update to those fields; `mustNotExist` makes it create-only;
+    /// `updateTime`: only if nobody changed it since then. Returns the document's new update time.
+    @discardableResult
     static func patch(_ path: String, fields: [String: Any], mask: [String]? = nil,
-                      mustNotExist: Bool = false) async throws {
+                      mustNotExist: Bool = false, updateTime: String? = nil) async throws -> String? {
         let token = try await FirebaseAuth.shared.token()
         var q = (mask ?? []).map { URLQueryItem(name: "updateMask.fieldPaths", value: $0) }
         if mustNotExist { q.append(URLQueryItem(name: "currentDocument.exists", value: "false")) }
+        if let updateTime { q.append(URLQueryItem(name: "currentDocument.updateTime", value: updateTime)) }
         let (status, body) = try await HTTP.send("PATCH", url(path, query: q), json: ["fields": fields], token: token)
         if mustNotExist, status == 400 || status == 409 { throw SocialError.usernameTaken }
         guard status == 200 else { throw SocialError.server(status, HTTP.errorMessage(body)) }
+        return (body as? [String: Any])?["updateTime"] as? String
     }
 
     static func delete(_ path: String) async throws {

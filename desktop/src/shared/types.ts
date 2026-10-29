@@ -22,6 +22,8 @@ export interface Track {
   chosen?: boolean | null
   /** When it was added to this playlist or Liked songs (seconds since 2001, like the phone). */
   added?: number | null
+  /** Collaborative playlists: who added it (their profile ID). */
+  addedBy?: string | null
   [extra: string]: unknown
 }
 
@@ -40,6 +42,16 @@ export interface Playlist {
   albumArtist?: string | null
   /** Custom cover photo (base64 JPEG), synced with the phone. */
   cover?: string | null
+  /** Collaborative: shared with friends who can add, remove and move songs too. */
+  collab?: CollabInfo | null
+}
+
+export interface CollabInfo {
+  /** Who made it (their profile ID). */
+  owner: string
+  members: string[]
+  /** Profile ID → username. */
+  names: Record<string, string>
 }
 
 /** What the Edit playlist window can change. */
@@ -382,6 +394,11 @@ export interface DriftApi {
   searchYouTube(query: string, more?: string): Promise<{ tracks: Track[]; more?: string }>
   /** Every version of a song on YouTube Music, clean ones included (for replacing a song). */
   versions(query: string): Promise<Track[]>
+  /** Collaborative playlists: make one of yours shared (or change who's in it), leave, stop sharing. */
+  collabShare(playlistId: string, people: { id: string; username: string }[]): Promise<void>
+  collabLeave(playlistId: string): Promise<void>
+  collabStop(playlistId: string): Promise<void>
+  collabSync(): Promise<void>
   /** Swaps the song at a place in a playlist (or Liked songs) for another version. */
   replaceTrack(place: { playlistId: string } | { liked: true }, index: number, oldId: string, track: Track): Promise<void>
   lyrics(track: Track): Promise<Lyrics>
@@ -472,7 +489,7 @@ export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
-  'prepare', 'prefetch', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
+  'prepare', 'prefetch', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',

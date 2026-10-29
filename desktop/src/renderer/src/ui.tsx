@@ -5,6 +5,7 @@ import { Icon } from './icons'
 import { DownloadMark, downloadMenuItem, useDownloadSets } from './downloads'
 import { editPlaylist } from './views/editPlaylist'
 import { openReplace } from './views/replace'
+import { openCollab } from './views/collab'
 import type { SongPlace } from './views/replace'
 import { addedText } from './sort'
 import type { Sort, SortClick, SortKey } from './sort'
@@ -219,6 +220,8 @@ export interface TrackListProps {
   emptyText?: string
   /** A "Date added" column (playlists and Liked songs). */
   showAdded?: boolean
+  /** Collaborative playlists: profile ID → name, shown with the date (who added each song). */
+  addedByNames?: Record<string, string>
   /** Clickable column headers (playlists and Liked songs). */
   sort?: Sort
   onSort?: (key: SortClick) => void
@@ -368,7 +371,12 @@ export function TrackList(props: TrackListProps): JSX.Element {
                 {t.album ? <button className="link" onClick={() => void goToAlbum(t)}>{t.album}</button> : ''}
               </span>
             )}
-            {props.showAdded && <span className="c-added">{addedText(t.added)}</span>}
+            {props.showAdded && (
+              <span className="c-added">
+                {t.addedBy && props.addedByNames?.[t.addedBy] ? <b className="added-by">{props.addedByNames[t.addedBy]}</b> : null}
+                {addedText(t.added)}
+              </span>
+            )}
             <span className="c-like">
               <button
                 className={`like-btn ${likedIds.has(t.id) ? 'on' : ''}`}
@@ -589,7 +597,28 @@ export function playlistMenu(p: Playlist): MenuItem[] {
     { label: 'Add to queue', icon: 'list', action: () => addToQueue(p.tracks) },
     { label: '', separator: true },
     { label: 'Edit details…', icon: 'edit', action: () => editPlaylist(p.id) },
-    {
+    ...(p.isAlbum
+      ? []
+      : [{ label: p.collab ? 'Collaborators…' : 'Make collaborative…', icon: 'person', action: () => openCollab(p.id) }]),
+    ...(p.collab && p.collab.owner !== accountStore.get().uid
+      ? [{
+          label: 'Leave playlist',
+          icon: 'trash',
+          danger: true,
+          action: () =>
+            dialogStore.set({
+              kind: 'confirm',
+              title: `Leave ${p.name}?`,
+              message: 'It goes from your library. The others keep it.',
+              confirm: 'Leave',
+              danger: true,
+              onDone: () => {
+                void drift.collabLeave(p.id)
+                go({ name: 'home' })
+              }
+            })
+        }]
+      : [{
       label: p.isAlbum ? 'Remove from library' : 'Delete playlist',
       icon: 'trash',
       danger: true,
@@ -601,11 +630,12 @@ export function playlistMenu(p: Playlist): MenuItem[] {
           confirm: p.isAlbum ? 'Remove' : 'Delete',
           danger: true,
           onDone: () => {
-            void drift.deletePlaylist(p.id)
+            // Shared: stop sharing first (it goes from everyone else's library too).
+            void (p.collab ? drift.collabStop(p.id) : Promise.resolve()).finally(() => void drift.deletePlaylist(p.id))
             go({ name: 'home' })
           }
         })
-    }
+    }])
   ]
 }
 

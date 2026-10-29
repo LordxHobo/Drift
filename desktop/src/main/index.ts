@@ -12,6 +12,7 @@ import * as spotify from './spotify'
 import * as downloads from './downloads'
 import * as notices from './notifications'
 import { applyIcon, iconPath } from './appicon'
+import * as collab from './collab'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -119,6 +120,10 @@ const api: DriftApi = {
   radio: (id) => yt.radio(id),
   prepare: (t) => prepare(t),
   prefetch: (list) => prefetch(list),
+  collabShare: (id, people) => collab.share(id, people),
+  collabLeave: (id) => collab.leave(id),
+  collabStop: (id) => collab.stop(id),
+  collabSync: () => collab.syncNow(),
   searchYouTube: (q, more) => searchYouTube(q, more),
   versions: (q) => yt.versions(q),
   replaceTrack: async (place, index, oldId, track) => {
@@ -242,6 +247,7 @@ app.whenReady().then(() => {
   createTray(showWindow)
   applyIcon()
   account.start()
+  collab.startCollab()
   startUpdates()
   downloads.startDownloads()
   podcasts.startPodcasts()

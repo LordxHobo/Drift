@@ -14,6 +14,11 @@ struct EditPlaylistView: View {
     @State private var newPhoto: UIImage?
     @State private var cropping: CropRequest?
     @State private var confirmDelete = false
+    /// In someone else's collaborative playlist (leaving instead of deleting).
+    private var isMember: Bool {
+        guard let c = playlist.collab else { return false }
+        return c.owner != SocialStore.shared.me?.id
+    }
     @FocusState private var nameFocused: Bool
     private var library: Library { .shared }
     private var accent: Color { AppSettings.shared.accent }
@@ -106,7 +111,7 @@ struct EditPlaylistView: View {
                     Button(role: .destructive) {
                         confirmDelete = true
                     } label: {
-                        Text("Delete playlist")
+                        Text(isMember ? "Leave playlist" : "Delete playlist")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color(hex: 0xFF6B5B))
                             .frame(maxWidth: .infinity, minHeight: 44)
@@ -144,11 +149,25 @@ struct EditPlaylistView: View {
                              onDone: { newPhoto = $0; cropping = nil },
                              onCancel: { cropping = nil })
             }
-            .confirmationDialog("Delete “\(playlist.name)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete playlist", role: .destructive) {
-                    library.deletePlaylist(playlist.id)
+            .confirmationDialog(isMember ? "Leave “\(playlist.name)”?" : "Delete “\(playlist.name)”?",
+                                isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(isMember ? "Leave playlist" : "Delete playlist", role: .destructive) {
+                    let id = playlist.id
+                    if isMember {
+                        Task { try? await CollabSync.shared.leave(id) }
+                    } else if playlist.collab != nil {
+                        // Shared: stop sharing first (it goes from everyone else's library too).
+                        Task {
+                            try? await CollabSync.shared.stop(id)
+                            library.deletePlaylist(id)
+                        }
+                    } else {
+                        library.deletePlaylist(id)
+                    }
                     dismiss()
                 }
+            } message: {
+                if isMember { Text("It goes from your library. The others keep it.") }
             }
         }
         .tint(accent)

@@ -116,11 +116,14 @@ export class Firestore {
     return body
   }
 
-  async patch(path: string, fields: Record<string, unknown>, opts: { mask?: string[]; mustNotExist?: boolean } = {}): Promise<void> {
+  /** Create or update. `updateTime`: only if nobody changed it since then (else FirebaseError). Returns the new update time. */
+  async patch(path: string, fields: Record<string, unknown>, opts: { mask?: string[]; mustNotExist?: boolean; updateTime?: string } = {}): Promise<string | undefined> {
     const q: [string, string][] = (opts.mask ?? []).map((m) => ['updateMask.fieldPaths', m])
     if (opts.mustNotExist) q.push(['currentDocument.exists', 'false'])
+    if (opts.updateTime) q.push(['currentDocument.updateTime', opts.updateTime])
     const [status, body] = await send('PATCH', this.url(path, q), { json: { fields }, token: await this.auth.token() })
     if (status !== 200) throw new FirebaseError(status, errorMessage(body))
+    return typeof body?.updateTime === 'string' ? body.updateTime : undefined
   }
 
   async delete(path: string): Promise<void> {
