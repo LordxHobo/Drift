@@ -183,6 +183,9 @@ function collectEpisodes(json: J, channels?: PodcastChannel[]): Track[] {
       if (k === 'videoRenderer' || k === 'lockupViewModel') {
         const t = k === 'videoRenderer' ? episodeFromVideo(v) : episodeFromLockup(v)
         if (t && !out.some((x) => x.id === t.id)) out.push(t)
+        // A podcast (YouTube's podcast playlists) in the results: a show of its own.
+        const show = k === 'lockupViewModel' && channels ? podcastFromLockup(v) : undefined
+        if (show && !channels!.some((x) => x.id === show.id)) channels!.push(show)
       } else if (k === 'channelRenderer' && channels) {
         const c = parseChannel(v)
         if (c && !channels.some((x) => x.id === c.id)) channels.push(c)
@@ -202,10 +205,116 @@ export async function searchPodcasts(query: string): Promise<{ channels: Podcast
   return { channels, episodes }
 }
 
+// MARK: YouTube podcasts (playlists marked as podcasts, on a channel's Podcasts tab)
+
+/** A show's id is its playlist's ("PL…") when it's one podcast, or the channel's ("UC…"). */
+export const isPlaylistShow = (id: string): boolean => /^(PL|VL)/.test(id)
+
+/** Every value under these keys, in the order they appear. */
+function findAll(node: J, keys: string[], found: (key: string, value: J) => void): void {
+  if (Array.isArray(node)) return node.forEach((n) => findAll(n, keys, found))
+  if (!node || typeof node !== 'object') return
+  for (const k of Object.keys(node)) {
+    if (keys.includes(k)) found(k, node[k])
+    else findAll(node[k], keys, found)
+  }
+}
+
+const imageIn = (node: J): string | null =>
+  fixURL(strings(node).find((s) => /^(https:)?\/\/(i\d?\.ytimg\.com|yt3\.)/.test(s) && !s.includes('/vi_webp/')))
+
+function podcastFromLockup(v: J): PodcastChannel | undefined {
+  const id = v?.contentId
+  if (typeof id !== 'string' || !id.startsWith('PL') || !/PODCAST/.test(String(v.contentType))) return undefined
+  const meta = dig(v, ['metadata', 'lockupMetadataViewModel'])
+  const name = viewText(meta?.title)
+  if (!name) return undefined
+  const by = strings(dig(meta, ['metadata', 'contentMetadataViewModel', 'metadataRows'])).find((t) => t.trim() && !/\d+ (episode|video)/.test(t))
+  return { id, name, avatarURL: imageIn(v.contentImage), subtitle: by ? `Podcast · ${by}` : 'Podcast' }
+}
+
+/** The podcasts on a channel's Podcasts tab (none when it has no such tab). */
+export async function channelPodcasts(channel: PodcastChannel): Promise<PodcastChannel[]> {
+  if (!channel.id.startsWith('UC')) return []
+  const home = await post('browse', { browseId: channel.id })
+  let params: string | undefined
+  findAll(home, ['tabRenderer'], (_, tab) => {
+    const url = dig(tab, ['endpoint', 'commandMetadata', 'webCommandMetadata', 'url'])
+    if (typeof url === 'string' && /\/podcasts$/.test(url)) params = dig(tab, ['endpoint', 'browseEndpoint', 'params'])
+  })
+  if (!params) return []
+  const json = await post('browse', { browseId: channel.id, params })
+  const out: PodcastChannel[] = []
+  findAll(json, ['lockupViewModel', 'gridPlaylistRenderer', 'playlistRenderer'], (k, v) => {
+    let show: PodcastChannel | undefined
+    if (k === 'lockupViewModel') {
+      // On the Podcasts tab every playlist is a podcast, whatever kind YouTube calls it.
+      show = podcastFromLockup({ ...v, contentType: 'LOCKUP_CONTENT_TYPE_PODCAST' })
+    } else if (typeof v?.playlistId === 'string' && v.playlistId.startsWith('PL')) {
+      const name = viewText(v.title)
+      if (name) show = { id: v.playlistId, name, avatarURL: imageIn(v.thumbnail ?? v.thumbnails), subtitle: 'Podcast' }
+    }
+    if (show && !out.some((x) => x.id === show!.id)) out.push({ ...show, subtitle: `Podcast · ${channel.name}`, avatarURL: show.avatarURL ?? channel.avatarURL ?? null })
+  })
+  return out
+}
+
+function episodeFromPlaylistVideo(r: J): Track | undefined {
+  const id = r?.videoId
+  const title = viewText(r?.title)
+  if (typeof id !== 'string' || !title) return undefined
+  const duration = Number(r.lengthSeconds) || parseDuration(viewText(r.lengthText) ?? '') || undefined
+  if (duration !== undefined && duration < 60) return undefined
+  return {
+    id,
+    title,
+    artist: dig(r, ['shortBylineText', 'runs', 0, 'text']) ?? '',
+    duration: duration ?? null,
+    artworkURL: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+    podcast: true,
+    published: relativeDate(strings(r.videoInfo).find((t) => t.endsWith(' ago')))
+  }
+}
+
+/** Newest first: by date where there is one; undated ones keep their place in the playlist. */
+function newestFirst(list: Track[]): Track[] {
+  if (!list.some((t) => t.published != null)) return list
+  let last: number | null = null
+  const dated = list.map((t) => {
+    if (t.published != null) last = t.published
+    return { t, at: t.published ?? last ?? -Infinity }
+  })
+  return dated.sort((a, b) => b.at - a.at).map((x) => x.t)
+}
+
+/** A YouTube podcast's episodes (its playlist), newest first. */
+export async function playlistEpisodes(show: PodcastChannel, artist = show.name, channelID = show.id): Promise<Track[]> {
+  const list = show.id.replace(/^VL/, '')
+  const feed = feedEpisodes({ ...show, id: list }, `playlist_id=${list}`)
+  const out: Track[] = []
+  let token: string | undefined
+  for (let page = 0; page < 6; page++) {
+    const json = await post('browse', page === 0 ? { browseId: 'VL' + list } : { continuation: token })
+    token = nextToken(json)
+    let added = 0
+    findAll(json, ['playlistVideoRenderer', 'lockupViewModel', 'videoRenderer'], (k, v) => {
+      const t = k === 'playlistVideoRenderer' ? episodeFromPlaylistVideo(v) : k === 'videoRenderer' ? episodeFromVideo(v) : episodeFromLockup(v)
+      if (!t || out.some((x) => x.id === t.id)) return
+      out.push({ ...t, artist, channelID, channelAvatar: show.avatarURL ?? null })
+      added++
+    })
+    if (!token || !added || out.length >= 400) break
+  }
+  const rss = await feed
+  const dates = new Map(rss.filter((t) => t.published != null).map((t) => [t.id, t.published!]))
+  for (const t of out) if (dates.has(t.id)) t.published = dates.get(t.id)!
+  return newestFirst(out)
+}
+
 /** The channel's RSS feed: only its latest 15 uploads (shorts and clips included), but with exact dates. */
-async function feedEpisodes(channel: PodcastChannel): Promise<Track[]> {
+async function feedEpisodes(channel: PodcastChannel, which = `channel_id=${channel.id}`): Promise<Track[]> {
   try {
-    const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`, { headers: { 'User-Agent': userAgent } })
+    const res = await fetch(`https://www.youtube.com/feeds/videos.xml?${which}`, { headers: { 'User-Agent': userAgent } })
     if (res.status === 200) {
       const xml = await res.text()
       const unescape = (s: string): string =>
@@ -261,6 +370,18 @@ function nextToken(node: J): string | undefined {
  * a lot of clips.
  */
 export async function channelEpisodes(channel: PodcastChannel): Promise<Track[]> {
+  // One podcast followed on its own.
+  if (isPlaylistShow(channel.id)) return playlistEpisodes(channel)
+  // A channel with a Podcasts tab: just its podcasts' episodes, not every video it posts.
+  const podcasts = await channelPodcasts(channel).catch(() => [] as PodcastChannel[])
+  if (podcasts.length) {
+    const lists = await Promise.all(
+      podcasts.slice(0, 4).map((p) => playlistEpisodes({ ...p, avatarURL: channel.avatarURL ?? p.avatarURL }, channel.name, channel.id).catch(() => [] as Track[]))
+    )
+    const seen = new Set<string>()
+    const all = lists.flat().filter((t) => !seen.has(t.id) && !!seen.add(t.id))
+    if (all.length) return newestFirst(all.sort((a, b) => (b.published ?? -Infinity) - (a.published ?? -Infinity)))
+  }
   const feed = feedEpisodes(channel)
   const out: Track[] = []
   let token: string | undefined

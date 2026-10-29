@@ -19,7 +19,7 @@ import * as podcasts from './podcasts'
 import * as presence from './presence'
 import { setToken, testOrbit } from './orbit'
 import { createTray } from './tray'
-import { chapters, searchPodcasts, searchYouTube, videoFromLink } from './youtube'
+import { channelPodcasts, chapters, searchPodcasts, searchYouTube, videoFromLink } from './youtube'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -216,6 +216,7 @@ const api: DriftApi = {
   podcasts: async () => podcasts.getPodcasts(),
   searchPodcasts: (q) => searchPodcasts(q),
   searchShows: (q) => podcasts.searchShows(q),
+  channelPodcasts: (c) => channelPodcasts(c).catch(() => []),
   channelEpisodes: (c) => podcasts.episodes(c),
   followChannel: async (c, follow) => podcasts.followChannel(c, follow),
   refreshPodcasts: (force) => podcasts.refresh(force),

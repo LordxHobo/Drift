@@ -43,6 +43,8 @@ enum YouTubeSearch {
                 if let t = parseVideo(value), seen.insert(t.id).inserted { episodes.append(t) }
             case "lockupViewModel":
                 if let t = parseLockup(value), seen.insert(t.id).inserted { episodes.append(t) }
+                // A podcast (YouTube's podcast playlists) in the results: a show of its own.
+                if let c = podcastFromLockup(value), !channels.contains(where: { $0.id == c.id }) { channels.append(c) }
             default: break
             }
         }
@@ -108,6 +110,20 @@ enum YouTubeSearch {
     /// dates from its RSS feed. The feed alone has only the latest 15 uploads, shorts and clips included,
     /// which for channels that post a lot of clips can leave just a handful of episodes.
     static func channelEpisodes(_ channel: PodcastChannel) async throws -> [Track] {
+        // One podcast followed on its own.
+        if isPlaylistShow(channel.id) { return try await playlistEpisodes(channel) }
+        // A channel with a Podcasts tab: just its podcasts' episodes, not every video it posts.
+        if let podcasts = try? await channelPodcasts(channel), !podcasts.isEmpty {
+            var all: [Track] = []
+            var seen = Set<String>()
+            for p in podcasts.prefix(4) {
+                var show = p
+                if let a = channel.avatarURL { show.avatarURL = a }
+                let eps = (try? await playlistEpisodes(show, artist: channel.name, channelID: channel.id)) ?? []
+                for t in eps where seen.insert(t.id).inserted { all.append(t) }
+            }
+            if !all.isEmpty { return newestFirst(all) }
+        }
         async let feed = try? rssEpisodes(channel)
         var out: [Track] = []
         var seen = Set<String>()
@@ -152,8 +168,133 @@ enum YouTubeSearch {
         return fresh + out
     }
 
-    private static func rssEpisodes(_ channel: PodcastChannel) async throws -> [Track] {
-        let url = URL(string: "https://www.youtube.com/feeds/videos.xml?channel_id=\(channel.id)")!
+    // MARK: YouTube podcasts (playlists marked as podcasts, on a channel's Podcasts tab)
+
+    /// A show's id is its playlist's ("PL…") when it's one podcast, or the channel's ("UC…").
+    static func isPlaylistShow(_ id: String) -> Bool { id.hasPrefix("PL") || id.hasPrefix("VL") }
+
+    /// Every value under these keys, in the order they appear.
+    private static func findAll(_ node: Any, _ keys: Set<String>, _ found: (String, [String: Any]) -> Void) {
+        if let d = node as? [String: Any] {
+            for (k, v) in d {
+                if keys.contains(k), let r = v as? [String: Any] { found(k, r) } else { findAll(v, keys, found) }
+            }
+        } else if let a = node as? [Any] {
+            for v in a { findAll(v, keys, found) }
+        }
+    }
+
+    private static func image(in node: Any?) -> URL? {
+        let s = strings(node).first { s in
+            (s.hasPrefix("https://") || s.hasPrefix("//")) && (s.contains("ytimg.com") || s.contains("yt3."))
+        }
+        return url(s)
+    }
+
+    private static func podcastFromLockup(_ v: [String: Any], anyPlaylist: Bool = false) -> PodcastChannel? {
+        guard let id = v["contentId"] as? String, id.hasPrefix("PL"),
+              anyPlaylist || ((v["contentType"] as? String) ?? "").contains("PODCAST") else { return nil }
+        let meta = dig(v, ["metadata", "lockupMetadataViewModel"]) as? [String: Any]
+        guard let name = text(meta?["title"]) else { return nil }
+        let rows = strings(dig(meta, ["metadata", "contentMetadataViewModel", "metadataRows"]))
+        let by = rows.first { t in
+            !t.trimmingCharacters(in: .whitespaces).isEmpty && t.range(of: "\\d+ (episode|video)", options: .regularExpression) == nil
+        }
+        return PodcastChannel(id: id, name: name, avatarURL: image(in: v["contentImage"]),
+                              subtitle: by.map { "Podcast · \($0)" } ?? "Podcast")
+    }
+
+    /// The podcasts on a channel's Podcasts tab (none when it has no such tab).
+    static func channelPodcasts(_ channel: PodcastChannel) async throws -> [PodcastChannel] {
+        guard channel.id.hasPrefix("UC") else { return [] }
+        let home = try await post("browse", ["browseId": channel.id])
+        var params: String?
+        findAll(home, ["tabRenderer"]) { _, tab in
+            if let u = dig(tab, ["endpoint", "commandMetadata", "webCommandMetadata", "url"]) as? String, u.hasSuffix("/podcasts") {
+                params = dig(tab, ["endpoint", "browseEndpoint", "params"]) as? String
+            }
+        }
+        guard let params else { return [] }
+        let json = try await post("browse", ["browseId": channel.id, "params": params])
+        var out: [PodcastChannel] = []
+        findAll(json, ["lockupViewModel", "gridPlaylistRenderer", "playlistRenderer"]) { key, v in
+            var show: PodcastChannel?
+            if key == "lockupViewModel" {
+                // On the Podcasts tab every playlist is a podcast, whatever kind YouTube calls it.
+                show = podcastFromLockup(v, anyPlaylist: true)
+            } else if let id = v["playlistId"] as? String, id.hasPrefix("PL"), let name = text(v["title"]) {
+                show = PodcastChannel(id: id, name: name, avatarURL: image(in: v["thumbnail"] ?? v["thumbnails"]))
+            }
+            guard var show, !out.contains(where: { $0.id == show.id }) else { return }
+            show.subtitle = "Podcast · \(channel.name)"
+            if show.avatarURL == nil { show.avatarURL = channel.avatarURL }
+            out.append(show)
+        }
+        return out
+    }
+
+    private static func episode(fromPlaylistVideo r: [String: Any]) -> Track? {
+        guard let id = r["videoId"] as? String, let title = text(r["title"]) else { return nil }
+        let duration = (r["lengthSeconds"] as? String).flatMap { Double($0) }
+            ?? text(r["lengthText"]).flatMap { YTMusic.parseDuration($0) }
+        if let duration, duration < 60 { return nil }
+        let ago = strings(r["videoInfo"]).first { $0.hasSuffix(" ago") }
+        return Track(id: id, title: title, artist: "", album: nil, duration: duration,
+                     artworkURL: URL(string: "https://i.ytimg.com/vi/\(id)/mqdefault.jpg"), podcast: true,
+                     published: relativeDate(ago))
+    }
+
+    /// Newest first: by date where there is one; undated ones keep their place in the list.
+    private static func newestFirst(_ list: [Track]) -> [Track] {
+        guard list.contains(where: { $0.published != nil }) else { return list }
+        var last: Date?
+        let dated = list.enumerated().map { (i, t) -> (Int, Track, Date) in
+            if let p = t.published { last = p }
+            return (i, t, t.published ?? last ?? .distantPast)
+        }
+        return dated.sorted { $0.2 != $1.2 ? $0.2 > $1.2 : $0.0 < $1.0 }.map { $0.1 }
+    }
+
+    /// A YouTube podcast's episodes (its playlist), newest first.
+    static func playlistEpisodes(_ show: PodcastChannel, artist: String? = nil, channelID: String? = nil) async throws -> [Track] {
+        let list = show.id.hasPrefix("VL") ? String(show.id.dropFirst(2)) : show.id
+        async let feed = try? rssEpisodes(show, which: "playlist_id=\(list)")
+        var out: [Track] = []
+        var seen = Set<String>()
+        var token: String?
+        for page in 0..<6 {
+            let body: [String: Any] = page == 0 ? ["browseId": "VL" + list] : ["continuation": token ?? ""]
+            let json = try await post("browse", body)
+            token = nil
+            var added = 0
+            walk(json) { key, value in
+                if key == "continuationItemRenderer",
+                   let next = dig(value, ["continuationEndpoint", "continuationCommand", "token"]) as? String { token = next }
+            }
+            findAll(json, ["playlistVideoRenderer", "lockupViewModel", "videoRenderer"]) { key, v in
+                let found: Track?
+                switch key {
+                case "playlistVideoRenderer": found = episode(fromPlaylistVideo: v)
+                case "videoRenderer": found = parseVideo(v)
+                default: found = parseLockup(v)
+                }
+                guard var t = found, seen.insert(t.id).inserted else { return }
+                t.artist = artist ?? show.name
+                t.channelID = channelID ?? show.id
+                t.channelAvatar = show.avatarURL
+                out.append(t)
+                added += 1
+            }
+            if token == nil || added == 0 || out.count >= 400 { break }
+        }
+        var dates: [String: Date] = [:]
+        for t in await feed ?? [] { if let d = t.published { dates[t.id] = d } }
+        for i in out.indices { if let d = dates[out[i].id] { out[i].published = d } }
+        return newestFirst(out)
+    }
+
+    private static func rssEpisodes(_ channel: PodcastChannel, which: String? = nil) async throws -> [Track] {
+        let url = URL(string: "https://www.youtube.com/feeds/videos.xml?\(which ?? "channel_id=\(channel.id)")")!
         let (data, response) = try await URLSession.shared.data(from: url)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         let parser = FeedParser()

@@ -40,7 +40,7 @@ struct PodcastsView: View {
                                 ForEach(store.subscriptions) { c in
                                     NavigationLink(value: Route.channel(c)) {
                                         VStack(spacing: 8) {
-                                            ChannelAvatar(name: c.name, url: c.avatarURL, size: 76, square: c.isFeed)
+                                            ChannelAvatar(name: c.name, url: c.avatarURL, size: 76, square: c.hasSquareCover)
                                             Text(c.name)
                                                 .font(.system(size: 12, weight: .semibold))
                                                 .lineLimit(2)
@@ -102,6 +102,8 @@ struct PodcastsView: View {
 
 struct ChannelView: View {
     let channel: PodcastChannel
+    /// A channel with several podcasts: each can be followed on its own.
+    @State private var podcasts: [PodcastChannel] = []
     private var store: PodcastStore { .shared }
     private var player: Player { .shared }
 
@@ -109,7 +111,7 @@ struct ChannelView: View {
         let episodes = store.feeds[channel.id] ?? []
         ScrollView {
             VStack(spacing: 14) {
-                ChannelAvatar(name: channel.name, url: channel.avatarURL, size: 120, square: channel.isFeed)
+                ChannelAvatar(name: channel.name, url: channel.avatarURL, size: 120, square: channel.hasSquareCover)
                     .padding(.top, 8)
                 Text(channel.name)
                     .font(.system(size: 24, weight: .heavy))
@@ -118,6 +120,33 @@ struct ChannelView: View {
                     Text(sub).font(.system(size: 13)).foregroundStyle(Theme.muted)
                 }
                 FollowButton(channel: channel)
+
+                if podcasts.count > 1 {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Podcasts on this channel")
+                            .font(.system(size: 17, weight: .heavy))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: 14) {
+                                ForEach(podcasts) { p in
+                                    NavigationLink(value: Route.channel(p)) {
+                                        VStack(spacing: 8) {
+                                            ChannelAvatar(name: p.name, url: p.avatarURL, size: 96, square: true)
+                                            Text(p.name)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.center)
+                                                .frame(width: 100)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .scrollClipDisabled()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                }
 
                 VStack(alignment: .leading, spacing: 0) {
                     if episodes.isEmpty {
@@ -149,6 +178,9 @@ struct ChannelView: View {
         .task {
             await store.loadChannel(channel)
             player.prefetch(Array((store.feeds[channel.id] ?? []).prefix(2)))
+        }
+        .task(id: channel.id) {
+            if channel.id.hasPrefix("UC") { podcasts = (try? await YouTubeSearch.channelPodcasts(channel)) ?? [] }
         }
     }
 }

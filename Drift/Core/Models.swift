@@ -105,6 +105,8 @@ struct PodcastChannel: Codable, Hashable, Identifiable {
     var feedURL: URL? = nil
 
     var isFeed: Bool { feedURL != nil }
+    /// A square cover: a show from its feed, or one podcast (playlist) from a YouTube channel.
+    var hasSquareCover: Bool { isFeed || id.hasPrefix("PL") }
 }
 
 /// Where someone stopped in an episode.

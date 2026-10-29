@@ -280,11 +280,11 @@ struct SearchView: View {
                 if !channels.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(shows.isEmpty ? "Channels" : "YouTube channels").font(.system(size: 17, weight: .heavy))
-                        ForEach(channels.prefix(4)) { c in
+                        ForEach(channels.prefix(6)) { c in
                             HStack(spacing: 12) {
                                 NavigationLink(value: Route.channel(c)) {
                                     HStack(spacing: 12) {
-                                        ChannelAvatar(name: c.name, url: c.avatarURL, size: 52)
+                                        ChannelAvatar(name: c.name, url: c.avatarURL, size: 52, square: c.hasSquareCover)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(c.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                                             if let s = c.subtitle {
@@ -296,7 +296,7 @@ struct SearchView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
-                                                FollowButton(channel: c, compact: true)
+                                FollowButton(channel: c, compact: true)
                             }
                         }
                     }

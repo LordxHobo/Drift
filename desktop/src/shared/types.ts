@@ -518,6 +518,8 @@ export interface DriftApi {
   searchPodcasts(query: string): Promise<{ channels: PodcastChannel[]; episodes: Track[] }>
   /** Shows in Apple's podcast directory, or the show behind a pasted feed link. */
   searchShows(query: string): Promise<PodcastChannel[]>
+  /** The podcasts on a YouTube channel's Podcasts tab. */
+  channelPodcasts(channel: PodcastChannel): Promise<PodcastChannel[]>
   channelEpisodes(channel: PodcastChannel): Promise<Track[]>
   followChannel(channel: PodcastChannel, follow: boolean): Promise<void>
   refreshPodcasts(force: boolean): Promise<void>
@@ -544,7 +546,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
   'setShareActivity', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
-  'podcasts', 'searchPodcasts', 'searchShows', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
+  'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]
 

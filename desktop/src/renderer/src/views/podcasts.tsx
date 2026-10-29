@@ -42,6 +42,8 @@ export function channelOf(t: Track): PodcastChannel | undefined {
 
 /** Shows from a feed have square covers; YouTube channels round pictures. */
 const isFeedShow = (c: PodcastChannel): boolean => !!c.feedURL
+/** Square cover: a feed show, or one podcast (playlist) from a YouTube channel. */
+const isSquareShow = (c: PodcastChannel): boolean => isFeedShow(c) || /^(PL|VL)/.test(c.id)
 
 function episodeMenu(t: Track): MenuItem[] {
   const p = podcastsStore.get()
@@ -115,10 +117,10 @@ export function EpisodeRow({ t, list, index, context }: { t: Track; list: Track[
 function ShowCard({ c }: { c: PodcastChannel }): JSX.Element {
   return (
     <Card
-      round={!isFeedShow(c)}
+      round={!isSquareShow(c)}
       title={c.name}
       subtitle={c.subtitle ?? 'Show'}
-      image={<Art src={resized(c.avatarURL, 400)} seed={c.id} round={!isFeedShow(c)} />}
+      image={<Art src={resized(c.avatarURL, 400)} seed={c.id} round={!isSquareShow(c)} />}
       onOpen={() => go({ name: 'channel', channel: c })}
     />
   )
@@ -268,18 +270,24 @@ export function ChannelPage({ channel }: { channel: PodcastChannel }): JSX.Eleme
   const [error, setError] = useState<string>()
   const following = p.subscriptions.some((s) => s.id === channel.id)
   const info = p.subscriptions.find((s) => s.id === channel.id) ?? channel
+  const [podcasts, setPodcasts] = useState<PodcastChannel[]>([])
   const load = (): void => {
     setError(undefined)
     drift.channelEpisodes(channel).then(setEpisodes).catch((e) => setError(cleanError(e)))
   }
   useEffect(load, [channel.id])
+  // A channel with several podcasts: each can be followed on its own.
+  useEffect(() => {
+    setPodcasts([])
+    if (channel.id.startsWith('UC')) void drift.channelPodcasts(channel).then(setPodcasts)
+  }, [channel.id])
   const context: PlayContext = { kind: 'artist', id: `channel-${channel.id}`, name: channel.name }
   const avatar = info.avatarURL ?? episodes?.find((e) => e.channelAvatar)?.channelAvatar
 
   return (
     <div className="page channel-page">
       <div className="user-head">
-        <Art src={resized(avatar, 400)} seed={channel.id} size={160} round={!isFeedShow(channel)} />
+        <Art src={resized(avatar, 400)} seed={channel.id} size={160} round={!isSquareShow(channel)} />
         <div className="user-text">
           <div className="d-kind">Show</div>
           <h1>{info.name}</h1>
@@ -302,6 +310,12 @@ export function ChannelPage({ channel }: { channel: PodcastChannel }): JSX.Eleme
           </div>
         </div>
       </div>
+      {podcasts.length > 1 && (
+        <section className="shelf">
+          <div className="shelf-head"><h2>Podcasts on this channel</h2></div>
+          <div className="shelf-row">{podcasts.map((c) => <ShowCard key={c.id} c={c} />)}</div>
+        </section>
+      )}
       {error && !episodes ? (
         <Failed message={`Couldn’t load the episodes: ${error}`} retry={load} />
       ) : !episodes ? (
