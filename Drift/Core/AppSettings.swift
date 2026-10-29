@@ -66,7 +66,12 @@ final class AppSettings {
             Task { @MainActor in LyricsActivity.shared.settingChanged() }
         }
     }
-    var uiStyle: UIStyle { didSet { defaults.set(uiStyle.rawValue, forKey: "uiStyle") } }
+    var uiStyle: UIStyle {
+        didSet {
+            defaults.set(uiStyle.rawValue, forKey: "uiStyle")
+            Task { @MainActor in AppIconSwitcher.match() }
+        }
+    }
     /// Dark (default), light, or follow the iPhone's setting.
     var appearance: Appearance {
         didSet {

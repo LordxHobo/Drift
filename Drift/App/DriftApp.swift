@@ -15,6 +15,8 @@ struct DriftApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // The home screen icon follows the style (in case it was changed elsewhere).
+                .task { AppIconSwitcher.match() }
         }
         // iOS wakes Drift up when background downloads finish.
         .backgroundTask(.urlSession(DownloadManager.sessionID)) {
