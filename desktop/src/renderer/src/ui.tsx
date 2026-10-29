@@ -6,6 +6,7 @@ import { DownloadMark, downloadMenuItem, useDownloadSets } from './downloads'
 import { editPlaylist } from './views/editPlaylist'
 import { openReplace } from './views/replace'
 import { openCollab } from './views/collab'
+import { openInvite } from './views/invite'
 import type { SongPlace } from './views/replace'
 import { addedText } from './sort'
 import type { Sort, SortClick, SortKey } from './sort'
@@ -182,6 +183,7 @@ export function trackMenu(t: Track, opts: { playlistId?: string; index?: number;
     { label: '', separator: true },
     { label: liked ? 'Remove from Liked songs' : 'Save to Liked songs', icon: liked ? 'heartFill' : 'heart', action: () => toggleLike(t) },
     { label: 'Add to playlist', icon: 'plus', submenu: addToPlaylistItems([t]) },
+    ...(accountStore.get().linked ? [{ label: 'Invite to listen together…', icon: 'together', action: () => openInvite(t) }] : []),
     downloadMenuItem(t),
     ...(opts.playlistId && opts.index !== undefined
       ? [{ label: 'Remove from this playlist', icon: 'trash', action: () => void drift.removeFromPlaylist(opts.playlistId!, [opts.index!]) }]

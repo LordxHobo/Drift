@@ -18,6 +18,7 @@ import { ReplaceDialog } from './views/replace'
 import { ReportDialog } from './views/report'
 import { CollabDialog } from './views/collab'
 import { JamDialog } from './views/jam'
+import { IncomingInvite, InviteDialog } from './views/invite'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 import { ChannelPage, PodcastsPage } from './views/podcasts'
@@ -158,6 +159,8 @@ export function App(): JSX.Element {
         <ReportDialog />
         <CollabDialog />
         <JamDialog />
+        <InviteDialog />
+        <IncomingInvite />
         <EditProfileDialog />
         <DialogHost />
         <Toast />
@@ -187,6 +190,8 @@ export function App(): JSX.Element {
       <ReportDialog />
       <CollabDialog />
       <JamDialog />
+      <InviteDialog />
+      <IncomingInvite />
       <EditProfileDialog />
       <DialogHost />
       <Toast />

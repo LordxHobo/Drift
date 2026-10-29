@@ -206,6 +206,7 @@ function LinkPhone(): JSX.Element {
         </div>
         <p className="set-detail">Playlists, albums, liked songs and followed artists stay the same here and on your phone.</p>
         <ShareActivity />
+        <AllowInvites />
         <div className="link-buttons">
           <button className="btn" onClick={() => editProfileStore.set(true)}>
             <Icon name="edit" size={14} /> Edit profile
@@ -349,6 +350,27 @@ function ShareActivity(): JSX.Element | null {
         onChange={(v) => {
           meStore.set({ ...me, shareActivity: v })
           void drift.setShareActivity(v)
+        }}
+      />
+    </div>
+  )
+}
+
+function AllowInvites(): JSX.Element | null {
+  const me = useStore(meStore)
+  if (!me) return null
+  return (
+    <div className="set-row in-card">
+      <div className="set-text">
+        <div className="set-title">Listen Together invites</div>
+        <div className="set-detail">Friends who follow you back can invite you to listen together. Same setting as on your phone.</div>
+      </div>
+      <Toggle
+        on={me.allowInvites !== false}
+        label="Listen Together invites"
+        onChange={(v) => {
+          meStore.set({ ...me, allowInvites: v })
+          void drift.setAllowInvites(v)
         }}
       />
     </div>

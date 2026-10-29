@@ -14,6 +14,10 @@ struct UserProfile: Codable, Hashable, Identifiable {
     var updatedAt: Date?
     /// The Listen Together session they're in (its code), so friends can join.
     var jam: String? = nil
+    /// Friends may invite them to listen together (nil = yes, the default).
+    var allowInvites: Bool? = nil
+
+    var acceptsInvites: Bool { allowInvites ?? true }
 
     init(id: String, username: String, avatar: Data?, following: [String] = [], shareActivity: Bool = true,
          nowPlaying: Track? = nil, playing: Bool = false, updatedAt: Date? = nil) {
@@ -37,6 +41,7 @@ struct UserProfile: Codable, Hashable, Identifiable {
         shareActivity = FV.bool(f, "shareActivity") ?? true
         playing = FV.bool(f, "playing") ?? false
         jam = FV.string(f, "jam")
+        allowInvites = FV.bool(f, "allowInvites")
         updatedAt = FV.int(f, "updatedAt").map { Date(timeIntervalSince1970: TimeInterval($0)) }
         if let np = FV.mapFields(f, "nowPlaying"), let tid = FV.string(np, "id"), let title = FV.string(np, "title") {
             var t = Track(id: tid, title: title, artist: FV.string(np, "artist") ?? "", album: nil,
@@ -228,6 +233,15 @@ final class SocialStore {
         try? await Firestore.patch("users/\(profile.id)", fields: ["shareActivity": FV.b(on)], mask: ["shareActivity"])
         lastPublished = nil
         playerChanged()
+    }
+
+    /// Whether friends can invite you to listen together (the server checks it too).
+    func setAllowInvites(_ on: Bool) async {
+        guard var profile = me else { return }
+        profile.allowInvites = on
+        me = profile
+        cache()
+        try? await Firestore.patch("users/\(profile.id)", fields: ["allowInvites": FV.b(on)], mask: ["allowInvites"])
     }
 
     func deleteProfile() async throws {

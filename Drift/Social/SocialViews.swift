@@ -336,6 +336,10 @@ struct ProfileView: View {
                         Toggle(isOn: Binding(get: { social.privateSession }, set: { social.privateSession = $0 })) {
                             label("Private session", "Hide what you play until Drift restarts.")
                         }
+                        Toggle(isOn: Binding(get: { me.acceptsInvites },
+                                             set: { on in Task { await social.setAllowInvites(on) } })) {
+                            label("Listen Together invites", "Friends who follow you back can invite you to listen together.")
+                        }
                     }
                     .tint(accent)
 

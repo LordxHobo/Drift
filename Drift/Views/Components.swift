@@ -337,6 +337,12 @@ struct TrackMenuItems: View {
             UIState.shared.addToPlaylist = track
         } label: { Label("Add to playlist", systemImage: "text.badge.plus") }
 
+        if SocialStore.shared.me != nil {
+            Button {
+                UIState.shared.inviteTrack = track
+            } label: { Label("Invite to listen together", systemImage: "person.2") }
+        }
+
         if library.isDownloaded(track.id) {
             Button(role: .destructive) {
                 library.removeDownload(track.id)

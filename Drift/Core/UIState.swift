@@ -7,6 +7,8 @@ import CoreImage
 final class UIState {
     static let shared = UIState()
     var addToPlaylist: Track?
+    /// Song to invite friends to listen to together.
+    var inviteTrack: Track?
     /// Song being swapped for another YouTube version (from a playlist or Liked songs).
     var replacing: ReplaceRequest?
     var showPlayer = false

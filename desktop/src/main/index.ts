@@ -14,6 +14,7 @@ import * as notices from './notifications'
 import { applyIcon, iconPath } from './appicon'
 import * as collab from './collab'
 import * as jam from './jam'
+import * as invites from './invites'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -202,6 +203,9 @@ const api: DriftApi = {
   sharedPlaylists: (u) => social.sharedPlaylists(u),
   sharedPlaylistTracks: (owner, id) => social.sharedPlaylistTracks(owner, id),
   setShareActivity: (on) => social.setShareActivity(on),
+  setAllowInvites: (on) => social.setAllowInvites(on),
+  jamInvite: (ids, code, track) => invites.sendInvites(ids, code, track),
+  jamInviteAnswered: (i) => invites.answerInvite(i),
   usernameAvailable: (name) => social.usernameAvailable(name),
   updateProfile: (change) => social.updateProfile(change),
   setPrivateSession: async (on) => presence.setPrivateSession(on),
@@ -256,6 +260,7 @@ app.whenReady().then(() => {
   applyIcon()
   account.start()
   collab.startCollab()
+  invites.startInvites()
   startUpdates()
   downloads.startDownloads()
   podcasts.startPodcasts()

@@ -326,6 +326,19 @@ export interface UserProfile {
   updatedAt?: number
   /** In a Listen Together session (its code), so friends can join. */
   jam?: string | null
+  /** Friends may invite them to listen together (null = yes, the default). */
+  allowInvites?: boolean | null
+}
+
+/** An invite to listen together, from a friend. */
+export interface JamInvite {
+  from: string
+  fromName: string
+  code: string
+  title: string
+  artist: string
+  /** Milliseconds since 1970. */
+  at: number
 }
 
 /** Listen Together: what everyone in the session hears. */
@@ -506,6 +519,11 @@ export interface DriftApi {
   sharedPlaylists(user: UserProfile): Promise<SharedPlaylist[]>
   sharedPlaylistTracks(ownerId: string, id: string): Promise<Track[]>
   setShareActivity(on: boolean): Promise<void>
+  setAllowInvites(on: boolean): Promise<void>
+  /** Invites friends (profile ids) to a Listen Together session; returns the ids it couldn't invite. */
+  jamInvite(friendIds: string[], code: string, track: Track): Promise<string[]>
+  /** Clears an invite once answered. */
+  jamInviteAnswered(invite: JamInvite): Promise<void>
   usernameAvailable(name: string): Promise<boolean | null>
   updateProfile(change: { username?: string; avatar?: string | null }): Promise<UserProfile | null>
   setPrivateSession(on: boolean): Promise<void>
@@ -533,7 +551,7 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -545,7 +563,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
-  'setShareActivity', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
+  'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]

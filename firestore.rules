@@ -22,6 +22,23 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow write: if request.auth != null && request.auth.uid == uid;
       }
+
+      // Listen Together invites to you, one per friend (the document is named after them). Only friends
+      // who follow each other can invite, and only when you allow invites. You read and clear yours;
+      // the one who invited you can take theirs back.
+      match /invites/{from} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == from);
+        allow create, update: if request.auth != null
+          && request.auth.uid == from
+          && from != uid
+          && request.resource.data.from == from
+          && request.resource.data.code is string
+          && request.resource.data.keys().hasOnly(['from', 'fromName', 'code', 'title', 'artist', 'at'])
+          && get(/databases/$(database)/documents/users/$(uid)).data.following.hasAny([from])
+          && get(/databases/$(database)/documents/users/$(from)).data.following.hasAny([uid])
+          && get(/databases/$(database)/documents/users/$(uid)).data.get('allowInvites', true) != false;
+      }
     }
 
     // Linking a computer: the computer posts a one-time code with its public key, your phone answers

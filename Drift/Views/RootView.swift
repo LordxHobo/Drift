@@ -75,6 +75,7 @@ struct RootView: View {
         .sheet(item: $ui.replacing) { r in
             ReplaceSongSheet(request: r)
         }
+        .jamInvites()
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onAppear { settings.applyAppearance() }
         .task { await ArtistStore.shared.check() }
@@ -84,6 +85,7 @@ struct RootView: View {
                 Task { await ArtistStore.shared.check() }
                 LibrarySync.shared.refresh()
                 LyricsActivity.shared.appBecameActive()
+                Task { await JamInvites.shared.check() }
             }
             if phase == .background {
                 player.savePosition()

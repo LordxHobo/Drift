@@ -20,6 +20,8 @@ struct DriftApp: App {
                     AppIconSwitcher.match()
                     // Collaborative playlists: changes from the others every 30 s while open.
                     CollabSync.shared.start()
+                    // Listen Together invites from friends (every 20 s while open).
+                    JamInvites.shared.start()
                 }
         }
         // iOS wakes Drift up when background downloads finish.

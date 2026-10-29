@@ -3229,6 +3229,22 @@ kbd {
   display: block;
 }
 /* A show's square cover (feed episodes) fits whole instead of being cut to 16:9. */
+.invite-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 10px;
+}
+.invite-title {
+  font-weight: 700;
+}
+.invite-artist {
+  color: var(--muted);
+  font-size: 13px;
+}
+.dialog.invite-incoming {
+  width: min(400px, calc(100vw - 32px));
+}
 .episode-thumb.square img {
   object-fit: contain;
 }

@@ -43,6 +43,7 @@ function profile(doc: any): UserProfile | null {
     nowPlaying,
     playing: FV.bool(f, 'playing') ?? false,
     jam: FV.string(f, 'jam') ?? null,
+    allowInvites: FV.bool(f, 'allowInvites') ?? null,
     updatedAt: FV.int(f, 'updatedAt')
   }
 }
@@ -63,6 +64,17 @@ export async function me(): Promise<UserProfile | null> {
   meCache = doc ? profile(doc) : null
   emit('me', meCache)
   return meCache
+}
+
+/** Your profile as last loaded (no request). */
+export const cachedMe = (): UserProfile | null => meCache
+
+/** Whether friends can invite you to listen together (the server checks it too). Same setting as on the phone. */
+export async function setAllowInvites(on: boolean): Promise<void> {
+  const { db, uid } = need()
+  await db.patch(`users/${uid}`, { allowInvites: FV.b(on) }, { mask: ['allowInvites'] })
+  if (meCache) meCache = { ...meCache, allowInvites: on }
+  emit('me', meCache)
 }
 
 export async function user(id: string): Promise<UserProfile | null> {
