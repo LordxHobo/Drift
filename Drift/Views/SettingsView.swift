@@ -46,6 +46,24 @@ struct SettingsView: View {
                     toggle("Skip sponsors",
                            "Skips sponsor reads, self-promotion and “like and subscribe” reminders that the SponsorBlock community has marked.",
                            $settings.skipSponsors)
+                    toggle("Show video",
+                           "Episodes show their video in the player (the sound stays the same). Uses more data, only while the player is open.",
+                           $settings.podcastVideo)
+                    if settings.podcastVideo {
+                        HStack {
+                            Text("Video quality").font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Picker("Video quality", selection: $settings.videoQuality) {
+                                Text("360p").tag(360)
+                                Text("480p").tag(480)
+                                Text("720p").tag(720)
+                                Text("1080p").tag(1080)
+                                Text("Best").tag(4320)
+                            }
+                            .pickerStyle(.menu)
+                            .tint(settings.accent)
+                        }
+                    }
                     Text("Episodes remember where you stopped. Speed is set from the player.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)

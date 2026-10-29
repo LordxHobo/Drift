@@ -63,6 +63,7 @@ actor StreamResolver {
                try await Self.quickResolve(videoID, dataSaver: dataSaver, visitorData: visitorData)
            }) {
             if let v = quick.visitorData { visitorData = v }
+            if !quick.videos.isEmpty { videoCache[videoID] = (quick.videos, Date().addingTimeInterval(3 * 3600)) }
             var stream = quick.stream
             stream.source = "quick"
             if let d = ResolvedStream.lengthFromURL(stream.url) { stream.duration = d }
@@ -139,6 +140,36 @@ actor StreamResolver {
     private struct QuickResult: Sendable {
         let stream: ResolvedStream
         let visitorData: String?
+        /// The picture-only versions (for episode video).
+        var videos: [VideoFormat] = []
+    }
+
+    /// One picture-only version of a video (H.264, which iPhones play natively).
+    struct VideoFormat: Sendable {
+        let height: Int
+        let url: URL
+        let rate: Int
+    }
+
+    /// Picture-only versions seen with the sound, per video.
+    private var videoCache: [String: ([VideoFormat], Date)] = [:]
+
+    /// The picture for an episode (no sound): the sharpest H.264 version up to `maxHeight`, and
+    /// every height it comes in. nil when YouTube gave none.
+    func video(_ videoID: String, maxHeight: Int) async -> (url: URL, height: Int, heights: [Int])? {
+        if !(videoCache[videoID].map { $0.1 > Date() } ?? false) {
+            if let quick = try? await withTimeout(4, { [visitorData] in
+                try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData)
+            }) {
+                if let v = quick.visitorData { visitorData = v }
+                videoCache[videoID] = (quick.videos, Date().addingTimeInterval(3 * 3600))
+            }
+        }
+        guard let list = videoCache[videoID]?.0, let lowest = list.min(by: { $0.height < $1.height }) else { return nil }
+        let heights = Array(Set(list.map(\.height))).sorted()
+        let pool = list.filter { $0.height <= maxHeight }
+        let pick = (pool.isEmpty ? [lowest] : pool).max { ($0.height, $0.rate) < ($1.height, $1.rate) } ?? lowest
+        return (pick.url, pick.height, heights)
     }
 
     /// YouTube's visionOS client hands out direct audio links without the web page or signature
@@ -225,9 +256,16 @@ actor StreamResolver {
         let kbps = rate(pick) / 1000
         var length = (pick["approxDurationMs"] as? String).flatMap(Double.init).map { $0 / 1000 }
         if length == nil, let secs = seconds, secs > 0 { length = secs }
+        // Picture-only H.264 versions, for episode video.
+        let videos: [VideoFormat] = formats.compactMap { f in
+            guard let mime = f["mimeType"] as? String, mime.hasPrefix("video/mp4"), mime.contains("avc1"),
+                  let s = f["url"] as? String, let url = URL(string: s),
+                  let height = f["height"] as? Int, height > 0 else { return nil }
+            return VideoFormat(height: height, url: url, rate: rate(f))
+        }
         return QuickResult(stream: ResolvedStream(url: url, label: kbps > 0 ? "AAC · \(kbps) kbps" : "AAC",
                                                   duration: length),
-                           visitorData: visitor)
+                           visitorData: visitor, videos: videos)
     }
 
     func invalidate(_ videoID: String) {

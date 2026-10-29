@@ -10,6 +10,7 @@ struct NowPlayingView: View {
     @State private var showLyrics = false
     @State private var showStreamInfo = false
     @State private var showChapters = false
+    @State private var showVideoFull = false
     /// Live artwork drag. A @GestureState resets itself even when iOS cancels the drag,
     /// so the artwork can never get stuck halfway.
     @GestureState private var drag = SwipeDrag()
@@ -52,6 +53,9 @@ struct NowPlayingView: View {
         }
         .sheet(isPresented: $showChapters) {
             ChaptersSheet()
+        }
+        .fullScreenCover(isPresented: $showVideoFull) {
+            if let t = player.current { EpisodeVideoFullScreen(track: t) }
         }
     }
 
@@ -108,7 +112,12 @@ struct NowPlayingView: View {
                 }
 
                 // Artwork (16:9 for podcast episodes)
-                if t.isEpisode {
+                if t.isEpisode && AppSettings.shared.podcastVideo {
+                    // The episode's video (optional, in Settings or with the Video button below).
+                    EpisodeVideoView(track: t, width: geo.size.width - 48) { showVideoFull = true }
+                        .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
+                        .frame(maxWidth: .infinity)
+                } else if t.isEpisode {
                     EpisodeArtwork(url: t.artworkURL ?? t.artwork(size: 800), width: geo.size.width - 48, corner: 8)
                         .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
                         .frame(maxWidth: .infinity)
@@ -332,7 +341,22 @@ struct NowPlayingView: View {
                     }
 
                     if t.isEpisode {
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 44)
+                        // Where songs have Lyrics: turns the episode's video on or off.
+                        let on = AppSettings.shared.podcastVideo
+                        Button { AppSettings.shared.podcastVideo.toggle() } label: {
+                            HStack(spacing: 6) {
+                                Text("Video").font(.system(size: 12, weight: .bold))
+                                Image(systemName: on ? "play.rectangle.fill" : "play.rectangle")
+                                    .font(.system(size: 18))
+                            }
+                            .foregroundStyle(on ? accent : Theme.text)
+                            .padding(.horizontal, DriftGlass.isOn ? 14 : 0)
+                            .frame(height: DriftGlass.isOn ? 38 : 44)
+                            .driftGlass(in: Capsule(), interactive: true)
+                            .frame(height: 44)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .accessibilityLabel(on ? "Hide video" : "Show video")
                     } else {
                     Button { showLyrics = true } label: {
                         HStack(spacing: 6) {

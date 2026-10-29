@@ -57,6 +57,10 @@ final class AppSettings {
     /// Skip sponsor reads, self-promotion and subscribe reminders in podcasts (SponsorBlock).
     var skipSponsors: Bool { didSet { defaults.set(skipSponsors, forKey: "skipSponsors") } }
     var podcastSpeed: Double { didSet { defaults.set(podcastSpeed, forKey: "podcastSpeed") } }
+    /// Episodes show their video in the player (the sound stays the same).
+    var podcastVideo: Bool { didSet { defaults.set(podcastVideo, forKey: "podcastVideo") } }
+    /// Highest video quality (height); 4320 = the sharpest there is.
+    var videoQuality: Int { didSet { defaults.set(videoQuality, forKey: "videoQuality") } }
     /// Liquid Glass tab bar, mini player, drawer and player buttons (iOS 26+).
     var glassEffects: Bool { didSet { defaults.set(glassEffects, forKey: "glassEffects") } }
     /// Current lyric line in the lock screen / CarPlay Now Playing info (in place of the artist).
@@ -92,6 +96,8 @@ final class AppSettings {
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
+        podcastVideo = d.bool(forKey: "podcastVideo")
+        videoQuality = d.object(forKey: "videoQuality") as? Int ?? 720
         glassEffects = d.bool(forKey: "glassEffects")
         lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? false
         uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify

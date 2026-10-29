@@ -232,6 +232,12 @@ final class Player {
 
     private var effectiveRate: Float { isEpisode ? Float(speed) : 1 }
 
+    /// The sound's exact position and rate (the episode video follows it).
+    var audioClock: (time: Double, rate: Float) {
+        let t = av.currentTime().seconds
+        return (t.isFinite ? t : 0, av.rate)
+    }
+
     private func applyRate() {
         av.defaultRate = effectiveRate
         if av.timeControlStatus != .paused { av.rate = effectiveRate }
