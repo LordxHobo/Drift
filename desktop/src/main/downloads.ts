@@ -108,7 +108,8 @@ function enqueue(tracks: Track[], manual: boolean): void {
   const d = data()
   let added = false
   for (const t of tracks) {
-    if (t.podcast) continue
+    // Episodes download only when asked for (not with kept playlists).
+    if (t.podcast && !manual) continue
     const entry = d.entries[t.id]
     if (entry) {
       if (manual && !entry.manual) entry.manual = true
@@ -140,7 +141,8 @@ function pump(): void {
   }
 }
 
-const extension = (mime: string): string => (mime.includes('webm') ? 'webm' : mime.includes('mp4') ? 'm4a' : 'audio')
+const extension = (mime: string): string =>
+  mime.includes('webm') ? 'webm' : mime.includes('mp4') ? 'm4a' : mime.includes('mpeg') ? 'mp3' : mime.includes('ogg') ? 'ogg' : 'audio'
 
 async function run(track: Track, manual: boolean): Promise<void> {
   const d = data()

@@ -29,7 +29,7 @@ function load(id: string): Promise<Chapter[]> {
 
 /** The episode's chapters ([] when it has none). */
 export function useChapters(track: Track | undefined): { chapters: Chapter[]; loading: boolean; failed: boolean } {
-  const id = track?.podcast ? track.id : undefined
+  const id = track?.podcast && !track.audioURL ? track.id : undefined
   const [state, setState] = useState<{ id?: string; chapters: Chapter[]; loading: boolean; failed: boolean }>(() => ({
     id,
     chapters: (id && cache.get(id)) || [],
@@ -135,5 +135,5 @@ export function chapterMask(marks: number[], duration: number): string | undefin
 playerStore.subscribe(() => {
   const p = playerStore.get()
   const t = p.queue[p.index]
-  if (t?.podcast && !cache.has(t.id)) void load(t.id).catch(() => undefined)
+  if (t?.podcast && !t.audioURL && !cache.has(t.id)) void load(t.id).catch(() => undefined)
 })

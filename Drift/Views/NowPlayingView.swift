@@ -113,7 +113,16 @@ struct NowPlayingView: View {
                 }
 
                 // Artwork (16:9 for podcast episodes)
-                if t.isEpisode && AppSettings.shared.podcastVideo {
+                if t.isFeedEpisode {
+                    // A show from its feed: its square cover (audio only, no video).
+                    GeometryReader { box in
+                        ArtworkView(url: t.artwork(size: 800), size: max(120, min(box.size.width, box.size.height)), corner: 8, seed: t.id)
+                            .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
+                            .frame(width: box.size.width, height: box.size.height)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: artCap)
+                    .layoutPriority(1)
+                } else if t.isEpisode && AppSettings.shared.podcastVideo {
                     // The episode's video (optional, in Settings or with the Video button below).
                     EpisodeVideoView(track: t, width: geo.size.width - 48) { showVideoFull = true }
                         .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
@@ -362,7 +371,10 @@ struct NowPlayingView: View {
                     .accessibilityLabel(jam != nil ? "Listening together, \(jam!.members.count) people" : "Listen together")
                     .sheet(isPresented: $showJam) { JamSheet() }
 
-                    if t.isEpisode {
+                    if t.isFeedEpisode {
+                        // Episodes from a show's feed are audio only.
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 44)
+                    } else if t.isEpisode {
                         // Where songs have Lyrics: turns the episode's video on or off.
                         let on = AppSettings.shared.podcastVideo
                         Button { AppSettings.shared.podcastVideo.toggle() } label: {

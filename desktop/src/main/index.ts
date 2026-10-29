@@ -137,7 +137,7 @@ const api: DriftApi = {
     if (store.replaceTrack(place, index, oldId, track) && wasDownloaded) downloads.download([track])
   },
   lyrics: (t) => lyrics(t),
-  chapters: (id) => chapters(id),
+  chapters: async (id) => (id.startsWith('rss-') ? [] : chapters(id)),
   videoQualities: (id) => videoQualities(id),
 
   library: async () => store.getLibrary(),
@@ -215,13 +215,14 @@ const api: DriftApi = {
 
   podcasts: async () => podcasts.getPodcasts(),
   searchPodcasts: (q) => searchPodcasts(q),
+  searchShows: (q) => podcasts.searchShows(q),
   channelEpisodes: (c) => podcasts.episodes(c),
   followChannel: async (c, follow) => podcasts.followChannel(c, follow),
   refreshPodcasts: (force) => podcasts.refresh(force),
   episodeProgress: async (t, position, duration) => podcasts.updateProgress(t, position, duration),
   markPlayed: async (t, played) => podcasts.markPlayed(t, played),
   videoFromLink: (link) => videoFromLink(link),
-  skipSegments: (id, podcast) => podcasts.skipSegments(id, podcast),
+  skipSegments: async (id, podcast) => (id.startsWith('rss-') ? [] : podcasts.skipSegments(id, podcast)),
 
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),

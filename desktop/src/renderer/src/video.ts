@@ -22,7 +22,7 @@ function wanted(): string {
   const p = playerStore.get()
   const s = settingsStore.get()
   const id = p.info?.playId
-  if (!p.current?.podcast || !s.podcastVideo || !id) return ''
+  if (!p.current?.podcast || p.current.audioURL || !s.podcastVideo || !id) return ''
   return `drift://stream/${id}?v=${s.videoQuality || 720}`
 }
 

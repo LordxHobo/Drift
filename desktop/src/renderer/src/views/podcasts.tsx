@@ -1,4 +1,5 @@
-// Podcasts: any YouTube channel can be followed as a show, and any video played as an episode.
+// Podcasts: shows with their own feed (found in Apple's podcast directory, or a pasted feed link),
+// any YouTube channel followed as a show, and any video played as an episode.
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import type { PodcastChannel, Track } from '@shared/types'
@@ -30,8 +31,17 @@ function lengthText(seconds: number): string {
 }
 
 export function channelOf(t: Track): PodcastChannel | undefined {
-  return t.channelID ? { id: t.channelID, name: t.artist, avatarURL: t.channelAvatar ?? null } : undefined
+  if (!t.channelID) return undefined
+  const followed = podcastsStore.get().subscriptions.find((s) => s.id === t.channelID)
+  if (followed) return followed
+  const feedURL = t.feedURL ?? null
+  // A feed episode whose show isn't known here: nothing to open.
+  if (t.audioURL && !feedURL) return undefined
+  return { id: t.channelID, name: t.artist, avatarURL: t.channelAvatar ?? null, feedURL }
 }
+
+/** Shows from a feed have square covers; YouTube channels round pictures. */
+const isFeedShow = (c: PodcastChannel): boolean => !!c.feedURL
 
 function episodeMenu(t: Track): MenuItem[] {
   const p = podcastsStore.get()
@@ -54,7 +64,7 @@ function episodeMenu(t: Track): MenuItem[] {
             : { label: `Follow ${channel.name}`, icon: 'plus', action: () => void drift.followChannel(channel, true) }
         ]
       : []),
-    { label: 'Open on YouTube', icon: 'external', action: () => void drift.openExternal(`https://www.youtube.com/watch?v=${t.id}`) }
+    ...(t.audioURL ? [] : [{ label: 'Open on YouTube', icon: 'external', action: () => void drift.openExternal(`https://www.youtube.com/watch?v=${t.id}`) }])
   ]
 }
 
@@ -68,14 +78,14 @@ export function EpisodeRow({ t, list, index, context }: { t: Track; list: Track[
   const play = (): void => playList(list, index, context, { shuffle: false })
   return (
     <div className={`episode ${current ? 'current' : ''} ${p?.finished ? 'finished' : ''}`} onDoubleClick={play} onContextMenu={(e) => openMenu(e, episodeMenu(t))}>
-      <button className="episode-thumb" onClick={play} aria-label={`Play ${t.title}`}>
+      <button className={`episode-thumb ${t.audioURL ? 'square' : ''}`} onClick={play} aria-label={`Play ${t.title}`}>
         <img src={t.artworkURL ?? `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`} alt="" loading="lazy" />
         <span className="episode-play">{current && player.playing ? <EqualizerIcon /> : <Icon name="play" size={18} />}</span>
       </button>
       <div className="episode-text">
         <div className="episode-title">{t.title}</div>
         <div className="episode-meta">
-          {t.channelID ? (
+          {channelOf(t) ? (
             <button className="link" onClick={() => go({ name: 'channel', channel: channelOf(t)! })}>{t.artist}</button>
           ) : (
             <span>{t.artist}</span>
@@ -105,10 +115,10 @@ export function EpisodeRow({ t, list, index, context }: { t: Track; list: Track[
 function ShowCard({ c }: { c: PodcastChannel }): JSX.Element {
   return (
     <Card
-      round
+      round={!isFeedShow(c)}
       title={c.name}
       subtitle={c.subtitle ?? 'Show'}
-      image={<Art src={resized(c.avatarURL, 400)} seed={c.id} round />}
+      image={<Art src={resized(c.avatarURL, 400)} seed={c.id} round={!isFeedShow(c)} />}
       onOpen={() => go({ name: 'channel', channel: c })}
     />
   )
@@ -129,13 +139,18 @@ export function PodcastsPage({ q }: { q: string }): JSX.Element {
     if (!text) return setResults(null)
     let alive = true
     const t = window.setTimeout(() => {
+      const link = /^https?:\/\//i.test(text)
       if (/youtu/.test(text)) {
         void drift.videoFromLink(text).then((v) => alive && setLinkTrack(v)).catch(() => undefined)
       }
-      drift
-        .searchPodcasts(text)
-        .then((r) => alive && setResults({ q: text, ...r }))
-        .catch((e) => alive && setResults({ q: text, channels: [], episodes: [], error: cleanError(e) }))
+      // Shows with their own feed (Apple's directory, or a pasted feed link) and YouTube, side by side.
+      const shows = drift.searchShows(text).catch(() => [] as PodcastChannel[])
+      const youtube = link && !/youtu/.test(text) ? Promise.resolve({ channels: [], episodes: [] }) : drift.searchPodcasts(text)
+      Promise.all([shows, youtube])
+        .then(([s, r]) => alive && setResults({ q: text, channels: [...s, ...r.channels], episodes: r.episodes }))
+        .catch((e) =>
+          void shows.then((s) => alive && setResults({ q: text, channels: s, episodes: [], error: s.length ? undefined : cleanError(e) }))
+        )
     }, 400)
     return () => {
       alive = false
@@ -164,7 +179,7 @@ export function PodcastsPage({ q }: { q: string }): JSX.Element {
       </div>
       <label className="search-box people-search">
         <Icon name="search" size={18} />
-        <input value={query} placeholder="Search shows and episodes, or paste a YouTube link" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setQuery('')} />
+        <input value={query} placeholder="Search shows and episodes, or paste a feed or YouTube link" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setQuery('')} />
       </label>
 
       {query.trim() ? (
@@ -187,16 +202,18 @@ export function PodcastsPage({ q }: { q: string }): JSX.Element {
                   <div className="shelf-row">{results.channels.slice(0, 10).map((c) => <ShowCard key={c.id} c={c} />)}</div>
                 </section>
               )}
-              <section className="section">
-                <h2>Episodes</h2>
-                {results.episodes.length ? (
-                  results.episodes.slice(0, 30).map((t) => (
-                    <EpisodeRow key={t.id} t={t} list={[t]} index={0} context={{ kind: 'song', name: t.title }} />
-                  ))
-                ) : (
-                  <div className="empty small">No episodes found.</div>
-                )}
-              </section>
+              {(results.episodes.length > 0 || !results.channels.length) && (
+                <section className="section">
+                  <h2>{results.channels.some(isFeedShow) ? 'Episodes on YouTube' : 'Episodes'}</h2>
+                  {results.episodes.length ? (
+                    results.episodes.slice(0, 30).map((t) => (
+                      <EpisodeRow key={t.id} t={t} list={[t]} index={0} context={{ kind: 'song', name: t.title }} />
+                    ))
+                  ) : (
+                    <div className="empty small">Nothing found.</div>
+                  )}
+                </section>
+              )}
             </>
           )}
         </>
@@ -205,7 +222,7 @@ export function PodcastsPage({ q }: { q: string }): JSX.Element {
           {!followed.length && !continueListening.length && (
             <div className="welcome">
               <h2>Follow your first show</h2>
-              <p>Search for a show or any YouTube channel above and click Follow. New episodes show up here, and every episode remembers where you stopped. You can also paste a YouTube link to play any video.</p>
+              <p>Search for a show (or paste its feed link) or any YouTube channel above and click Follow. New episodes show up here, and every episode remembers where you stopped. You can also paste a YouTube link to play any video.</p>
             </div>
           )}
           {continueListening.length > 0 && (
@@ -255,7 +272,7 @@ export function ChannelPage({ channel }: { channel: PodcastChannel }): JSX.Eleme
   return (
     <div className="page channel-page">
       <div className="user-head">
-        <Art src={resized(avatar, 400)} seed={channel.id} size={160} round />
+        <Art src={resized(avatar, 400)} seed={channel.id} size={160} round={!isFeedShow(channel)} />
         <div className="user-text">
           <div className="d-kind">Show</div>
           <h1>{info.name}</h1>

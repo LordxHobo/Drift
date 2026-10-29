@@ -27,7 +27,11 @@ function profile(doc: any): UserProfile | null {
       artist: FV.string(np, 'artist') ?? '',
       duration: FV.int(np, 'duration') ?? null,
       artworkURL: FV.string(np, 'artwork') ?? null,
-      podcast: FV.bool(np, 'podcast') ?? null
+      podcast: FV.bool(np, 'podcast') ?? null,
+      // An episode from a show's feed: its file and feed, so friends can play it too.
+      audioURL: FV.string(np, 'audio') ?? null,
+      feedURL: FV.string(np, 'feed') ?? null,
+      channelID: FV.string(np, 'channel') ?? null
     }
   }
   return {
@@ -172,6 +176,11 @@ export async function publishActivity(track: Track | null, playing: boolean): Pr
     const np: Record<string, unknown> = { id: FV.s(t.id), title: FV.s(t.title), artist: FV.s(t.artist), podcast: FV.b(!!t.podcast) }
     np.artwork = FV.s(t.artworkURL ?? `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`)
     if (t.duration) np.duration = FV.i(t.duration)
+    if (t.audioURL) {
+      np.audio = FV.s(t.audioURL)
+      if (t.feedURL) np.feed = FV.s(t.feedURL)
+      if (t.channelID) np.channel = FV.s(t.channelID)
+    }
     fields.nowPlaying = FV.map(np)
     mask.push('nowPlaying')
   }

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Followed channels, their latest episodes and where each episode was left off.
+/// Followed shows (YouTube channels, or shows with their own feed), their latest episodes and where each episode was left off.
 /// Saved separately from the music library in podcasts.json.
 @Observable @MainActor
 final class PodcastStore {
@@ -64,8 +64,8 @@ final class PodcastStore {
 
     /// Follow the channel an episode is from.
     func follow(from t: Track) {
-        guard let id = t.channelID else { return }
-        follow(PodcastChannel(id: id, name: t.artist, avatarURL: t.channelAvatar))
+        guard let c = channel(for: t) else { return }
+        follow(c)
     }
 
     func unfollow(_ channelID: String) {
@@ -79,8 +79,22 @@ final class PodcastStore {
 
     func channel(for t: Track) -> PodcastChannel? {
         guard let id = t.channelID else { return nil }
-        return subscriptions.first { $0.id == id }
-            ?? PodcastChannel(id: id, name: t.artist, avatarURL: t.channelAvatar)
+        if let c = subscriptions.first(where: { $0.id == id }) { return c }
+        // A feed episode whose feed isn't known: nothing to open or follow.
+        if t.isFeedEpisode && t.feedURL == nil { return nil }
+        return PodcastChannel(id: id, name: t.artist, avatarURL: t.channelAvatar, feedURL: t.feedURL)
+    }
+
+    /// A show's episodes: from its feed, or the YouTube channel's uploads.
+    nonisolated static func fetchEpisodes(_ c: PodcastChannel) async throws -> [Track] {
+        if c.isFeed { return try await PodcastFeeds.episodes(c) }
+        return try await YouTubeSearch.channelEpisodes(c)
+    }
+
+    /// A show opened from a pasted feed link: its episodes are already here.
+    func showLoaded(_ c: PodcastChannel, episodes: [Track]) {
+        guard !episodes.isEmpty else { return }
+        feeds[c.id] = episodes
     }
 
     // MARK: Episodes
@@ -106,7 +120,7 @@ final class PodcastStore {
         let subs = subscriptions
         let results = await withTaskGroup(of: (String, [Track]?).self) { group in
             for c in subs {
-                group.addTask { (c.id, try? await YouTubeSearch.channelEpisodes(c)) }
+                group.addTask { (c.id, try? await PodcastStore.fetchEpisodes(c)) }
             }
             var out: [(String, [Track]?)] = []
             for await r in group { out.append(r) }
@@ -124,7 +138,7 @@ final class PodcastStore {
         guard !loadingChannels.contains(c.id) else { return }
         loadingChannels.insert(c.id)
         defer { loadingChannels.remove(c.id) }
-        if let eps = try? await YouTubeSearch.channelEpisodes(c), !eps.isEmpty {
+        if let eps = try? await Self.fetchEpisodes(c), !eps.isEmpty {
             feeds[c.id] = eps
             if isFollowing(c.id) { save() }
         }

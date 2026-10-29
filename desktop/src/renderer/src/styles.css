@@ -3228,6 +3228,10 @@ kbd {
   object-fit: cover;
   display: block;
 }
+/* A show's square cover (feed episodes) fits whole instead of being cut to 16:9. */
+.episode-thumb.square img {
+  object-fit: contain;
+}
 .episode-play {
   position: absolute;
   inset: 0;

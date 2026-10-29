@@ -371,8 +371,10 @@ final class Player {
             guard !Task.isCancelled, self.current?.id == track.id else { return }
             self.playID = playID
             // Skip segments are looked up while the audio link is being found.
-            let segsTask = Task {
-                await SponsorBlock.segments(
+            let segsTask = Task { () -> [SkipSegment] in
+                // Feed episodes aren't on YouTube, so SponsorBlock doesn't know them.
+                if track.isFeedEpisode { return [] }
+                return await SponsorBlock.segments(
                     for: playID,
                     categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
             }
@@ -381,6 +383,17 @@ final class Player {
                 if downloaded {
                     url = Library.shared.fileURL(for: track.id)
                     self.qualityLabel = "Downloaded"
+                } else if let audio = track.audioURL {
+                    // An episode from the show's feed: its audio file, played as it is.
+                    url = audio
+                    let ext = audio.pathExtension.lowercased()
+                    self.qualityLabel = ["mp3", "m4a", "aac", "ogg", "opus"].contains(ext) ? ext.uppercased() : "Podcast"
+                    self.streamInfo = [
+                        ("Episode", track.title),
+                        ("From", "The show's feed"),
+                        ("File", audio.absoluteString),
+                        ("Listed length", track.duration.map { formatTime($0) } ?? "–"),
+                    ]
                 } else {
                     let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
                         try await StreamResolver.shared.resolve(playID, dataSaver: low)
@@ -421,7 +434,7 @@ final class Player {
                 }
                 self.prefetchNext()
 
-                if track.isEpisode {
+                if track.isEpisode && !track.isFeedEpisode {
                     let ch = await YouTubeSearch.chapters(for: track.id, duration: self.duration)
                     if self.current?.id == track.id, !ch.isEmpty {
                         self.chapters = ch
@@ -461,7 +474,11 @@ final class Player {
         itemNotifications.removeAll()
 
         let item: AVPlayerItem
-        if url.isFileURL || url.absoluteString.contains(".m3u8") || url.path.contains("/hls") {
+        if current?.isFeedEpisode == true && !url.isFileURL {
+            // A feed episode's file: AVPlayer follows the host's redirects and reads it in pieces itself.
+            loader = nil
+            item = AVPlayerItem(url: url)
+        } else if url.isFileURL || url.absoluteString.contains(".m3u8") || url.path.contains("/hls") {
             // Downloaded file, or an HLS stream (AVPlayer streams those itself).
             loader = nil
             item = AVPlayerItem(url: url)
@@ -570,6 +587,11 @@ final class Player {
         let resumeAt = currentTime
         let wasPlaying = isPlaying || isBuffering
         loadTask?.cancel()
+        if let audio = track.audioURL {
+            // Feed episodes: just open the file once more.
+            start(audio, autoplay: wasPlaying, at: resumeAt)
+            return
+        }
         loadTask = Task { [weak self] in
             guard let self else { return }
             let playID = self.playID ?? track.id
@@ -623,7 +645,7 @@ final class Player {
     /// Resolve stream links ahead of time so tapping play starts right away.
     func prefetch(_ tracks: [Track]) {
         let low = AppSettings.shared.dataSaver
-        let todo = tracks.filter { !Library.shared.isDownloaded($0.id) && $0.id != current?.id }
+        let todo = tracks.filter { !Library.shared.isDownloaded($0.id) && $0.id != current?.id && !$0.isFeedEpisode }
         guard !todo.isEmpty else { return }
         // In parallel: each one is ready to start instantly (link found, opening seconds downloaded).
         for track in todo {

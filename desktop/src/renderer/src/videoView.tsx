@@ -122,7 +122,7 @@ export function VideoSurface({ className, onExpand }: { className?: string; onEx
 export function useVideoOn(): boolean {
   const p = usePlayer()
   const s = useStore(settingsStore)
-  return !!p.current?.podcast && s.podcastVideo
+  return !!p.current?.podcast && !p.current.audioURL && s.podcastVideo
 }
 
 /** Drift style: the video filling the main area. */
@@ -199,7 +199,8 @@ export function VideoButton(): JSX.Element | null {
   const p = usePlayer()
   const s = useStore(settingsStore)
   const route = useRoute()
-  if (!p.current?.podcast) return null
+  // Episodes from a show's feed are audio only.
+  if (!p.current?.podcast || p.current.audioURL) return null
   return (
     <IconButton
       icon="video"

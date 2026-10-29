@@ -39,10 +39,14 @@ struct UserProfile: Codable, Hashable, Identifiable {
         jam = FV.string(f, "jam")
         updatedAt = FV.int(f, "updatedAt").map { Date(timeIntervalSince1970: TimeInterval($0)) }
         if let np = FV.mapFields(f, "nowPlaying"), let tid = FV.string(np, "id"), let title = FV.string(np, "title") {
-            nowPlaying = Track(id: tid, title: title, artist: FV.string(np, "artist") ?? "", album: nil,
-                               duration: FV.int(np, "duration").map(Double.init),
-                               artworkURL: FV.string(np, "artwork").flatMap(URL.init(string:)),
-                               podcast: FV.bool(np, "podcast"))
+            var t = Track(id: tid, title: title, artist: FV.string(np, "artist") ?? "", album: nil,
+                          duration: FV.int(np, "duration").map(Double.init),
+                          artworkURL: FV.string(np, "artwork").flatMap(URL.init(string:)),
+                          podcast: FV.bool(np, "podcast"))
+            t.audioURL = FV.string(np, "audio").flatMap(URL.init(string:))
+            t.feedURL = FV.string(np, "feed").flatMap(URL.init(string:))
+            t.channelID = FV.string(np, "channel")
+            nowPlaying = t
         } else {
             nowPlaying = nil
         }
@@ -391,6 +395,12 @@ final class SocialStore {
                                      "podcast": FV.b(t.isEpisode)]
             if let a = t.artworkURL?.absoluteString ?? t.artwork(size: 300)?.absoluteString { np["artwork"] = FV.s(a) }
             if let d = t.duration { np["duration"] = FV.i(Int(d)) }
+            if let audio = t.audioURL {
+                // An episode from a show's feed: its file and feed, so friends can play it too.
+                np["audio"] = FV.s(audio.absoluteString)
+                if let feed = t.feedURL { np["feed"] = FV.s(feed.absoluteString) }
+                if let ch = t.channelID { np["channel"] = FV.s(ch) }
+            }
             fields["nowPlaying"] = FV.map(np)
             mask.append("nowPlaying")
         }

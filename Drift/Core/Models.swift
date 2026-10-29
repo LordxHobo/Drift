@@ -23,8 +23,14 @@ struct Track: Codable, Hashable, Identifiable {
     var chosen: Bool?
     /// Collaborative playlists: who added it (their profile ID).
     var addedBy: String?
+    /// A podcast episode from a show's feed: its audio file (not on YouTube)…
+    var audioURL: URL?
+    /// …and the feed it's from (to open its show).
+    var feedURL: URL?
 
     var isEpisode: Bool { podcast == true }
+    /// From a show's feed (an audio file) rather than YouTube.
+    var isFeedEpisode: Bool { audioURL != nil }
 
     var durationText: String {
         guard let duration else { return "" }
@@ -34,7 +40,7 @@ struct Track: Codable, Hashable, Identifiable {
     /// Artwork at roughly the requested pixel size.
     func artwork(size: Int) -> URL? {
         guard let artworkURL else {
-            return URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg")
+            return isFeedEpisode ? nil : URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg")
         }
         let s = artworkURL.absoluteString
         if s.contains("googleusercontent.com") || s.contains("ggpht.com") {
@@ -91,10 +97,14 @@ func formatTotal(_ tracks: [Track]) -> String {
 
 /// A YouTube channel followed as a podcast.
 struct PodcastChannel: Codable, Hashable, Identifiable {
-    var id: String          // "UC…" channel ID
+    var id: String          // "UC…" channel ID, or "rss-…" for a show from its feed
     var name: String
     var avatarURL: URL?
     var subtitle: String?   // e.g. "1.2M subscribers"
+    /// A show from its own feed (RSS) rather than a YouTube channel.
+    var feedURL: URL? = nil
+
+    var isFeed: Bool { feedURL != nil }
 }
 
 /// Where someone stopped in an episode.

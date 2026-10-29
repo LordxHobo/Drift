@@ -24,6 +24,10 @@ export interface Track {
   added?: number | null
   /** Collaborative playlists: who added it (their profile ID). */
   addedBy?: string | null
+  /** A podcast episode from a show's feed: its audio file (not on YouTube). */
+  audioURL?: string | null
+  /** …and the feed it's from (to open its show). */
+  feedURL?: string | null
   [extra: string]: unknown
 }
 
@@ -370,12 +374,14 @@ export interface SharedPlaylist {
   preview: Track[]
 }
 
-/** A YouTube channel followed as a podcast (same shape as the phone's). */
+/** A followed podcast (same shape as the phone's): a YouTube channel, or a show with its own feed. */
 export interface PodcastChannel {
   id: string
   name: string
   avatarURL?: string | null
   subtitle?: string | null
+  /** A show from its feed (RSS) rather than a YouTube channel. */
+  feedURL?: string | null
 }
 
 /** Where an episode was left off. */
@@ -510,6 +516,8 @@ export interface DriftApi {
 
   podcasts(): Promise<PodcastsState>
   searchPodcasts(query: string): Promise<{ channels: PodcastChannel[]; episodes: Track[] }>
+  /** Shows in Apple's podcast directory, or the show behind a pasted feed link. */
+  searchShows(query: string): Promise<PodcastChannel[]>
   channelEpisodes(channel: PodcastChannel): Promise<Track[]>
   followChannel(channel: PodcastChannel, follow: boolean): Promise<void>
   refreshPodcasts(force: boolean): Promise<void>
@@ -536,7 +544,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
   'setShareActivity', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
-  'podcasts', 'searchPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
+  'podcasts', 'searchPodcasts', 'searchShows', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]
 

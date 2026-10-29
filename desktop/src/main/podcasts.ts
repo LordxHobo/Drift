@@ -2,7 +2,8 @@
 import { app, net } from 'electron'
 import type { EpisodeProgress, PodcastChannel, PodcastsState, SkipSegment, Track } from '@shared/types'
 import { emit, writeJSON } from './store'
-import { channelEpisodes } from './youtube'
+import { channelEpisodes as youtubeEpisodes } from './youtube'
+import { feedEpisodes, searchShows as directory, showFromLink } from './feeds'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 
@@ -48,11 +49,30 @@ export function followChannel(c: PodcastChannel, follow: boolean): void {
   const d = data()
   d.subscriptions = d.subscriptions.filter((s) => s.id !== c.id)
   if (follow) {
-    d.subscriptions.push({ id: c.id, name: c.name, avatarURL: c.avatarURL ?? null, subtitle: c.subtitle ?? null })
+    d.subscriptions.push({ id: c.id, name: c.name, avatarURL: c.avatarURL ?? null, subtitle: c.subtitle ?? null, feedURL: c.feedURL ?? null })
     void loadChannel(c)
   }
   changed(true)
 }
+
+/** A show's episodes: from its feed, or the YouTube channel's uploads. */
+const channelEpisodes = (c: PodcastChannel): Promise<Track[]> => (c.feedURL ? feedEpisodes(c) : youtubeEpisodes(c))
+
+/** Shows from Apple's podcast directory, or the show behind a pasted feed link (its episodes kept ready). */
+export async function searchShows(q: string): Promise<PodcastChannel[]> {
+  const text = q.trim()
+  if (/^https?:\/\//i.test(text)) {
+    if (/youtu\.?be/i.test(text)) return []
+    const found = await showFromLink(text).catch(() => undefined)
+    if (!found) return []
+    linkShows.set(found.channel.id, found.episodes)
+    return [found.channel]
+  }
+  return directory(text)
+}
+
+/** Episodes of shows opened from a pasted link (so their page shows them straight away). */
+const linkShows = new Map<string, Track[]>()
 
 async function loadChannel(c: PodcastChannel): Promise<void> {
   const eps = await channelEpisodes(c).catch(() => [])
@@ -63,7 +83,9 @@ async function loadChannel(c: PodcastChannel): Promise<void> {
 }
 
 export async function episodes(c: PodcastChannel): Promise<Track[]> {
-  const eps = await channelEpisodes(c)
+  const ready = linkShows.get(c.id)
+  linkShows.delete(c.id)
+  const eps = ready ?? (await channelEpisodes(c))
   if (eps.length && data().subscriptions.some((s) => s.id === c.id)) {
     data().feeds[c.id] = eps
     changed(true)

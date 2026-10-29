@@ -328,7 +328,19 @@ final class Library {
     // MARK: Downloads
 
     func fileURL(for id: String) -> URL {
-        downloadsDirectory.appending(path: "\(id).m4a")
+        // Feed episodes keep their file's own type (usually MP3).
+        if id.hasPrefix("rss-") {
+            let m4a = downloadsDirectory.appending(path: "\(id).m4a")
+            return FileManager.default.fileExists(atPath: m4a.path) ? m4a : downloadsDirectory.appending(path: "\(id).mp3")
+        }
+        return downloadsDirectory.appending(path: "\(id).m4a")
+    }
+
+    /// Where a download of this file goes (feed episodes: by the file's type).
+    func downloadDestination(for id: String, source: URL) -> URL {
+        guard id.hasPrefix("rss-") else { return fileURL(for: id) }
+        let ext = ["m4a", "mp4", "aac", "m4b"].contains(source.pathExtension.lowercased()) ? "m4a" : "mp3"
+        return downloadsDirectory.appending(path: "\(id).\(ext)")
     }
 
     func isDownloaded(_ id: String) -> Bool {

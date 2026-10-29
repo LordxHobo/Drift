@@ -392,6 +392,7 @@ export async function downloadAudio(
   onProgress: (received: number, total: number) => void,
   cancelled: () => boolean
 ): Promise<{ mime: string; size: number; playId: string }> {
+  if (track.audioURL) return { ...(await downloadFeed(track.audioURL, path, onProgress, cancelled)), playId: track.id }
   const playId = await preferredId(track)
   const r = await resolve(playId)
   const part = path + '.part'
@@ -465,6 +466,11 @@ export async function prepare(track: Track): Promise<StreamInfo> {
   if (local) {
     return { playId: track.id, mime: local.mime, bitrate: track.duration ? Math.round((local.size * 8) / track.duration) : 0, size: local.size, duration: track.duration ?? undefined, client: 'Downloaded', note: 'Downloaded on this computer' }
   }
+  // An episode from a show's feed: its audio file, passed through as it is.
+  if (track.audioURL) {
+    feedAudio.set(track.id, track.audioURL)
+    return { playId: track.id, mime: 'audio/mpeg', bitrate: 0, duration: track.duration ?? undefined, client: 'Podcast feed', note: '' }
+  }
   const playId = await preferredId(track)
   const r = await resolve(playId)
   return {
@@ -476,6 +482,89 @@ export async function prepare(track: Track): Promise<StreamInfo> {
     client: r.client,
     note: notes.get(track.id) ?? ''
   }
+}
+
+// MARK: Podcast feeds
+
+/** Feed episodes' audio files, by episode id (from prepare). */
+const feedAudio = new Map<string, string>()
+
+/** Asks the show's host for (part of) an episode's file; redirects are followed. */
+async function feedPiece(url: string, range: string | null): Promise<Response> {
+  const headers: Record<string, string> = { 'User-Agent': 'Drift/1.0 (podcast app)' }
+  if (range) headers.Range = range
+  return net.fetch(url, { headers })
+}
+
+const feedMime = (type: string | null, url: string): string => {
+  if (type && /^(audio|video)\//.test(type)) return type.split(';')[0]
+  if (/\.m4a(\?|$)/i.test(url)) return 'audio/mp4'
+  if (/\.(mp4|m4v)(\?|$)/i.test(url)) return 'video/mp4'
+  if (/\.(ogg|opus)(\?|$)/i.test(url)) return 'audio/ogg'
+  return 'audio/mpeg'
+}
+
+async function serveFeed(url: string, range: string | null): Promise<Response> {
+  let res: Response
+  try {
+    res = await feedPiece(url, range)
+  } catch (e) {
+    return new Response(e instanceof Error ? e.message : 'Unavailable', { status: 502 })
+  }
+  if (!res.ok) return new Response(`The show's host answered ${res.status}`, { status: 502 })
+  const headers = new Headers({
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': feedMime(res.headers.get('content-type'), res.url || url),
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'no-store'
+  })
+  for (const h of ['content-length', 'content-range']) {
+    const v = res.headers.get(h)
+    if (v) headers.set(h, v)
+  }
+  return new Response(res.body, { status: res.status, headers })
+}
+
+/** Saves a feed episode's file (carrying on where an interrupted download stopped). */
+async function downloadFeed(
+  url: string,
+  path: string,
+  onProgress: (received: number, total: number) => void,
+  cancelled: () => boolean
+): Promise<{ mime: string; size: number }> {
+  const part = path + '.part'
+  let position = existsSync(part) ? statSync(part).size : 0
+  let res = await feedPiece(url, position > 0 ? `bytes=${position}-` : null)
+  // The host can't carry on from there: start over.
+  if (position > 0 && res.status !== 206) {
+    await res.body?.cancel().catch(() => undefined)
+    position = 0
+    res = await feedPiece(url, null)
+  }
+  if (!res.ok || !res.body) throw new Error(`The show's host answered ${res.status}`)
+  const length = Number(res.headers.get('content-length') ?? 0)
+  const total = length > 0 ? position + length : 0
+  const mime = feedMime(res.headers.get('content-type'), res.url || url)
+  const fd = openSync(part, position > 0 ? 'a' : 'w')
+  try {
+    const reader = res.body.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      writeSync(fd, value)
+      position += value.byteLength
+      onProgress(position, total)
+      if (cancelled()) {
+        await reader.cancel().catch(() => undefined)
+        break
+      }
+    }
+  } finally {
+    closeSync(fd)
+  }
+  if (cancelled()) throw new Error('cancelled')
+  if (total && position < total) throw new Error('The download stopped')
+  return { mime, size: position }
 }
 
 // MARK: drift://stream/<id>
@@ -510,6 +599,8 @@ export async function handleStream(request: Request): Promise<Response> {
   const id = height > 0 ? `${videoId}#v${Math.min(2160, Math.max(144, height))}` : videoId
   const local = height > 0 ? undefined : localLookup(videoId)
   if (local) return serveFile(local, request.headers.get('range'))
+  const feed = feedAudio.get(videoId)
+  if (feed) return serveFeed(feed, request.headers.get('range'))
   const [start, askedEnd] = parseRange(request.headers.get('range'))
 
   let r: Resolved

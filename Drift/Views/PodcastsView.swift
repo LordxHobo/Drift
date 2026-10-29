@@ -17,7 +17,7 @@ struct PodcastsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Follow your first podcast")
                             .font(.system(size: 20, weight: .heavy))
-                        Text("Go to Search, switch to Podcasts and look up a show or channel. Tap Follow and new episodes show up here. You can also paste a YouTube link there to play any video.")
+                        Text("Go to Search, switch to Podcasts and look up a show or channel (or paste a show's feed link). Tap Follow and new episodes show up here. You can also paste a YouTube link there to play any video.")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.muted)
                             .lineSpacing(2)
@@ -40,7 +40,7 @@ struct PodcastsView: View {
                                 ForEach(store.subscriptions) { c in
                                     NavigationLink(value: Route.channel(c)) {
                                         VStack(spacing: 8) {
-                                            ChannelAvatar(name: c.name, url: c.avatarURL, size: 76)
+                                            ChannelAvatar(name: c.name, url: c.avatarURL, size: 76, square: c.isFeed)
                                             Text(c.name)
                                                 .font(.system(size: 12, weight: .semibold))
                                                 .lineLimit(2)
@@ -109,7 +109,7 @@ struct ChannelView: View {
         let episodes = store.feeds[channel.id] ?? []
         ScrollView {
             VStack(spacing: 14) {
-                ChannelAvatar(name: channel.name, url: channel.avatarURL, size: 120)
+                ChannelAvatar(name: channel.name, url: channel.avatarURL, size: 120, square: channel.isFeed)
                     .padding(.top, 8)
                 Text(channel.name)
                     .font(.system(size: 24, weight: .heavy))
@@ -185,6 +185,8 @@ struct ChannelAvatar: View {
     let name: String
     let url: URL?
     var size: CGFloat
+    /// A show's square cover (shows from a feed) instead of a channel's round picture.
+    var square = false
 
     var body: some View {
         AsyncImage(url: url) { phase in
@@ -200,16 +202,17 @@ struct ChannelAvatar: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
+        .clipShape(square ? AnyShape(RoundedRectangle(cornerRadius: size * 0.1, style: .continuous)) : AnyShape(Circle()))
         .accessibilityHidden(true)
     }
 }
 
-/// 16:9 video thumbnail.
+/// 16:9 video thumbnail (or a show's square cover, for episodes from its feed).
 struct EpisodeArtwork: View {
     let url: URL?
     var width: CGFloat
     var corner: CGFloat = 6
+    var square = false
 
     var body: some View {
         AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
@@ -224,7 +227,7 @@ struct EpisodeArtwork: View {
                 }
             }
         }
-        .frame(width: width, height: width * 9 / 16)
+        .frame(width: width, height: square ? width : width * 9 / 16)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .accessibilityHidden(true)
     }
@@ -247,7 +250,8 @@ struct EpisodeRow: View {
             Button(action: onTap) {
                 HStack(alignment: .top, spacing: 12) {
                     ZStack(alignment: .bottom) {
-                        EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 320), width: 112)
+                        let square = track.isFeedEpisode
+                        EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 320), width: square ? 63 : 112, square: square)
                         if let f = store.fraction(track.id) {
                             GeometryReader { g in
                                 ZStack(alignment: .leading) {
@@ -255,7 +259,7 @@ struct EpisodeRow: View {
                                     Rectangle().fill(accent).frame(width: g.size.width * f)
                                 }
                             }
-                            .frame(width: 104, height: 3)
+                            .frame(width: track.isFeedEpisode ? 55 : 104, height: 3)
                             .clipShape(Capsule())
                             .padding(.bottom, 4)
                         }

@@ -128,6 +128,22 @@ final class DownloadManager {
     }
 
     private func start(_ t: Track, freshLink: Bool = false) async {
+        if let audio = t.audioURL {
+            // A feed episode: the show's own file (after the host's redirects).
+            do {
+                let (total, link) = try await Self.sizeAndLink(of: audio)
+                let parts = max(1, Int((Double(total) / Double(Self.partSize)).rounded(.up)))
+                var p = Pending(track: t, url: link, total: total, parts: parts)
+                if let old = pending[t.id] { p.attempts = old.attempts }
+                pending[t.id] = p
+                received[t.id] = [:]
+                savePending()
+                for i in 0..<parts { enqueue(t.id, part: i, p) }
+            } catch {
+                fail(t.id)
+            }
+            return
+        }
         do {
             let playID = await AudioVersion.shared.preferred(t)
             if freshLink { await StreamResolver.shared.invalidate(playID) }
@@ -157,6 +173,18 @@ final class DownloadManager {
         task.taskDescription = "\(id)|\(i)"
         task.countOfBytesClientExpectsToReceive = Int64(to - from + 1)
         task.resume()
+    }
+
+    /// A file's size and where it really is (podcast hosts send you on through a few redirects).
+    private static func sizeAndLink(of url: URL) async throws -> (Int, URL) {
+        var req = URLRequest(url: url)
+        req.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        req.setValue("Drift/1.0 (podcast app)", forHTTPHeaderField: "User-Agent")
+        let (_, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, let range = http.value(forHTTPHeaderField: "Content-Range"),
+              let slash = range.lastIndex(of: "/"), let total = Int(range[range.index(after: slash)...]), total > 0
+        else { throw URLError(.badServerResponse) }
+        return (total, http.url ?? url)
     }
 
     /// File size from the link ("clen=") or, failing that, a 1-byte request.
@@ -213,7 +241,7 @@ final class DownloadManager {
     /// All parts are here: join them into the song file.
     private func assemble(_ id: String) {
         guard let p = pending[id] else { return }
-        let dest = Library.shared.fileURL(for: id)
+        let dest = Library.shared.downloadDestination(for: id, source: p.url)
         do {
             try? FileManager.default.removeItem(at: dest)
             FileManager.default.createFile(atPath: dest.path, contents: nil)

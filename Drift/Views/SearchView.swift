@@ -62,6 +62,8 @@ struct SearchView: View {
     @State private var results: [Track] = []
     @State private var topArtist: ArtistRef?
     @State private var channels: [PodcastChannel] = []
+    /// Shows with their own feed (Apple's podcast directory, or a pasted feed link).
+    @State private var shows: [PodcastChannel] = []
     @State private var episodes: [Track] = []
     @State private var loading = false
     @State private var error: String?
@@ -77,7 +79,7 @@ struct SearchView: View {
     private var accent: Color { settings.accent }
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var hasResults: Bool { mode == .podcasts ? !(channels.isEmpty && episodes.isEmpty) : !results.isEmpty }
+    private var hasResults: Bool { mode == .podcasts ? !(shows.isEmpty && channels.isEmpty && episodes.isEmpty) : !results.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -145,7 +147,7 @@ struct SearchView: View {
         case .youtube:
             "Search all of YouTube for anything that isn't on YouTube Music (fan uploads, live sets, mixes), or paste a YouTube link. Only the audio plays."
         case .podcasts:
-            "Search podcasts and channels on YouTube, or paste a YouTube link to play any video."
+            "Search shows (from Apple Podcasts) and YouTube channels, or paste a show's feed link or a YouTube link."
         }
     }
 
@@ -155,7 +157,7 @@ struct SearchView: View {
                 .foregroundStyle(Theme.isMusic ? Theme.muted : Color(hex: 0x3F3F46))
             TextField("", text: $query,
                       prompt: Text(mode == .songs ? "What do you want to listen to?"
-                                   : mode == .youtube ? "Search YouTube or paste a link" : "Podcasts, channels or a YouTube link")
+                                   : mode == .youtube ? "Search YouTube or paste a link" : "Shows, channels, or a feed or YouTube link")
                         .foregroundStyle(Theme.isMusic ? Theme.muted : Color(hex: 0x52525B)))
                 .foregroundStyle(Theme.searchText)
                 .font(.system(size: 15, weight: .semibold))
@@ -251,9 +253,33 @@ struct SearchView: View {
     private var podcastList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if !shows.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Shows").font(.system(size: 17, weight: .heavy))
+                        ForEach(shows.prefix(6)) { c in
+                            HStack(spacing: 12) {
+                                NavigationLink(value: Route.channel(c)) {
+                                    HStack(spacing: 12) {
+                                        ChannelAvatar(name: c.name, url: c.avatarURL, size: 52, square: true)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(c.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                                            if let s = c.subtitle {
+                                                Text(s).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                                            }
+                                        }
+                                        Spacer(minLength: 0)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                FollowButton(channel: c, compact: true)
+                            }
+                        }
+                    }
+                }
                 if !channels.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Channels").font(.system(size: 17, weight: .heavy))
+                        Text(shows.isEmpty ? "Channels" : "YouTube channels").font(.system(size: 17, weight: .heavy))
                         ForEach(channels.prefix(4)) { c in
                             HStack(spacing: 12) {
                                 NavigationLink(value: Route.channel(c)) {
@@ -392,7 +418,7 @@ struct SearchView: View {
     private func search() async {
         let q = trimmed
         guard q.count >= 2 else {
-            results = []; channels = []; episodes = []; topArtist = nil
+            results = []; channels = []; shows = []; episodes = []; topArtist = nil
             error = nil
             return
         }
@@ -436,13 +462,27 @@ struct SearchView: View {
                     let t = try await YouTubeSearch.resolve(link: q)
                     guard !Task.isCancelled else { return }
                     channels = []
+                    shows = []
                     episodes = t.map { [$0] } ?? []
-                } else {
-                    let found = try await YouTubeSearch.search(q)
+                } else if let feed = PodcastFeeds.feedLink(q) {
+                    // A show's feed link: that show, its episodes ready on its page.
+                    let found = try await PodcastFeeds.show(from: feed)
                     guard !Task.isCancelled else { return }
-                    channels = found.channels
-                    episodes = found.episodes
-                    player.prefetch(Array(found.episodes.prefix(2)))
+                    if let found { PodcastStore.shared.showLoaded(found.channel, episodes: found.episodes) }
+                    shows = found.map { [$0.channel] } ?? []
+                    channels = []
+                    episodes = []
+                } else {
+                    // Apple's podcast directory and YouTube at the same time.
+                    async let directory = try? PodcastFeeds.search(q)
+                    let found = try? await YouTubeSearch.search(q)
+                    let fromDirectory = await directory
+                    guard !Task.isCancelled else { return }
+                    if found == nil && fromDirectory == nil { throw URLError(.notConnectedToInternet) }
+                    shows = fromDirectory ?? []
+                    channels = found?.channels ?? []
+                    episodes = found?.episodes ?? []
+                    player.prefetch(Array(episodes.prefix(2)))
                 }
             }
             error = nil
