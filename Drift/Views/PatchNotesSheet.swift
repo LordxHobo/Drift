@@ -14,7 +14,7 @@ struct PatchNotesSheet: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(e.title)
                                 .font(.system(size: 19, weight: .heavy))
-                            Text(PatchNotes.dateText(e.date))
+                            Text([PatchNotes.build(of: e), PatchNotes.dateText(e.date)].compactMap { $0 }.joined(separator: " · "))
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
                             VStack(alignment: .leading, spacing: 10) {

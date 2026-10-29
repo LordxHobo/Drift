@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import data from '@shared/patchNotes.json'
-import { Store, useStore } from '../state'
+import { drift, Store, useStore } from '../state'
 
 /** Set to show every note again (tapping the version in Settings). */
 const reopenStore = new Store(0)
@@ -22,6 +22,30 @@ interface Entry {
 }
 
 const seenKey = 'drift.patchNotesSeen'
+const buildsKey = 'drift.patchNotesBuilds'
+
+/**
+ * Which version each note came with: every build brings a new note, so the newest one is this
+ * version's. Remembered on this computer, since version numbers are only known once a build is made.
+ */
+function builds(version: string): Record<string, string> {
+  let map: Record<string, string> = {}
+  try {
+    map = JSON.parse(localStorage.getItem(buildsKey) ?? '{}') ?? {}
+  } catch {
+    map = {}
+  }
+  const newest = (data.entries as Entry[])[0]?.id
+  if (version && newest !== undefined && !map[newest]) {
+    map[newest] = version
+    try {
+      localStorage.setItem(buildsKey, JSON.stringify(map))
+    } catch {
+      // nothing to remember it in
+    }
+  }
+  return map
+}
 const entries = (data.entries as Entry[])
   .map((e) => ({ ...e, notes: e.notes.filter((n) => !n.platforms || n.platforms.includes('desktop')) }))
   .filter((e) => e.notes.length)
@@ -52,9 +76,13 @@ const dateText = (d: string): string => new Date(d + 'T12:00:00').toLocaleDateSt
 export function PatchNotes(): JSX.Element | null {
   const [list, setList] = useState<Entry[]>(unseen)
   const reopen = useStore(reopenStore)
+  const [versions, setVersions] = useState<Record<string, string>>({})
   useEffect(() => {
     if (reopen) setList(entries)
   }, [reopen])
+  useEffect(() => {
+    void drift.appInfo().then((i) => setVersions(builds(i.version))).catch(() => undefined)
+  }, [])
   if (!list.length) return null
   const close = (): void => {
     markSeen()
@@ -69,7 +97,7 @@ export function PatchNotes(): JSX.Element | null {
             <section key={e.id}>
               <div className="patch-notes-head">
                 <span className="patch-notes-title">{e.title}</span>
-                <span className="patch-notes-date">{dateText(e.date)}</span>
+                <span className="patch-notes-date">{[versions[e.id] && `Version ${versions[e.id]}`, dateText(e.date)].filter(Boolean).join(' · ')}</span>
               </div>
               <ul>
                 {e.notes.map((n, i) => (

@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 3,
+      "date": "2026-10-29",
+      "title": "Build numbers in What's new",
+      "notes": [
+        {
+          "text": "What's new now shows which build each change came with.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "What's new now shows which version each change came with.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 2,
       "date": "2026-10-29",
       "title": "Followers, and what's new",
