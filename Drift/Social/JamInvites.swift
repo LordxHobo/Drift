@@ -38,7 +38,7 @@ final class JamInvites {
     func start() {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { _ in
-            MainActor.assumeIsolated { Task { await JamInvites.shared.check() } }
+            Task { @MainActor in await JamInvites.shared.check() }
         }
         Task { await check() }
     }
