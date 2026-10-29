@@ -26,17 +26,17 @@ service cloud.firestore {
       // Listen Together invites to you, one per friend (the document is named after them). Only friends
       // who follow each other can invite, and only when you allow invites. You read and clear yours;
       // the one who invited you can take theirs back.
-      match /invites/{from} {
+      match /invites/{sender} {
         allow read: if request.auth != null && request.auth.uid == uid;
-        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == from);
+        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == sender);
         allow create, update: if request.auth != null
-          && request.auth.uid == from
-          && from != uid
-          && request.resource.data.from == from
+          && request.auth.uid == sender
+          && sender != uid
+          && request.resource.data['from'] == sender
           && request.resource.data.code is string
           && request.resource.data.keys().hasOnly(['from', 'fromName', 'code', 'title', 'artist', 'at'])
-          && get(/databases/$(database)/documents/users/$(uid)).data.following.hasAny([from])
-          && get(/databases/$(database)/documents/users/$(from)).data.following.hasAny([uid])
+          && sender in get(/databases/$(database)/documents/users/$(uid)).data.get('following', [])
+          && uid in get(/databases/$(database)/documents/users/$(sender)).data.get('following', [])
           && get(/databases/$(database)/documents/users/$(uid)).data.get('allowInvites', true) != false;
       }
     }

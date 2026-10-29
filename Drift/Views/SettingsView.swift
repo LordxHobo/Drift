@@ -4,6 +4,8 @@ struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var confirmDelete = false
     @State private var linkComputer = false
+    /// What's new, opened by tapping the version.
+    @State private var patchNotes: [PatchNotes.Entry] = []
     private var library: Library { .shared }
 
     var body: some View {
@@ -224,10 +226,23 @@ struct SettingsView: View {
                 }
                 }
 
-                Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
+                // Tap for what's new.
+                Button {
+                    patchNotes = PatchNotes.everything()
+                } label: {
+                    VStack(spacing: 3) {
+                        Text("Drift \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
+                        Text("What's new").underline()
+                    }
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: Binding(get: { !patchNotes.isEmpty }, set: { if !$0 { patchNotes = [] } })) {
+                    PatchNotesSheet(entries: patchNotes)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)

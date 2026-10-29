@@ -2,17 +2,65 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 2,
+      "date": "2026-10-29",
+      "title": "Followers, and what's new",
+      "notes": [
+        {
+          "text": "Tap Followers or Following on any profile to see who's in them."
+        },
+        {
+          "text": "Tap the version at the bottom of Settings to see what's new again.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Click the version at the bottom of Settings to see what's new again.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Listen Together invites: clearer messages when an invite can't be sent."
+        }
+      ]
+    },
+    {
       "id": 1,
       "date": "2026-10-29",
       "title": "Listen Together invites, and podcasts from anywhere",
       "notes": [
-        { "text": "Invite friends to listen together from any song's ⋯ menu. They get a popup to join or decline." },
-        { "text": "Only friends who follow each other can invite. You can turn invites off in your profile settings.", "platforms": ["ios"] },
-        { "text": "Only friends who follow each other can invite. You can turn invites off in Settings.", "platforms": ["desktop"] },
-        { "text": "Podcasts from Apple Podcasts: search a show's name, or paste its Apple Podcasts, SoundCloud or feed link." },
-        { "text": "YouTube podcasts now list only the episodes on a channel's Podcasts tab, and their whole back catalogue." },
-        { "text": "Members-only videos are left out of YouTube results." },
-        { "text": "Podcast episodes can be downloaded.", "platforms": ["desktop"] }
+        {
+          "text": "Invite friends to listen together from any song's ⋯ menu. They get a popup to join or decline."
+        },
+        {
+          "text": "Only friends who follow each other can invite. You can turn invites off in your profile settings.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Only friends who follow each other can invite. You can turn invites off in Settings.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Podcasts from Apple Podcasts: search a show's name, or paste its Apple Podcasts, SoundCloud or feed link."
+        },
+        {
+          "text": "YouTube podcasts now list only the episodes on a channel's Podcasts tab, and their whole back catalogue."
+        },
+        {
+          "text": "Members-only videos are left out of YouTube results."
+        },
+        {
+          "text": "Podcast episodes can be downloaded.",
+          "platforms": [
+            "desktop"
+          ]
+        }
       ]
     }
   ]

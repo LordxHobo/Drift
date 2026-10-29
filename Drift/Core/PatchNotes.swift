@@ -42,6 +42,9 @@ enum PatchNotes {
         return entries.filter { $0.id > seen }
     }
 
+    /// Every note, newest first (tapping the version in Settings).
+    static func everything() -> [Entry] { forPhone }
+
     static func markSeen() {
         UserDefaults.standard.set(all.map(\.id).max() ?? 0, forKey: seenKey)
     }

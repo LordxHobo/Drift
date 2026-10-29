@@ -1,7 +1,14 @@
 // What's new: shown once after an update (the same notes as on the phone, in shared/patchNotes.json).
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import data from '@shared/patchNotes.json'
+import { Store, useStore } from '../state'
+
+/** Set to show every note again (tapping the version in Settings). */
+const reopenStore = new Store(0)
+export function showPatchNotes(): void {
+  reopenStore.set(reopenStore.get() + 1)
+}
 
 interface Note {
   text: string
@@ -44,6 +51,10 @@ const dateText = (d: string): string => new Date(d + 'T12:00:00').toLocaleDateSt
 
 export function PatchNotes(): JSX.Element | null {
   const [list, setList] = useState<Entry[]>(unseen)
+  const reopen = useStore(reopenStore)
+  useEffect(() => {
+    if (reopen) setList(entries)
+  }, [reopen])
   if (!list.length) return null
   const close = (): void => {
     markSeen()

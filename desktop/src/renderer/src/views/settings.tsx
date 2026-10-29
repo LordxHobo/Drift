@@ -7,6 +7,7 @@ import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
 import { editProfileStore } from './editProfile'
 import { bestQuality } from '../video'
+import { showPatchNotes } from './patchNotes'
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }): JSX.Element {
   return (
@@ -177,7 +178,9 @@ export function SettingsPage(): JSX.Element {
 
       <div className="about">
         <Logo size={18} />
-        <span>Drift {version} for {platform === 'win32' ? 'Windows' : platform === 'darwin' ? 'Mac' : 'Linux'}</span>
+        <button className="link about-version" onClick={showPatchNotes} title="What’s new">
+          Drift {version} for {platform === 'win32' ? 'Windows' : platform === 'darwin' ? 'Mac' : 'Linux'} · What’s new
+        </button>
       </div>
     </div>
   )

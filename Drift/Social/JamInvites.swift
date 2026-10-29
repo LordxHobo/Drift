@@ -58,6 +58,7 @@ final class JamInvites {
         if JamSession.shared.state == nil { try await JamSession.shared.start() }
         guard let code = JamSession.shared.state?.code else { throw JamSession.JamError.failed }
         var failed: [String] = []
+        var refused = false
         for f in friends {
             let fields: [String: Any] = [
                 "from": FV.s(me.id), "fromName": FV.s(me.username), "code": FV.s(code),
@@ -66,19 +67,24 @@ final class JamInvites {
             ]
             do {
                 try await Firestore.patch("users/\(f.id)/invites/\(me.id)", fields: fields)
+            } catch SocialError.server(403, _) {
+                failed.append(f.username)
+                refused = true
             } catch {
                 failed.append(f.username)
             }
         }
-        if !failed.isEmpty { throw InviteError.notSent(failed) }
+        if !failed.isEmpty { throw InviteError.notSent(failed, refused: refused) }
     }
 
     enum InviteError: LocalizedError {
-        case notSent([String])
+        case notSent([String], refused: Bool)
         var errorDescription: String? {
             switch self {
-            case .notSent(let names):
-                "Couldn't invite \(names.joined(separator: ", ")). They may have turned invites off or stopped following you."
+            case .notSent(let names, let refused):
+                refused
+                    ? "Drift's server refused the invite to \(names.joined(separator: ", ")). They may have turned invites off or stopped following you, or the security rules need updating."
+                    : "Couldn't invite \(names.joined(separator: ", ")). Check your connection and try again."
             }
         }
     }

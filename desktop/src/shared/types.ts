@@ -512,6 +512,8 @@ export interface DriftApi {
 
   me(): Promise<UserProfile | null>
   friends(): Promise<UserProfile[]>
+  /** Several profiles at once (someone's following list). */
+  users(ids: string[]): Promise<UserProfile[]>
   followers(id?: string): Promise<UserProfile[]>
   user(id: string): Promise<UserProfile | null>
   searchUsers(text: string): Promise<UserProfile[]>
@@ -562,7 +564,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'startImport', 'importState', 'retryMissing', 'notifications', 'markNotificationsRead', 'removeNotification', 'retryReport', 'clearImport',
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
-  'me', 'friends', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
+  'me', 'friends', 'users', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
   'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'

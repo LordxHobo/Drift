@@ -268,18 +268,65 @@ export function FriendsPage(): JSX.Element {
 
 // MARK: Profile page
 
+/** Someone's followers, or the people they follow. */
+function FollowDialog({ title, load, empty, close }: { title: string; load: () => Promise<UserProfile[]>; empty: string; close: () => void }): JSX.Element {
+  const [list, setList] = useState<UserProfile[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    load().then((l) => alive && setList(l)).catch(() => alive && setList([]))
+    return () => {
+      alive = false
+    }
+  }, [title])
+  return (
+    <div className="dialog-layer" onMouseDown={close}>
+      <div className="dialog collab" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && close()} tabIndex={-1}>
+        <h3>{title}</h3>
+        <div className="collab-list follow-list">
+          {list === null ? (
+            <div className="empty small"><Spinner size={18} /></div>
+          ) : list.length === 0 ? (
+            <div className="empty small">{empty}</div>
+          ) : (
+            list.map((u) => (
+              <button
+                key={u.id}
+                className="collab-row follow-row"
+                onClick={() => {
+                  close()
+                  go({ name: 'user', id: u.id, hint: u })
+                }}
+              >
+                <UserAvatar user={u} size={30} />
+                <span className="collab-name">{u.username}</span>
+              </button>
+            ))
+          )}
+        </div>
+        <div className="dialog-buttons">
+          <span className="spacer" />
+          <button className="btn ghost" onClick={close}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.Element {
   const me = useStore(meStore)
   const music = useMusic()
   const [user, setUser] = useState<UserProfile | undefined>(hint)
   const [lists, setLists] = useState<SharedPlaylist[] | null>(null)
-  const [followers, setFollowers] = useState<number | null>(null)
+  const [followerList, setFollowerList] = useState<UserProfile[] | null>(null)
+  const followers = followerList?.length ?? null
   const [error, setError] = useState<string>()
+  const [showing, setShowing] = useState<'followers' | 'following' | null>(null)
 
   useEffect(() => {
     let alive = true
     setError(undefined)
     setLists(null)
+    setShowing(null)
     drift
       .user(id)
       .then((u) => {
@@ -289,7 +336,7 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
         void drift.sharedPlaylists(u).then((l) => alive && setLists(l)).catch(() => alive && setLists([]))
       })
       .catch((e) => alive && setError(cleanError(e)))
-    void drift.followers(id).then((f) => alive && setFollowers(f.length)).catch(() => undefined)
+    void drift.followers(id).then((f) => alive && setFollowerList(f)).catch(() => undefined)
     return () => {
       alive = false
     }
@@ -306,6 +353,14 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
 
   return (
     <div className="page user-page">
+      {showing && (
+        <FollowDialog
+          title={showing === 'followers' ? `${isMe ? 'Your' : `${user.username}’s`} followers` : `${isMe ? 'You follow' : `${user.username} follows`}`}
+          load={() => (showing === 'followers' ? (followerList ? Promise.resolve(followerList) : drift.followers(user.id)) : drift.users(user.following))}
+          empty={showing === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
+          close={() => setShowing(null)}
+        />
+      )}
       <div className="user-head">
         {isMe ? (
           <button className="edit-cover round" onClick={() => editProfileStore.set(true)} title="Edit profile">
@@ -320,8 +375,12 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
           <h1>{user.username}</h1>
           <div className="user-counts">
             <span><b>{lists?.length ?? '–'}</b> public {lists?.length === 1 ? 'playlist' : 'playlists'}</span>
-            <span><b>{followers ?? '–'}</b> {followers === 1 ? 'follower' : 'followers'}</span>
-            <span><b>{user.following.length}</b> following</span>
+            <button className="link count-link" onClick={() => setShowing('followers')}>
+              <b>{followers ?? '–'}</b> {followers === 1 ? 'follower' : 'followers'}
+            </button>
+            <button className="link count-link" onClick={() => setShowing('following')}>
+              <b>{user.following.length}</b> following
+            </button>
           </div>
           <div className="user-buttons">
             {isMe ? (

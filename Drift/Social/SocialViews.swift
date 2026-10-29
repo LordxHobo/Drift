@@ -594,9 +594,14 @@ struct UserView: View {
                 UserAvatar(data: u.avatar, name: u.username, size: 120).padding(.top, 12)
                 Text("@\(u.username)").font(.system(size: 24, weight: .heavy))
                 HStack(spacing: 28) {
-                    count(followerCount, "Followers")
-                    count(u.following.count, "Following")
+                    NavigationLink(value: Route.userFollows(u, followers: true)) {
+                        count(followerCount, "Followers")
+                    }
+                    NavigationLink(value: Route.userFollows(u, followers: false)) {
+                        count(u.following.count, "Following")
+                    }
                 }
+                .buttonStyle(.plain)
                 if isMe {
                     NavigationLink(value: Route.profile) {
                         Text("Edit profile")
@@ -739,7 +744,8 @@ struct UserView: View {
             Text(n.map(String.init) ?? "–").font(.system(size: 18, weight: .heavy))
             Text(title).font(.system(size: 12)).foregroundStyle(Theme.muted)
         }
-        .frame(minWidth: 80)
+        .frame(minWidth: 80, minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -874,6 +880,8 @@ struct SharedPlaylistView: View {
 /// Your followers or the people you follow.
 struct FollowListView: View {
     let followers: Bool
+    /// Whose (nil = yours).
+    var user: UserProfile? = nil
     @State private var users: [UserProfile] = []
     @State private var loaded = false
     private var social: SocialStore { .shared }
@@ -905,7 +913,10 @@ struct FollowListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bg, for: .navigationBar)
         .task {
-            if followers {
+            if let user, user.id != social.me?.id {
+                // Someone else's lists.
+                users = followers ? await SocialStore.followers(of: user.id) : await social.users(user.following)
+            } else if followers {
                 await social.loadFollowers()
                 users = social.followers
             } else if let me = social.me {

@@ -196,6 +196,7 @@ const api: DriftApi = {
 
   me: () => social.me(),
   friends: () => social.friends(),
+  users: (ids) => social.users(ids),
   followers: (id) => social.followers(id),
   user: (id) => social.user(id),
   searchUsers: (text) => social.searchUsers(text),

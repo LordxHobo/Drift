@@ -99,6 +99,14 @@ export async function friends(): Promise<UserProfile[]> {
     })
 }
 
+/** Several profiles at once (in the order asked for; gone ones left out). */
+export async function users(ids: string[]): Promise<UserProfile[]> {
+  if (!ids.length) return []
+  const docs = await need().db.batchGet(ids.map((id) => `users/${id}`))
+  const found = docs.map(profile).filter((u): u is UserProfile => !!u)
+  return ids.map((id) => found.find((u) => u.id === id)).filter((u): u is UserProfile => !!u)
+}
+
 export async function followers(id?: string): Promise<UserProfile[]> {
   const { db, uid } = need()
   const docs = await db.query({

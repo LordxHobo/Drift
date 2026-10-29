@@ -61,7 +61,7 @@ export function InviteDialog(): JSX.Element | null {
       const ids = [...picked]
       const failed = await drift.jamInvite(ids, code, track)
       const names = (ids: string[]): string => ids.map((id) => invitable.find((f) => f.id === id)?.username ?? 'someone').join(', ')
-      if (failed.length) toast(`Couldn’t invite ${names(failed)}. They may have turned invites off.`)
+      if (failed.length) toast(`Drift’s server refused the invite to ${names(failed)}. They may have turned invites off or stopped following you, or the security rules need updating.`)
       const sent = ids.filter((id) => !failed.includes(id))
       if (sent.length) toast(`Invited ${names(sent)} to listen together`)
       close()

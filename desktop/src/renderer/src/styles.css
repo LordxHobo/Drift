@@ -4330,3 +4330,37 @@ kbd {
   margin: 5px 0;
   line-height: 1.45;
 }
+
+/* Followers / following on a profile */
+.count-link {
+  color: inherit;
+  font: inherit;
+}
+.count-link:hover {
+  text-decoration: underline;
+}
+.follow-list {
+  max-height: min(55vh, 460px);
+  overflow-y: auto;
+}
+.collab-row.follow-row {
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.collab-row.follow-row:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.12));
+}
+
+.about-version {
+  color: inherit;
+  font: inherit;
+}
+.about-version:hover {
+  text-decoration: underline;
+}
