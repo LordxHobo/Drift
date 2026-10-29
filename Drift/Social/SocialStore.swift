@@ -12,6 +12,8 @@ struct UserProfile: Codable, Hashable, Identifiable {
     var nowPlaying: Track?
     var playing: Bool
     var updatedAt: Date?
+    /// The Listen Together session they're in (its code), so friends can join.
+    var jam: String? = nil
 
     init(id: String, username: String, avatar: Data?, following: [String] = [], shareActivity: Bool = true,
          nowPlaying: Track? = nil, playing: Bool = false, updatedAt: Date? = nil) {
@@ -34,6 +36,7 @@ struct UserProfile: Codable, Hashable, Identifiable {
         following = FV.stringArray(f, "following")
         shareActivity = FV.bool(f, "shareActivity") ?? true
         playing = FV.bool(f, "playing") ?? false
+        jam = FV.string(f, "jam")
         updatedAt = FV.int(f, "updatedAt").map { Date(timeIntervalSince1970: TimeInterval($0)) }
         if let np = FV.mapFields(f, "nowPlaying"), let tid = FV.string(np, "id"), let title = FV.string(np, "title") {
             nowPlaying = Track(id: tid, title: title, artist: FV.string(np, "artist") ?? "", album: nil,

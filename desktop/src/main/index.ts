@@ -13,6 +13,7 @@ import * as downloads from './downloads'
 import * as notices from './notifications'
 import { applyIcon, iconPath } from './appicon'
 import * as collab from './collab'
+import * as jam from './jam'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -120,6 +121,11 @@ const api: DriftApi = {
   radio: (id) => yt.radio(id),
   prepare: (t) => prepare(t),
   prefetch: (list) => prefetch(list),
+  jamStart: () => jam.startJam(),
+  jamJoin: (code) => jam.joinJam(code),
+  jamLeave: () => jam.leaveJam(),
+  jamPublish: (change) => jam.publish(change),
+  jamState: async () => jam.getJam(),
   collabShare: (id, people) => collab.share(id, people),
   collabLeave: (id) => collab.leave(id),
   collabStop: (id) => collab.stop(id),
@@ -258,6 +264,7 @@ app.whenReady().then(() => {
 
 let quitting = false
 app.on('before-quit', () => {
+  void jam.leaveJam()
   quitting = true
   void presence.stopPresence()
   store.flush()

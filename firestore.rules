@@ -55,6 +55,22 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.owner;
     }
 
+    // Listen Together: a session is looked up by its code (not listed). Members change what plays;
+    // anyone signed in can add themselves (joining with the code); only the host ends it.
+    match /jams/{code} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.host == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && code.matches('^[A-Z2-9]{6}$');
+      allow update: if request.auth != null
+        && request.resource.data.host == resource.data.host
+        && (request.auth.uid in resource.data.members
+            || (request.resource.data.members.toSet() == resource.data.members.toSet().union([request.auth.uid].toSet())
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'names'])));
+      allow delete: if request.auth != null && request.auth.uid == resource.data.host;
+    }
+
     // Usernames: one owner each, first come first served.
     match /usernames/{name} {
       allow read: if request.auth != null;

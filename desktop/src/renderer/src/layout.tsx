@@ -7,6 +7,7 @@ import {
   readLocal, togglePanel, useRoute, useStore, writeLocal, notificationsStore
 } from './state'
 import { reportStore } from './views/report'
+import { JamButton } from './views/jam'
 import type { MenuItem, Route } from './state'
 import { jumpTo, playList, removeFromQueue, setSpeed, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
@@ -313,6 +314,7 @@ export function DriftPlayerBar(): JSX.Element {
       <div className="pb-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
+        <JamButton />
         <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />
         <IconButton icon="queue" label="Queue" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
         <Volume />
@@ -579,6 +581,7 @@ export function MusicTopPlayer(): JSX.Element {
       <div className="m-top-right">
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
+        <JamButton />
         <NoticesBell />
         <Volume />
         <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />

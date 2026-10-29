@@ -71,6 +71,41 @@ function shuffled<T>(list: T[]): T[] {
   return a
 }
 
+/** For Listen Together: how many times you've jumped in a song, and when a song last ended by itself. */
+export const jamHooks = { seeks: 0, naturalEndAt: 0 }
+
+/** The exact position of the sound right now. */
+export function currentTime(): number {
+  return audio.src ? audio.currentTime : positionStore.get()
+}
+
+/**
+ * Listen Together: play what the session plays (the song, what comes after it, where, and whether).
+ * Only changes what differs, so the music keeps going smoothly.
+ */
+export function jamPlay(track: Track, upcoming: Track[], position: number, playing: boolean): void {
+  const s = playerStore.get()
+  if (s.current?.id !== track.id) {
+    unshuffled = undefined
+    radioFor = undefined
+    patch({ queue: [track, ...upcoming], index: 0, shuffle: false, context: { kind: 'queue', name: 'Listening together' } })
+    void load(track, playing, position).then(() => {
+      if (!playing) audio.pause()
+    })
+    return
+  }
+  const ids = s.queue.slice(s.index + 1).map((t) => t.id).join(',')
+  if (ids !== upcoming.map((t) => t.id).join(',')) patch({ queue: [...s.queue.slice(0, s.index + 1), ...upcoming] })
+  // Paused, or just paused/started: the exact spot. While playing on: only bigger gaps (no stutter).
+  const tolerance = !playing || playing === audio.paused ? 0.3 : 1.5
+  if (playing && audio.paused) void audio.play().catch(() => undefined)
+  if (!playing && !audio.paused) audio.pause()
+  if (Math.abs(currentTime() - position) > tolerance) {
+    positionStore.set(position)
+    if (audio.src) audio.currentTime = position
+  }
+}
+
 // MARK: Starting
 
 export function playList(tracks: Track[], start: number, context?: PlayContext, opts: { shuffle?: boolean } = {}): void {
@@ -289,6 +324,7 @@ export function previous(): void {
   const s = playerStore.get()
   if (!s.current) return
   if (audio.currentTime > 3 || s.index <= 0) {
+    jamHooks.seeks++
     audio.currentTime = 0
     positionStore.set(0)
     return
@@ -298,6 +334,7 @@ export function previous(): void {
 }
 
 export function seek(t: number): void {
+  jamHooks.seeks++
   const d = playerStore.get().duration
   const time = Math.max(0, Math.min(t, d || t))
   positionStore.set(time)
@@ -352,6 +389,7 @@ audio.addEventListener('pause', () => {
 audio.addEventListener('waiting', () => patch({ loading: true }))
 audio.addEventListener('canplay', () => patch({ loading: false }))
 audio.addEventListener('ended', () => {
+  jamHooks.naturalEndAt = Date.now()
   const t = playerStore.get().current
   if (t?.podcast) void drift.markPlayed(t, true)
   next(true)

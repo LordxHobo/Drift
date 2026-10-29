@@ -38,6 +38,7 @@ function profile(doc: any): UserProfile | null {
     shareActivity: FV.bool(f, 'shareActivity') ?? true,
     nowPlaying,
     playing: FV.bool(f, 'playing') ?? false,
+    jam: FV.string(f, 'jam') ?? null,
     updatedAt: FV.int(f, 'updatedAt')
   }
 }

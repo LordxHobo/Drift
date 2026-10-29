@@ -5,6 +5,7 @@ import { loadAll } from './state'
 import { restore } from './player'
 import { startAutoInstall } from './autoupdate'
 import { startActivity } from './activity'
+import { startJam } from './jam'
 import { startVideo } from './video'
 
 void loadAll().then(() => {
@@ -12,5 +13,6 @@ void loadAll().then(() => {
   startAutoInstall()
   startActivity()
   startVideo()
+  startJam()
   createRoot(document.getElementById('root')!).render(<App />)
 })

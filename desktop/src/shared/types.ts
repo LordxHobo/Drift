@@ -320,6 +320,38 @@ export interface UserProfile {
   playing: boolean
   /** Seconds since 1970. */
   updatedAt?: number
+  /** In a Listen Together session (its code), so friends can join. */
+  jam?: string | null
+}
+
+/** Listen Together: what everyone in the session hears. */
+export interface JamState {
+  code: string
+  host: string
+  members: string[]
+  /** Profile ID → username. */
+  names: Record<string, string>
+  track?: Track | null
+  /** What plays after it. */
+  queue: Track[]
+  playing: boolean
+  /** Position (seconds) at `at`. */
+  position: number
+  /** When `position` was true (milliseconds, the server's clock). */
+  at: number
+  version: number
+  updatedBy: string
+  /** This computer's clock minus the server's (milliseconds). */
+  offset: number
+  me: string
+}
+
+/** What this computer sends when someone here changes what's playing. */
+export interface JamChange {
+  track: Track | null
+  queue: Track[]
+  playing: boolean
+  position: number
 }
 
 /** A playlist someone shows on their profile. */
@@ -394,6 +426,12 @@ export interface DriftApi {
   searchYouTube(query: string, more?: string): Promise<{ tracks: Track[]; more?: string }>
   /** Every version of a song on YouTube Music, clean ones included (for replacing a song). */
   versions(query: string): Promise<Track[]>
+  /** Listen Together: start a session, join one (code), leave it, send a change, the current state. */
+  jamStart(): Promise<JamState>
+  jamJoin(code: string): Promise<JamState>
+  jamLeave(): Promise<void>
+  jamPublish(change: JamChange): Promise<void>
+  jamState(): Promise<JamState | null>
   /** Collaborative playlists: make one of yours shared (or change who's in it), leave, stop sharing. */
   collabShare(playlistId: string, people: { id: string; username: string }[]): Promise<void>
   collabLeave(playlistId: string): Promise<void>
@@ -485,11 +523,11 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
-  'prepare', 'prefetch', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
+  'prepare', 'prefetch', 'jamStart', 'jamJoin', 'jamLeave', 'jamPublish', 'jamState', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',

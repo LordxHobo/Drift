@@ -94,6 +94,9 @@ struct FriendRow: View {
                         .lineLimit(1)
                 }
             }
+            if let code = user.jam, JamSession.shared.state?.code != code {
+                JamJoinButton(code: code, name: user.username)
+            }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())

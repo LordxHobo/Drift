@@ -11,6 +11,7 @@ struct NowPlayingView: View {
     @State private var showStreamInfo = false
     @State private var showChapters = false
     @State private var showVideoFull = false
+    @State private var showJam = false
     /// Live artwork drag. A @GestureState resets itself even when iOS cancels the drag,
     /// so the artwork can never get stuck halfway.
     @GestureState private var drag = SwipeDrag()
@@ -339,6 +340,27 @@ struct NowPlayingView: View {
                         .accessibilityLabel("\(player.qualityLabel), stream info")
                         .sheet(isPresented: $showStreamInfo) { StreamInfoSheet() }
                     }
+
+                    // Listen Together (lit, with how many, while in a session).
+                    let jam = JamSession.shared.state
+                    Button { showJam = true } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: jam != nil ? "person.2.fill" : "person.2")
+                                .font(.system(size: 16))
+                            if let jam {
+                                Text("\(jam.members.count)").font(.system(size: 12, weight: .bold))
+                            }
+                        }
+                        .foregroundStyle(jam != nil ? accent : Theme.text)
+                        .padding(.horizontal, DriftGlass.isOn ? 12 : 6)
+                        .frame(height: DriftGlass.isOn ? 38 : 44)
+                        .driftGlass(in: Capsule(), interactive: true)
+                        .frame(height: 44)
+                        .fixedSize()
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(jam != nil ? "Listening together, \(jam!.members.count) people" : "Listen together")
+                    .sheet(isPresented: $showJam) { JamSheet() }
 
                     if t.isEpisode {
                         // Where songs have Lyrics: turns the episode's video on or off.

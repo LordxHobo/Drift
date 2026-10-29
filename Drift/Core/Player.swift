@@ -232,6 +232,41 @@ final class Player {
 
     private var effectiveRate: Float { isEpisode ? Float(speed) : 1 }
 
+    // MARK: Listen Together
+
+    /// How many times you've jumped in a song, and when a song last ended by itself (JamSession).
+    @ObservationIgnored private(set) var jamSeeks = 0
+    @ObservationIgnored private(set) var lastNaturalEnd: Date?
+
+    /// Listen Together: play what the session plays (the song, what comes after it, where, and
+    /// whether). Only changes what differs, so the music keeps going smoothly.
+    func jamPlay(_ track: Track, upcoming: [Track], at position: Double, playing: Bool) {
+        guard current?.id == track.id else {
+            shuffle = false
+            originalQueue = [track] + upcoming
+            queue = originalQueue
+            index = 0
+            playingFrom = "Listening together"
+            pendingResume = (track.id, position)
+            load(autoplay: playing)
+            return
+        }
+        if queue.dropFirst(index + 1).map(\.id) != upcoming.map(\.id) {
+            queue = Array(queue.prefix(index + 1)) + upcoming
+            originalQueue = queue
+        }
+        // Paused, or just paused/started: the exact spot. While playing on: only bigger gaps (no stutter).
+        let going = isPlaying || isBuffering
+        let tolerance = !playing || playing != going ? 0.3 : 1.5
+        if playing && !going { resume() }
+        if !playing && going { pause() }
+        if abs(audioClock.time - position) > tolerance {
+            let seeks = jamSeeks
+            seek(to: position)
+            jamSeeks = seeks   // not a jump made here
+        }
+    }
+
     /// The sound's exact position and rate (the episode video follows it).
     var audioClock: (time: Double, rate: Float) {
         let t = av.currentTime().seconds
@@ -256,6 +291,7 @@ final class Player {
 
     /// `precise: false` lets AVPlayer land up to half a second later, which starts noticeably sooner.
     func seek(to t: Double, precise: Bool = true) {
+        jamSeeks += 1
         let target = max(0, duration > 0 ? min(t, duration - 0.5) : t)
         currentTime = target
         // Restored song that isn't loaded yet: remember where to start.
@@ -272,6 +308,7 @@ final class Player {
 
     private func advance(auto: Bool) {
         guard !queue.isEmpty else { return }
+        if auto { lastNaturalEnd = Date() }
         if auto, let t = current, t.isEpisode { PodcastStore.shared.markFinished(t) }
         if auto && repeatMode == .one {
             seek(to: 0)

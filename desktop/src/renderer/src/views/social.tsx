@@ -9,6 +9,7 @@ import { Card, PlaylistCover, Spinner, TrackArt, TrackList, trackMenu } from '..
 import { formatTotal, plural } from '../util'
 import { CollectionHeader, Failed, Loading, cleanError, useMusic } from './common'
 import { editProfileStore } from './editProfile'
+import { joinFriend } from './jam'
 
 // MARK: Helpers
 
@@ -103,6 +104,18 @@ function FriendRow({ user, button }: { user: UserProfile; button?: boolean }): J
           <span className="friend-track muted">{user.shareActivity ? 'Nothing played yet' : 'Listening activity is hidden'}</span>
         )}
       </span>
+      {user.jam && (
+        <button
+          className="btn small jam-join-btn"
+          title={`Listen together with ${user.username}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            joinFriend(user)
+          }}
+        >
+          Join
+        </button>
+      )}
       {button && <FollowButton user={user} />}
     </div>
   )
@@ -316,7 +329,14 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
                 <Icon name="edit" size={14} /> Edit profile
               </button>
             ) : (
-              <FollowButton user={user} />
+              <>
+                <FollowButton user={user} />
+                {user.jam && (
+                  <button className="btn primary" onClick={() => joinFriend(user)}>
+                    <Icon name="together" size={14} /> Listen together
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

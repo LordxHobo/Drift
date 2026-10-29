@@ -4195,3 +4195,81 @@ kbd {
   font-weight: 600;
   margin-right: 6px;
 }
+
+/* Listen Together */
+.jam-button {
+  position: relative;
+  display: inline-flex;
+}
+.jam-count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+.dialog.jam {
+  width: 460px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.dialog.jam .dialog-buttons {
+  align-items: center;
+}
+.dialog.jam .spacer {
+  flex: 1;
+}
+.jam-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.jam-hint {
+  text-align: center;
+  font-size: 13px;
+}
+.jam-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+}
+.jam-join {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.jam-join .field {
+  flex: 1;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.jam-friends-head {
+  margin-top: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.jam-join-btn {
+  flex: none;
+}
