@@ -234,6 +234,7 @@ enum YouTubeSearch {
     }
 
     private static func episode(fromPlaylistVideo r: [String: Any]) -> Track? {
+        guard !membersOnly(r["badges"]), !membersOnly(r["thumbnailOverlays"]) else { return nil }
         guard let id = r["videoId"] as? String, let title = text(r["title"]) else { return nil }
         let duration = (r["lengthSeconds"] as? String).flatMap { Double($0) }
             ?? text(r["lengthText"]).flatMap { YTMusic.parseDuration($0) }
@@ -362,7 +363,14 @@ enum YouTubeSearch {
         return []
     }
 
+    /// Members-only videos (and "members first" early access): they don't play without a paid channel
+    /// membership, so they're left out everywhere.
+    private static func membersOnly(_ node: Any?) -> Bool {
+        strings(node).contains { $0 == "Members only" || $0 == "Members first" || $0.contains("MEMBERS_ONLY") }
+    }
+
     private static func parseVideo(_ r: [String: Any]) -> Track? {
+        guard !membersOnly(r["badges"]), !membersOnly(r["badge"]) else { return nil }
         guard let id = r["videoId"] as? String, let title = text(r["title"]) else { return nil }
         // Live streams have no length; shorts are under a minute.
         guard let len = text(r["lengthText"]), let duration = YTMusic.parseDuration(len), duration >= 60 else { return nil }
@@ -380,7 +388,7 @@ enum YouTubeSearch {
 
     private static func parseLockup(_ v: [String: Any]) -> Track? {
         guard let id = v["contentId"] as? String, id.count == 11,
-              (v["contentType"] as? String) == "LOCKUP_CONTENT_TYPE_VIDEO" else { return nil }
+              (v["contentType"] as? String) == "LOCKUP_CONTENT_TYPE_VIDEO", !membersOnly(v) else { return nil }
         let meta = dig(v, ["metadata", "lockupMetadataViewModel"]) as? [String: Any]
         guard let title = text(meta?["title"]) else { return nil }
 

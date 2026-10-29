@@ -51,7 +51,16 @@ function strings(node: J): string[] {
   return []
 }
 
+/**
+ * Members-only videos (and "members first" early access): they don't play without a paid channel
+ * membership, so they're left out everywhere.
+ */
+function membersOnly(node: J): boolean {
+  return strings(node).some((s) => s === 'Members only' || s === 'Members first' || s.includes('MEMBERS_ONLY'))
+}
+
 function parseVideo(r: J): Video | undefined {
+  if (membersOnly(r?.badges) || membersOnly(r?.badge)) return undefined
   const id = r?.videoId
   const title = viewText(r?.title)
   if (typeof id !== 'string' || !title) return undefined
@@ -64,6 +73,7 @@ function parseVideo(r: J): Video | undefined {
 function parseLockup(v: J): Video | undefined {
   const id = v?.contentId
   if (typeof id !== 'string' || id.length !== 11 || v.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return undefined
+  if (membersOnly(v)) return undefined
   const meta = dig(v, ['metadata', 'lockupMetadataViewModel'])
   const title = viewText(meta?.title)
   if (!title) return undefined
@@ -260,6 +270,7 @@ export async function channelPodcasts(channel: PodcastChannel): Promise<PodcastC
 }
 
 function episodeFromPlaylistVideo(r: J): Track | undefined {
+  if (membersOnly(r?.badges) || membersOnly(r?.thumbnailOverlays)) return undefined
   const id = r?.videoId
   const title = viewText(r?.title)
   if (typeof id !== 'string' || !title) return undefined
