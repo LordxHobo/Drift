@@ -153,6 +153,37 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                 }
 
+                if settings.uiStyle == .music {
+                    section("App icon") {
+                        HStack(spacing: 18) {
+                            ForEach(MusicIcon.allCases, id: \.self) { icon in
+                                Button { settings.musicIcon = icon } label: {
+                                    VStack(spacing: 8) {
+                                        AppIconPreview(icon: icon, size: 64)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 64 * 0.225, style: .continuous)
+                                                    .stroke(settings.musicIcon == icon ? settings.accent : Theme.line,
+                                                            lineWidth: settings.musicIcon == icon ? 3 : 1)
+                                                    .padding(-4)
+                                            )
+                                        Text(icon.title)
+                                            .font(.system(size: 13, weight: settings.musicIcon == icon ? .bold : .regular))
+                                            .foregroundStyle(settings.musicIcon == icon ? settings.accent : Theme.text2)
+                                    }
+                                    .padding(4)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(icon.title) icon")
+                                .accessibilityAddTraits(settings.musicIcon == icon ? .isSelected : [])
+                            }
+                            Spacer()
+                        }
+                        Text("The icon on your home screen. iOS shows a short message when it changes.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+
                 section("Appearance") {
                     HStack(spacing: 4) {
                         ForEach(Appearance.allCases, id: \.self) { a in

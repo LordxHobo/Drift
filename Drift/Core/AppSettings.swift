@@ -3,6 +3,18 @@ import UIKit
 import Observation
 
 /// Overall look: Drift's own (Spotify-like) or Apple Music–like.
+/// The home screen icon in the Apple Music style.
+enum MusicIcon: String, CaseIterable {
+    case pink, white
+
+    var title: String {
+        switch self {
+        case .pink: "Pink"
+        case .white: "White"
+        }
+    }
+}
+
 enum UIStyle: String, CaseIterable {
     case spotify, music
 
@@ -70,6 +82,13 @@ final class AppSettings {
             Task { @MainActor in LyricsActivity.shared.settingChanged() }
         }
     }
+    /// Which icon the Apple Music style uses.
+    var musicIcon: MusicIcon {
+        didSet {
+            defaults.set(musicIcon.rawValue, forKey: "musicIcon")
+            Task { @MainActor in AppIconSwitcher.match() }
+        }
+    }
     var uiStyle: UIStyle {
         didSet {
             defaults.set(uiStyle.rawValue, forKey: "uiStyle")
@@ -101,6 +120,7 @@ final class AppSettings {
         glassEffects = d.bool(forKey: "glassEffects")
         lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? false
         uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify
+        musicIcon = d.string(forKey: "musicIcon").flatMap(MusicIcon.init(rawValue:)) ?? .pink
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
 

@@ -29,8 +29,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # The Apple Music style's icon (switched to when that style is picked).
-        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Music
+        # The Apple Music style's icons, pink and white (switched to when that style is picked).
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Music AppIcon-MusicLight
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         INFOPLIST_FILE: Drift/Info.plist
         GENERATE_INFOPLIST_FILE: NO
