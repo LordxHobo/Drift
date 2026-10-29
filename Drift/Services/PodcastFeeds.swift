@@ -210,7 +210,11 @@ private final class FeedReader: NSObject, XMLParserDelegate {
             if item == nil { inImage = true }
         case "itunes:image":
             if let href = attributes["href"] ?? attributes["url"] {
-                if item != nil { item?.image = item?.image ?? href } else if showImage == nil { showImage = href }
+                if item != nil {
+                    if item?.image == nil { item?.image = href }
+                } else if showImage == nil {
+                    showImage = href
+                }
             }
         case "enclosure":
             if item != nil, item?.audio == nil, let url = attributes["url"] { item?.audio = url }
