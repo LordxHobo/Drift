@@ -202,8 +202,8 @@ export async function searchPodcasts(query: string): Promise<{ channels: Podcast
   return { channels, episodes }
 }
 
-/** Latest episodes of a channel: its RSS feed, or its Videos tab if the feed fails. */
-export async function channelEpisodes(channel: PodcastChannel): Promise<Track[]> {
+/** The channel's RSS feed: only its latest 15 uploads (shorts and clips included), but with exact dates. */
+async function feedEpisodes(channel: PodcastChannel): Promise<Track[]> {
   try {
     const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`, { headers: { 'User-Agent': userAgent } })
     if (res.status === 200) {
@@ -230,18 +230,67 @@ export async function channelEpisodes(channel: PodcastChannel): Promise<Track[]>
           published: published ? Date.parse(published) / 1000 - appleEpoch : null
         })
       }
-      if (out.length) return out
+      return out
     }
   } catch {
-    // fall back to the Videos tab
+    // no feed
   }
-  const json = await post('browse', { browseId: channel.id, params: 'EgZ2aWRlb3PyBgQKAjoA' })
-  return collectEpisodes(json).map((t) => ({
-    ...t,
-    channelID: channel.id,
-    artist: !t.artist || t.artist === 'YouTube' ? channel.name : t.artist,
-    channelAvatar: t.channelAvatar ?? channel.avatarURL ?? null
-  }))
+  return []
+}
+
+/** The continuation token in a browse answer (the next page), if there is one. */
+function nextToken(node: J): string | undefined {
+  let token: string | undefined
+  const visit = (n: J): void => {
+    if (Array.isArray(n)) return n.forEach(visit)
+    if (!n || typeof n !== 'object') return
+    for (const k of Object.keys(n)) {
+      if (k === 'continuationItemRenderer') {
+        const t = n[k]?.continuationEndpoint?.continuationCommand?.token
+        if (typeof t === 'string') token = t
+      } else visit(n[k])
+    }
+  }
+  visit(node)
+  return token
+}
+
+/**
+ * A channel's episodes: its Videos tab (a few pages, so whole back catalogues show up), with exact
+ * dates from its RSS feed. The feed alone can leave just a handful of episodes on channels that post
+ * a lot of clips.
+ */
+export async function channelEpisodes(channel: PodcastChannel): Promise<Track[]> {
+  const feed = feedEpisodes(channel)
+  const out: Track[] = []
+  let token: string | undefined
+  try {
+    for (let page = 0; page < 4; page++) {
+      const json = await post('browse', page === 0 ? { browseId: channel.id, params: 'EgZ2aWRlb3PyBgQKAjoA' } : { continuation: token })
+      token = nextToken(json)
+      let added = 0
+      for (const t of collectEpisodes(json)) {
+        if (out.some((x) => x.id === t.id)) continue
+        out.push({ ...t, channelID: channel.id, artist: !t.artist || t.artist === 'YouTube' ? channel.name : t.artist, channelAvatar: t.channelAvatar ?? channel.avatarURL ?? null })
+        added++
+      }
+      if (!token || !added || out.length >= 120) break
+    }
+  } catch (e) {
+    if (!out.length) {
+      const rss = await feed
+      if (rss.length) return rss
+      throw e
+    }
+  }
+  const rss = await feed
+  if (!out.length) return rss
+  // The feed's exact dates (the Videos tab only says "2 weeks ago"), and anything newer than the tab shows.
+  const dates = new Map(rss.filter((t) => t.published != null).map((t) => [t.id, t.published!]))
+  for (const t of out) if (dates.has(t.id)) t.published = dates.get(t.id)!
+  const newest = Math.max(...out.map((t) => t.published ?? -Infinity))
+  const fresh = rss.filter((t) => !out.some((x) => x.id === t.id) && (t.published ?? -Infinity) > newest)
+  return [...fresh, ...out]
 }
 
 /** A YouTube link (watch, youtu.be, shorts, live, embed, music.youtube) → video ID. */

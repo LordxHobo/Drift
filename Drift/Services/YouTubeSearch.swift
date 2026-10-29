@@ -104,23 +104,52 @@ enum YouTubeSearch {
 
     // MARK: Channel episodes
 
-    /// Latest episodes of a channel: the channel's RSS feed, or its Videos tab if the feed fails.
+    /// A channel's episodes: its Videos tab (a few pages, so whole back catalogues show up), with exact
+    /// dates from its RSS feed. The feed alone has only the latest 15 uploads, shorts and clips included,
+    /// which for channels that post a lot of clips can leave just a handful of episodes.
     static func channelEpisodes(_ channel: PodcastChannel) async throws -> [Track] {
-        if let rss = try? await rssEpisodes(channel), !rss.isEmpty { return rss }
-        let json = try await post("browse", ["browseId": channel.id, "params": "EgZ2aWRlb3PyBgQKAjoA"])
+        async let feed = try? rssEpisodes(channel)
         var out: [Track] = []
         var seen = Set<String>()
-        walk(json) { key, value in
-            var t: Track?
-            if key == "videoRenderer" { t = parseVideo(value) }
-            if key == "lockupViewModel" { t = parseLockup(value) }
-            guard var t, seen.insert(t.id).inserted else { return }
-            t.channelID = channel.id
-            if t.artist.isEmpty || t.artist == "YouTube" { t.artist = channel.name }
-            if t.channelAvatar == nil { t.channelAvatar = channel.avatarURL }
-            out.append(t)
+        var token: String?
+        do {
+            for page in 0..<4 {
+                let body: [String: Any] = page == 0
+                    ? ["browseId": channel.id, "params": "EgZ2aWRlb3PyBgQKAjoA"]
+                    : ["continuation": token ?? ""]
+                let json = try await post("browse", body)
+                token = nil
+                var added = 0
+                walk(json) { key, value in
+                    if key == "continuationItemRenderer" {
+                        if let next = dig(value, ["continuationEndpoint", "continuationCommand", "token"]) as? String { token = next }
+                        return
+                    }
+                    var t: Track?
+                    if key == "videoRenderer" { t = parseVideo(value) }
+                    if key == "lockupViewModel" { t = parseLockup(value) }
+                    guard var t, seen.insert(t.id).inserted else { return }
+                    t.channelID = channel.id
+                    if t.artist.isEmpty || t.artist == "YouTube" { t.artist = channel.name }
+                    if t.channelAvatar == nil { t.channelAvatar = channel.avatarURL }
+                    out.append(t)
+                    added += 1
+                }
+                if token == nil || added == 0 || out.count >= 120 { break }
+            }
+        } catch {
+            if out.isEmpty, let rss = await feed, !rss.isEmpty { return rss }
+            if out.isEmpty { throw error }
         }
-        return out
+        let rss = await feed ?? []
+        if out.isEmpty { return rss }
+        // The feed's exact dates (the Videos tab only says "2 weeks ago"), and anything newer than the tab shows.
+        var dates: [String: Date] = [:]
+        for t in rss { if let d = t.published { dates[t.id] = d } }
+        for i in out.indices { if let d = dates[out[i].id] { out[i].published = d } }
+        let newest = out.compactMap(\.published).max() ?? .distantPast
+        let fresh = rss.filter { !seen.contains($0.id) && ($0.published ?? .distantPast) > newest }
+        return fresh + out
     }
 
     private static func rssEpisodes(_ channel: PodcastChannel) async throws -> [Track] {
