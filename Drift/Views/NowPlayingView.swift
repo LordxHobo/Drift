@@ -58,8 +58,10 @@ struct NowPlayingView: View {
     @ViewBuilder
     private func content(_ t: Track) -> some View {
         GeometryReader { geo in
-            let artSize = min(geo.size.width - 48, geo.size.height * 0.45)
-            VStack(spacing: 22) {
+            // The artwork gets the space left after the controls (never more than before), so
+            // everything fits on small phones like the iPhone 13 mini. Short screens also get smaller gaps.
+            let artCap = min(geo.size.width - 48, geo.size.height * 0.45)
+            VStack(spacing: geo.size.height < 740 ? 14 : 22) {
                 // Header
                 if Theme.isMusic {
                     // Apple Music: just a grabber at the top.
@@ -106,15 +108,19 @@ struct NowPlayingView: View {
                 }
 
                 // Artwork (16:9 for podcast episodes)
-                Group {
-                    if t.isEpisode {
-                        EpisodeArtwork(url: t.artworkURL ?? t.artwork(size: 800), width: geo.size.width - 48, corner: 8)
-                            .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
-                    } else {
-                        artworkCarousel(t, size: artSize)
+                if t.isEpisode {
+                    EpisodeArtwork(url: t.artworkURL ?? t.artwork(size: 800), width: geo.size.width - 48, corner: 8)
+                        .shadow(color: .black.opacity(0.45), radius: 25, y: 16)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    GeometryReader { box in
+                        artworkCarousel(t, size: max(120, min(box.size.width, box.size.height)))
+                            .frame(width: box.size.width, height: box.size.height)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: artCap)
+                    // Sized before the spacer below, so it takes the room first (up to its old size).
+                    .layoutPriority(1)
                 }
-                .frame(maxWidth: .infinity)
 
                 Spacer(minLength: 0)
 

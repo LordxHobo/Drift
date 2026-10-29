@@ -12,6 +12,9 @@ struct PlaylistView: View {
     @State private var editing: Playlist?
     @State private var filter = ""
     @FocusState private var filterFocused: Bool
+    /// How the list is sorted (nil = your own order), remembered per list.
+    @State private var sort: SongSort?
+    @State private var showSortSheet = false
     private var library: Library { .shared }
     private var player: Player { .shared }
     private var downloads: DownloadManager { .shared }
@@ -51,6 +54,8 @@ struct PlaylistView: View {
 
     var body: some View {
         let tracks = self.tracks
+        let all = ordered(tracks)
+        let playOrder = all.map(\.track)
         List {
             header(tracks)
                 .listRowInsets(EdgeInsets())
@@ -68,13 +73,16 @@ struct PlaylistView: View {
             }
 
             if !tracks.isEmpty {
-                filterField
+                HStack(spacing: 10) {
+                    filterField
+                    if sortable && !Theme.isMusic { sortButton }
+                }
                     .listRowBackground(Theme.bg)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
             }
 
-            let shown = filtered(tracks)
+            let shown = filtered(all)
             if !query.isEmpty && shown.isEmpty {
                 Text("No songs or artists matching “\(query)”")
                     .font(.system(size: 14))
@@ -85,11 +93,12 @@ struct PlaylistView: View {
                     .listRowSeparator(.hidden)
             }
 
-            // Tapping a song plays the whole list from that song, filtered or not.
+            // Tapping a song plays the whole list (in the order shown) from that song, filtered or not.
             ForEach(shown) { item in
                 TrackRow(track: item.track) {
                     filterFocused = false
-                    player.play(tracks, startAt: item.index, from: title)
+                    let start = all.firstIndex { $0.index == item.index } ?? 0
+                    player.play(playOrder, startAt: start, from: title)
                 }
                 .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
@@ -99,7 +108,8 @@ struct PlaylistView: View {
             .onDelete { offsets in
                 delete(IndexSet(offsets.map { shown[$0].index }))
             }
-            .onMove(perform: query.isEmpty ? move : nil)
+            // Dragging to reorder only in your own order (not filtered or sorted).
+            .onMove(perform: query.isEmpty && activeSort == nil ? move : nil)
         }
         .scrollDismissesKeyboard(.immediately)
         .environment(\.songPlace, songPlace)
@@ -111,6 +121,9 @@ struct PlaylistView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(title).font(.system(size: 15, weight: .bold))
+            }
+            if Theme.isMusic, sortable {
+                ToolbarItem(placement: .topBarTrailing) { sortMenu }
             }
             if Theme.isMusic, kind != .downloads {
                 ToolbarItem(placement: .topBarTrailing) { downloadButton(tracks) }
@@ -129,6 +142,11 @@ struct PlaylistView: View {
         .sheet(item: $editing) { p in
             EditPlaylistView(playlist: p)
         }
+        .sheet(isPresented: $showSortSheet) {
+            SortSheet(sort: activeSort) { setSort($0) }
+                .presentationDetents([.medium])
+        }
+        .onAppear { sort = SongSort.saved(for: listKey) }
         .onChange(of: library.playlists.count) { _, _ in
             // Playlist deleted from the edit sheet: go back to the library.
             if case .playlist(let id) = kind, library.playlist(id) == nil { dismiss() }
@@ -218,7 +236,7 @@ struct PlaylistView: View {
 
             HStack(spacing: 12) {
                 pill("Play", "play.fill") {
-                    if isPlayingThis { player.togglePlay() } else { player.play(tracks, from: title) }
+                    if isPlayingThis { player.togglePlay() } else { player.play(playOrder(tracks), from: title) }
                 }
                 pill("Shuffle", "shuffle") { player.shufflePlay(tracks, from: title) }
             }
@@ -310,7 +328,7 @@ struct PlaylistView: View {
                     } else if player.shuffle {
                         player.shufflePlay(tracks, from: title)
                     } else {
-                        player.play(tracks, from: title)
+                        player.play(playOrder(tracks), from: title)
                     }
                 } label: {
                     Image(systemName: isPlayingThis && player.isPlaying ? "pause.fill" : "play.fill")
@@ -361,14 +379,105 @@ struct PlaylistView: View {
         var id: String { track.id }
     }
 
-    private func filtered(_ tracks: [Track]) -> [Item] {
-        let all = tracks.enumerated().map { Item(index: $0.offset, track: $0.element) }
+    private func filtered(_ all: [Item]) -> [Item] {
         guard !query.isEmpty else { return all }
         return all.filter { item in
             item.track.title.localizedStandardContains(query)
                 || item.track.artist.localizedStandardContains(query)
                 || (item.track.album?.localizedStandardContains(query) ?? false)
         }
+    }
+
+    // MARK: Sorting
+
+    /// Which saved sort belongs to this list.
+    private var listKey: String {
+        switch kind {
+        case .liked: "liked"
+        case .downloads: "downloads"
+        case .playlist(let id): id.uuidString
+        }
+    }
+
+    /// Albums keep their track order; playlists, Liked songs and downloads can be sorted.
+    private var sortable: Bool {
+        if case .playlist(let id) = kind, library.playlist(id)?.isAlbum == true { return false }
+        return true
+    }
+
+    private var activeSort: SongSort? { sortable ? sort : nil }
+
+    private func setSort(_ s: SongSort?) {
+        sort = s
+        SongSort.save(s, for: listKey)
+    }
+
+    /// Every song with its place in the full list, in the order shown.
+    private func ordered(_ tracks: [Track]) -> [Item] {
+        let items = tracks.enumerated().map { Item(index: $0.offset, track: $0.element) }
+        guard let s = activeSort else { return items }
+        return s.order(tracks, places: items.map(\.index), newestFirst: kind == .liked).map { items[$0] }
+    }
+
+    private func playOrder(_ tracks: [Track]) -> [Track] { ordered(tracks).map(\.track) }
+
+    /// Drift style: "Sort" next to the filter, like Spotify; opens the sort sheet.
+    private var sortButton: some View {
+        Button { showSortSheet = true } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 13, weight: .bold))
+                Text(activeSort?.key.label ?? "Sort")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .foregroundStyle(activeSort == nil ? Theme.text : accent)
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .accessibilityLabel(activeSort.map { "Sorted by \($0.key.label), \($0.directionLabel). Change sort" } ?? "Sort")
+    }
+
+    /// Apple Music style: a Sort By menu in the top bar, like Apple Music.
+    private var sortMenu: some View {
+        let key = Binding<SongSort.Key?>(
+            get: { activeSort?.key },
+            set: { k in setSort(k.map { SongSort.first($0) }) }
+        )
+        let ascending = Binding<Bool>(
+            get: { activeSort?.ascending ?? true },
+            set: { a in
+                guard var s = activeSort else { return }
+                s.ascending = a
+                setSort(s)
+            }
+        )
+        return Menu {
+            Section("Sort By") {
+                Picker("Sort By", selection: key) {
+                    Text("Playlist Order").tag(SongSort.Key?.none)
+                    ForEach(SongSort.Key.allCases, id: \.self) { k in
+                        Text(k == .added ? "Recently Added" : k.label).tag(Optional(k))
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+            if let s = activeSort {
+                Section("Order") {
+                    Picker("Order", selection: ascending) {
+                        Text(s.key == .added ? "Oldest First" : "Ascending").tag(true)
+                        Text(s.key == .added ? "Newest First" : "Descending").tag(false)
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .accessibilityLabel(activeSort.map { "Sorted by \($0.key.label), \($0.directionLabel)" } ?? "Sort")
     }
 
     private var filterField: some View {
@@ -415,5 +524,77 @@ struct PlaylistView: View {
         case .downloads: break
         case .playlist(let id): library.moveTracks(from: from, to: to, in: id)
         }
+    }
+}
+
+/// Drift style: "Sort by", like Spotify. Tap an option to sort by it; tap the chosen one again to reverse it.
+private struct SortSheet: View {
+    let sort: SongSort?
+    let onPick: (SongSort?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                row("Custom order", selected: sort == nil, arrow: nil) { onPick(nil) }
+                ForEach(SongSort.Key.allCases, id: \.self) { k in
+                    let on = sort?.key == k
+                    row(k.label, selected: on, arrow: on ? sort?.ascending : nil) {
+                        if let s = sort, s.key == k {
+                            onPick(SongSort(key: k, ascending: !s.ascending))
+                        } else {
+                            onPick(SongSort.first(k))
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.surface)
+            .navigationTitle("Sort by")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                Text("Tap the one that's on again to reverse it.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private func row(_ label: String, selected: Bool, arrow: Bool?, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            dismiss()
+        } label: {
+            HStack {
+                Text(label)
+                    .font(.system(size: 16, weight: selected ? .bold : .regular))
+                    .foregroundStyle(selected ? accent : Theme.text)
+                Spacer()
+                if let arrow {
+                    Text(directionText(label, ascending: arrow))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                    Image(systemName: arrow ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(accent)
+                } else if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(accent)
+                }
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Theme.surface)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func directionText(_ label: String, ascending: Bool) -> String {
+        label == SongSort.Key.added.label ? (ascending ? "Oldest first" : "Newest first") : (ascending ? "A–Z" : "Z–A")
     }
 }
