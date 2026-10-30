@@ -43,8 +43,8 @@ struct InviteSheet: View {
                             if picked.contains(f.id) { picked.remove(f.id) } else { picked.insert(f.id) }
                         } label: {
                             HStack(spacing: 12) {
-                                UserAvatar(data: f.avatar, name: f.username, size: 38)
-                                Text(f.username).font(.system(size: 15, weight: .semibold))
+                                UserAvatar(data: f.avatar, name: f.name, size: 38)
+                                Text(f.name).font(.system(size: 15, weight: .semibold))
                                 Spacer()
                                 Image(systemName: picked.contains(f.id) ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 22))
@@ -104,35 +104,33 @@ struct InviteSheet: View {
     }
 }
 
-/// The invite popups (join or not, and why joining didn't work) and the invite sheet. Attached to the
-/// main screen and the full-screen player, so they show whichever is on top.
-struct JamInviteModifier: ViewModifier {
-    @State private var invites = JamInvites.shared
+/// Sheets any song menu can open (Add to playlist, Replace with another version, Invite to listen
+/// together). Attached to the main screen and to the full-screen player: whichever is on top shows them,
+/// so they open right away over the player too. Incoming invites show in their own layer (InviteOverlay).
+struct SongSheetsModifier: ViewModifier {
+    /// Attached to the full-screen player (the main screen leaves them to it while it's open).
+    let inPlayer: Bool
     @State private var ui = UIState.shared
+
+    private func binding<T>(_ value: ReferenceWritableKeyPath<UIState, T?>) -> Binding<T?> {
+        Binding(get: { ui.showPlayer == inPlayer ? ui[keyPath: value] : nil },
+                set: { if ui.showPlayer == inPlayer { ui[keyPath: value] = $0 } })
+    }
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $ui.inviteTrack) { track in
+            .sheet(item: binding(\.addToPlaylist)) { track in
+                AddToPlaylistSheet(track: track)
+            }
+            .sheet(item: binding(\.replacing)) { r in
+                ReplaceSongSheet(request: r)
+            }
+            .sheet(item: binding(\.inviteTrack)) { track in
                 InviteSheet(track: track)
-            }
-            .alert("Listen together?",
-                   isPresented: Binding(get: { invites.incoming != nil }, set: { if !$0 { invites.incoming = nil } }),
-                   presenting: invites.incoming) { invite in
-                Button("Join") { Task { await invites.accept(invite) } }
-                Button("Decline", role: .cancel) { invites.decline(invite) }
-            } message: { invite in
-                Text(invite.title.isEmpty
-                     ? "\(invite.fromName) invited you to listen together."
-                     : "\(invite.fromName) invited you to listen to “\(invite.title)” by \(invite.artist) together.")
-            }
-            .alert("Couldn't join", isPresented: Binding(get: { invites.failure != nil }, set: { if !$0 { invites.failure = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(invites.failure ?? "")
             }
     }
 }
 
 extension View {
-    func jamInvites() -> some View { modifier(JamInviteModifier()) }
+    func songSheets(inPlayer: Bool = false) -> some View { modifier(SongSheetsModifier(inPlayer: inPlayer)) }
 }

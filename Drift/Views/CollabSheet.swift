@@ -53,8 +53,8 @@ struct CollabSheet: View {
                                     if picked.contains(f.id) { picked.remove(f.id) } else { picked.insert(f.id) }
                                 } label: {
                                     HStack(spacing: 12) {
-                                        UserAvatar(data: f.avatar, name: f.username, size: 34)
-                                        Text(f.username).font(.system(size: 15, weight: .semibold))
+                                        UserAvatar(data: f.avatar, name: f.name, size: 34)
+                                        Text(f.name).font(.system(size: 15, weight: .semibold))
                                         Spacer()
                                         Image(systemName: picked.contains(f.id) ? "checkmark.circle.fill" : "circle")
                                             .font(.system(size: 22))

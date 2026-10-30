@@ -16,6 +16,8 @@ final class Player {
     private(set) var index = 0
     private(set) var isPlaying = false
     private(set) var isBuffering = false
+    /// Finding and opening the current song (before its audio starts arriving).
+    private(set) var isLoading = false
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var shuffle = false
@@ -310,6 +312,8 @@ final class Player {
         guard !queue.isEmpty else { return }
         if auto { lastNaturalEnd = Date() }
         if auto, let t = current, t.isEpisode { PodcastStore.shared.markFinished(t) }
+        // A song that played to the end: fill in what was skipped over, so it's cached whole.
+        if auto, let t = current, !t.isEpisode { Task.detached(priority: .utility) { await PlayCache.shared.fillGaps(key: t.id) } }
         if auto && repeatMode == .one {
             seek(to: 0)
             av.play()
@@ -345,6 +349,7 @@ final class Player {
         segments = []
         retried = false
         isBuffering = true
+        isLoading = true
         updateNowPlaying()
         loadArtwork(for: track)
         LyricsActivity.shared.trackChanged(track)
@@ -365,8 +370,11 @@ final class Player {
             guard let self else { return }
             // Music video → its album version when YouTube Music has one (no intro/outro, real length).
             let downloaded = Library.shared.isDownloaded(track.id)
+            // Played before: straight from the song cache (no version lookup, no data used).
+            var cached: URL?
+            if !downloaded && !track.isEpisode { cached = await PlayCache.shared.file(for: track.id) }
             var chosen = track.id
-            if !downloaded && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track) }
+            if !downloaded && cached == nil && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track) }
             let playID = chosen
             guard !Task.isCancelled, self.current?.id == track.id else { return }
             self.playID = playID
@@ -383,6 +391,10 @@ final class Player {
                 if downloaded {
                     url = Library.shared.fileURL(for: track.id)
                     self.qualityLabel = "Downloaded"
+                } else if let cached {
+                    url = cached
+                    self.qualityLabel = "Cached"
+                    self.streamInfo = [("Song", track.id), ("Playing", "From the song cache (played before)")]
                 } else if let audio = track.audioURL {
                     // An episode from the show's feed: its audio file, played as it is.
                     url = audio
@@ -469,6 +481,7 @@ final class Player {
     }
 
     private func start(_ url: URL, autoplay: Bool, at time: Double = 0) {
+        isLoading = false
         itemObservers.removeAll()
         itemNotifications.forEach { NotificationCenter.default.removeObserver($0) }
         itemNotifications.removeAll()
@@ -484,7 +497,9 @@ final class Player {
             item = AVPlayerItem(url: url)
             if !url.isFileURL { item.preferredPeakBitRate = 1_000_000 }
         } else {
-            let l = StreamLoader(url: url)
+            // Songs are kept in the song cache as they stream (not episodes or videos).
+            let key = current.flatMap { $0.isEpisode ? nil : $0.id }
+            let l = StreamLoader(url: url, cacheKey: key)
             loader = l
             item = AVPlayerItem(asset: l.asset)
         }
@@ -618,6 +633,7 @@ final class Player {
     /// Shows why it failed (stays until the next song or Try again); songs move on to the next one.
     private func fail(_ track: Track, _ error: Error? = nil) {
         isBuffering = false
+        isLoading = false
         watchdog?.cancel()
         av.pause()
         errorMessage = error.map { StreamResolver.describe($0, episode: track.isEpisode) }
@@ -650,6 +666,8 @@ final class Player {
         // In parallel: each one is ready to start instantly (link found, opening seconds downloaded).
         for track in todo {
             Task.detached(priority: .utility) {
+                // Already in the song cache: nothing to get ready.
+                if await PlayCache.shared.file(for: track.id) != nil { return }
                 let playID = await AudioVersion.shared.preferred(track)
                 if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)
@@ -666,7 +684,7 @@ final class Player {
 
     // MARK: Remembering what was playing
 
-    private static let sessionURL = URL.documentsDirectory.appending(path: "playback.json")
+    private static let sessionURL = AppFiles.data.appending(path: "playback.json")
     private static let positionKey = "player.position"
 
     private struct Session: Codable {

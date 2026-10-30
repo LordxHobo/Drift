@@ -48,8 +48,8 @@ final class DownloadManager {
     /// Bytes received per song and part, for the progress rings.
     @ObservationIgnored private var received: [String: [Int: Int64]] = [:]
 
-    @ObservationIgnored private let pendingURL = URL.documentsDirectory.appending(path: "downloads-pending.json")
-    @ObservationIgnored let partsDirectory = URL.documentsDirectory.appending(path: "DownloadParts", directoryHint: .isDirectory)
+    @ObservationIgnored private let pendingURL = AppFiles.data.appending(path: "downloads-pending.json")
+    @ObservationIgnored let partsDirectory = AppFiles.data.appending(path: "DownloadParts", directoryHint: .isDirectory)
     @ObservationIgnored private let delegate: DownloadSessionDelegate
     @ObservationIgnored let session: URLSession
 
@@ -241,7 +241,7 @@ final class DownloadManager {
     /// All parts are here: join them into the song file.
     private func assemble(_ id: String) {
         guard let p = pending[id] else { return }
-        let dest = Library.shared.downloadDestination(for: id, source: p.url)
+        let dest = Library.shared.downloadDestination(for: p.track, source: p.url)
         do {
             try? FileManager.default.removeItem(at: dest)
             FileManager.default.createFile(atPath: dest.path, contents: nil)
@@ -280,7 +280,7 @@ final class DownloadManager {
     }
 
     nonisolated func partURL(_ id: String, _ i: Int) -> URL {
-        URL.documentsDirectory.appending(path: "DownloadParts/\(id).\(i).part")
+        AppFiles.data.appending(path: "DownloadParts/\(id).\(i).part")
     }
 
     private func removeParts(_ id: String) {
@@ -479,7 +479,7 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
         let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200...299).contains(status) else { return }   // reported as a failure below
         // The file must be moved before returning; iOS deletes it afterwards.
-        let dest = URL.documentsDirectory.appending(path: "DownloadParts/\(id).\(i).part")
+        let dest = AppFiles.data.appending(path: "DownloadParts/\(id).\(i).part")
         try? FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: dest)
         do {

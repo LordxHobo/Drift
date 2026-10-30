@@ -120,8 +120,8 @@ struct JamSheet: View {
                         }
                         ForEach(friendsInSessions) { f in
                             HStack(spacing: 12) {
-                                UserAvatar(data: f.avatar, name: f.username, size: 34)
-                                Text(f.username).font(.system(size: 15, weight: .semibold))
+                                UserAvatar(data: f.avatar, name: f.name, size: 34)
+                                Text(f.name).font(.system(size: 15, weight: .semibold))
                                 Spacer()
                                 Button("Join") {
                                     if let c = f.jam { run { try await jam.join(c) } }

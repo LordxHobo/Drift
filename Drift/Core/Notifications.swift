@@ -44,7 +44,7 @@ final class NotificationStore {
 
     private(set) var items: [AppNotification] = []
 
-    @ObservationIgnored private let url = URL.documentsDirectory.appending(path: "notifications.json")
+    @ObservationIgnored private let url = AppFiles.data.appending(path: "notifications.json")
 
     private init() {
         if let data = try? Data(contentsOf: url),

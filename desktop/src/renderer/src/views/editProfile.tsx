@@ -1,4 +1,4 @@
-// Edit your Drift profile from the computer: username and photo (same rules as the phone).
+// Edit your Drift profile from the computer: display name, username and photo (same rules as the phone).
 import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon } from '../icons'
@@ -6,6 +6,7 @@ import { drift, meStore, Store, toast, useStore } from '../state'
 import { Spinner } from '../ui'
 import { UserAvatar } from './social'
 import { cleanError } from './common'
+import { displayNameLimit } from '@shared/types'
 
 export const editProfileStore = new Store(false)
 
@@ -37,6 +38,7 @@ export function EditProfileDialog(): JSX.Element | null {
   const open = useStore(editProfileStore)
   const me = useStore(meStore)
   const [name, setName] = useState('')
+  const [display, setDisplay] = useState('')
   const [avatar, setAvatar] = useState<string | null | undefined>(undefined) // undefined = unchanged
   const [check, setCheck] = useState<'idle' | 'checking' | 'free' | 'taken' | 'unknown'>('idle')
   const [saving, setSaving] = useState(false)
@@ -46,6 +48,7 @@ export function EditProfileDialog(): JSX.Element | null {
   useEffect(() => {
     if (!open || !me) return
     setName(me.username)
+    setDisplay(me.displayName ?? '')
     setAvatar(undefined)
     setError(undefined)
     setCheck('idle')
@@ -69,14 +72,19 @@ export function EditProfileDialog(): JSX.Element | null {
   const close = (): void => editProfileStore.set(false)
   const nameProblem = changedName ? problem(name) : null
   const shownAvatar = avatar === undefined ? me.avatar : avatar ? `data:image/jpeg;base64,${avatar}` : undefined
-  const canSave = !saving && !nameProblem && check !== 'taken' && check !== 'checking' && (changedName || avatar !== undefined)
+  const changedDisplay = !!me && display.trim() !== (me.displayName ?? '').trim()
+  const canSave = !saving && !nameProblem && check !== 'taken' && check !== 'checking' && (changedName || changedDisplay || avatar !== undefined)
 
   const save = (): void => {
     if (!canSave) return
     setSaving(true)
     setError(undefined)
     drift
-      .updateProfile({ ...(changedName ? { username: name } : {}), ...(avatar !== undefined ? { avatar } : {}) })
+      .updateProfile({
+        ...(changedName ? { username: name } : {}),
+        ...(changedDisplay ? { displayName: display } : {}),
+        ...(avatar !== undefined ? { avatar } : {})
+      })
       .then((m) => {
         if (m) meStore.set(m)
         toast('Profile saved')
@@ -101,7 +109,7 @@ export function EditProfileDialog(): JSX.Element | null {
         <div className="edit-body">
           <div className="profile-photo">
             <button type="button" className="edit-cover round" onClick={() => file.current?.click()} title="Choose a photo">
-              <UserAvatar user={{ username: name || me.username, avatar: shownAvatar }} size={140} />
+              <UserAvatar user={{ username: name || me.username, displayName: display, avatar: shownAvatar }} size={140} />
               <span className="edit-cover-hint"><Icon name="edit" size={22} /> Choose photo</span>
             </button>
             {shownAvatar && (
@@ -109,11 +117,19 @@ export function EditProfileDialog(): JSX.Element | null {
             )}
           </div>
           <div className="edit-fields">
+            <input
+              className="field display-field"
+              value={display}
+              autoFocus
+              maxLength={displayNameLimit}
+              onChange={(e) => setDisplay(e.target.value)}
+              placeholder="Display name"
+            />
+            <div className="set-detail">The name friends see. Capitals, spaces and emoji are fine; leave it empty to show your @username.</div>
             <label className="username-field">
               <span>@</span>
               <input
                 value={name}
-                autoFocus
                 maxLength={20}
                 onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
                 placeholder="username"

@@ -118,9 +118,9 @@ struct ProfileDrawer: View {
                 open(.user(me))
             } label: {
                 HStack(spacing: 12) {
-                    UserAvatar(data: me.avatar, name: me.username, size: 52)
+                    UserAvatar(data: me.avatar, name: me.name, size: 52)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("@\(me.username)")
+                        Text(me.name)
                             .font(.system(size: 18, weight: .heavy))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -133,7 +133,7 @@ struct ProfileDrawer: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("@\(me.username), view profile")
+            .accessibilityLabel("\(me.name), view profile")
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 UserAvatar(data: nil, name: "?", size: 52)

@@ -1,7 +1,7 @@
 // Collaborative playlists: one shared document per playlist (collabs/{playlist id}) that every member
 // can change. Each device remembers the list as it last saw it there, so only its own changes are
 // sent, merged into the newest list (see shared/collabMerge.ts; the phone does the same).
-import type { CollabInfo, Playlist, Track } from '@shared/types'
+import type { CollabInfo, CoverStyle, Playlist, Track } from '@shared/types'
 import { hasLocalChanges, mergeName, mergeTracks } from '@shared/collabMerge'
 import { FirebaseError, FV, docName } from './firebase'
 import * as account from './account'
@@ -12,6 +12,10 @@ interface Base {
   updateTime: string
   ids: string[]
   name: string
+  /** The cover as it was here after the last sync (to notice a change here), and when the shared cover
+   * last changed (to notice a change by someone else). */
+  coverSig?: string
+  coverAt?: number
 }
 
 const stateFile = 'collab-state.json'
@@ -39,6 +43,10 @@ interface Remote {
   name: string
   colorIndex: number
   tracks: Track[]
+  coverStyle: CoverStyle | null
+  coverSymbol: string | null
+  cover: string | null
+  coverAt: number
 }
 
 function parse(doc: any): Remote | undefined {
@@ -58,7 +66,11 @@ function parse(doc: any): Remote | undefined {
     info: { owner, members: FV.stringArray(f, 'members'), names },
     name: FV.string(f, 'name') ?? 'Playlist',
     colorIndex: FV.int(f, 'colorIndex') ?? 0,
-    tracks
+    tracks,
+    coverStyle: (FV.string(f, 'coverStyle') as CoverStyle | undefined) || null,
+    coverSymbol: FV.string(f, 'coverSymbol') || null,
+    cover: FV.data(f, 'cover') ?? null,
+    coverAt: FV.int(f, 'coverAt') ?? 0
   }
 }
 
@@ -69,7 +81,7 @@ function infoFields(info: CollabInfo): Record<string, unknown> {
 }
 
 function myName(): string {
-  return account.getAccount().username ?? 'Someone'
+  return account.myName()
 }
 
 /** Takes the server's version as it is (nothing changed here). */
@@ -79,7 +91,68 @@ function adopt(r: Remote): void {
     ? { ...local, name: r.name, tracks: r.tracks, collab: r.info }
     : { id: r.id, name: r.name, tracks: r.tracks, colorIndex: r.colorIndex, collab: r.info }
   store.setCollabPlaylist(p)
-  load()[r.id] = { updateTime: r.updateTime, ids: r.tracks.map((t) => t.id), name: r.name }
+  const old = load()[r.id]
+  load()[r.id] = { updateTime: r.updateTime, ids: r.tracks.map((t) => t.id), name: r.name, coverSig: old?.coverSig, coverAt: old?.coverAt }
+  // A cover set by someone else (or the shared one, the first time).
+  if (r.coverAt && (!local || r.coverAt !== old?.coverAt)) adoptCover(r)
+}
+
+// MARK: The cover (colour, symbol or photo): whoever changed it last wins
+
+function coverSig(p: Playlist | undefined): string {
+  if (!p) return ''
+  return `${p.coverStyle ?? 'auto'}|${p.coverSymbol ?? ''}|${p.colorIndex}|${p.cover ? `${p.cover.length}:${p.cover.slice(-24)}` : ''}`
+}
+
+const findPlaylist = (id: string): Playlist | undefined => store.getLibrary().playlists.find((p) => p.id === id)
+
+function adoptCover(r: Remote): void {
+  store.setCollabCover(r.id, { coverStyle: r.coverStyle ?? 'auto', coverSymbol: r.coverSymbol, colorIndex: r.colorIndex, cover: r.cover })
+  const b = load()[r.id]
+  if (b) {
+    b.coverAt = r.coverAt
+    b.coverSig = coverSig(findPlaylist(r.id))
+  }
+}
+
+async function sendCover(p: Playlist): Promise<void> {
+  const link = account.linked()
+  if (!link) return
+  const now = Date.now()
+  const photo = p.coverStyle === 'photo' ? p.cover ?? null : null
+  const updateTime = await link.db.patch(
+    `collabs/${p.id}`,
+    {
+      coverStyle: FV.s(p.coverStyle === 'photo' && !photo ? 'auto' : p.coverStyle ?? 'auto'),
+      coverSymbol: FV.s(p.coverSymbol ?? ''),
+      colorIndex: FV.i(p.colorIndex),
+      cover: photo ? FV.bytes(photo) : FV.null(),
+      coverAt: FV.i(now)
+    },
+    { mask: ['coverStyle', 'coverSymbol', 'colorIndex', 'cover', 'coverAt'] }
+  )
+  const b = load()[p.id]
+  if (b) {
+    b.coverAt = now
+    b.coverSig = coverSig(p)
+    if (updateTime) b.updateTime = updateTime
+  }
+}
+
+/** After the songs: a cover changed here goes up; one changed by someone else comes down. */
+async function syncCover(r: Remote): Promise<void> {
+  const base = load()[r.id]
+  const local = findPlaylist(r.id)
+  if (!base || !local) return
+  const now = coverSig(local)
+  if (base.coverSig === undefined) {
+    base.coverSig = now // first sync with covers: remember how it is now
+    if (r.coverAt) base.coverAt = r.coverAt
+  } else if (base.coverSig !== now) {
+    await sendCover(local)
+  } else if (r.coverAt && r.coverAt !== (base.coverAt ?? 0)) {
+    adoptCover(r)
+  }
 }
 
 // MARK: Syncing
@@ -95,6 +168,16 @@ export function startCollab(): void {
   })
   setInterval(() => schedule(0), 30_000)
   setTimeout(() => schedule(0), 4000)
+}
+
+/** A shared playlist on screen: checked every few seconds (the window says which, or null). */
+let watchTimer: NodeJS.Timeout | undefined
+export function watch(id: string | null): void {
+  clearInterval(watchTimer)
+  watchTimer = undefined
+  if (!id) return
+  schedule(0)
+  watchTimer = setInterval(() => schedule(0), 4000)
 }
 
 /** Syncs right away (and waits for it). */
@@ -158,6 +241,7 @@ async function sync(): Promise<void> {
     } else if (JSON.stringify(local.collab) !== JSON.stringify(r.info)) {
       store.setCollabInfo(r.id, r.info)
     }
+    await syncCover(r).catch(() => undefined)
   }
 
   // Shared playlists that are gone (stopped by their owner, or you were removed).
@@ -218,7 +302,7 @@ export async function share(id: string, invite: { id: string; username: string }
   )
   left.delete(id)
   store.setCollabPlaylist({ ...p, tracks, collab: info })
-  load()[id] = { updateTime: updateTime ?? '', ids: tracks.map((t) => t.id), name: p.name }
+  load()[id] = { updateTime: updateTime ?? '', ids: tracks.map((t) => t.id), name: p.name, coverSig: '', coverAt: 0 } // '' = send the cover next sync
   save()
 }
 

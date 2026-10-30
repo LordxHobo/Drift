@@ -17,6 +17,8 @@ let lastPublishLocal = 0
 let lastSeeks = 0
 let applyingUntil = 0
 let lastCorrection = 0
+let wasLoading = false
+let loadedSettleUntil = 0
 
 function signature(track: Track | null | undefined, playing: boolean, queue: Track[]): string {
   return `${track?.id ?? ''}|${playing}|${queue.slice(0, 30).map((t) => t.id).join(',')}`
@@ -58,6 +60,18 @@ function publish(): void {
 function tick(): void {
   const s = jamStore.get()
   if (!s || Date.now() < applyingUntil) return
+  // Still loading the song: nothing to tell the others yet (it looks paused at 0:00 meanwhile, which
+  // would pull everyone back to the start).
+  if (playerStore.get().loading) {
+    wasLoading = true
+    return
+  }
+  // …and a moment after, while it settles into playing.
+  if (wasLoading) {
+    wasLoading = false
+    loadedSettleUntil = Date.now() + 800
+  }
+  if (Date.now() < loadedSettleUntil) return
   const now = localNow()
   const sig = signature(now.track, now.playing, now.queue)
   if (sig !== lastSignature) {

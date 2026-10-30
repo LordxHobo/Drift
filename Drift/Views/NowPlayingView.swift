@@ -58,8 +58,8 @@ struct NowPlayingView: View {
         .fullScreenCover(isPresented: $showVideoFull) {
             if let t = player.current { EpisodeVideoFullScreen(track: t) }
         }
-        // Invites (and the invite sheet from this screen's song menu) show over the player too.
-        .jamInvites()
+        // Add to playlist, Replace and Invite from this screen's song menu open over the player.
+        .songSheets(inPlayer: true)
     }
 
     @ViewBuilder

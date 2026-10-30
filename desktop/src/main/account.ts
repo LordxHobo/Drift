@@ -53,7 +53,7 @@ export async function loadProfile(): Promise<void> {
     const doc = await db.get(`users/${auth.uid}`)
     const f = doc?.fields
     const avatar = FV.data(f, 'avatar')
-    setAccount({ username: FV.string(f, 'username'), avatar: avatar ? `data:image/jpeg;base64,${avatar}` : undefined })
+    setAccount({ username: FV.string(f, 'username'), displayName: FV.string(f, 'displayName') || undefined, avatar: avatar ? `data:image/jpeg;base64,${avatar}` : undefined })
   } catch {
     // shown again on the next try
   }
@@ -472,4 +472,10 @@ export function unlink(): void {
   setPairing({ phase: 'idle' })
   account = { linked: false, syncing: false }
   store.emit('account', account)
+}
+
+/** What friends see you as: your display name, or your username. */
+export function myName(): string {
+  const a = getAccount()
+  return a.displayName?.trim() || a.username || 'Someone'
 }

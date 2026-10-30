@@ -84,7 +84,7 @@ export function LikedCover({ size, radius }: { size?: number; radius?: number })
 
 export function Avatar({ size = 32 }: { size?: number }): JSX.Element {
   const account = useStore(accountStore)
-  const letter = (account.username ?? 'Y').slice(0, 1).toUpperCase()
+  const letter = (account.displayName || account.username || 'Y').slice(0, 1).toUpperCase()
   return account.avatar ? (
     <img className="avatar" src={account.avatar} alt="" style={{ width: size, height: size }} />
   ) : (

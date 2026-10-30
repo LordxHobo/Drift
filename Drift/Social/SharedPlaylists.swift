@@ -49,7 +49,7 @@ struct SharedPlaylist: Hashable, Identifiable {
     /// Someone's public playlists, in the order they have them.
     static func list(of user: UserProfile) async throws -> [SharedPlaylist] {
         let docs = try await Firestore.list("users/\(user.id)/playlists", fields: summaryFields)
-        return docs.compactMap { SharedPlaylist(document: $0, ownerName: user.username) }
+        return docs.compactMap { SharedPlaylist(document: $0, ownerName: user.name) }
             .sorted { $0.position < $1.position }
     }
 

@@ -7,6 +7,7 @@ import { accountStore, drift, Store, toast, useStore } from '../state'
 import { IconButton, Spinner } from '../ui'
 import { jamStore, joinSession, leaveSession, startSession } from '../jam'
 import { UserAvatar } from './social'
+import { nameOf } from '@shared/types'
 
 export const jamOpenStore = new Store(false)
 
@@ -17,7 +18,7 @@ const cleanMessage = (e: unknown): string =>
 export function joinFriend(u: UserProfile): void {
   if (!u.jam) return
   joinSession(u.jam)
-    .then(() => toast(`Listening together with ${u.username}`))
+    .then(() => toast(`Listening together with ${nameOf(u)}`))
     .catch((e) => toast(cleanMessage(e)))
 }
 
@@ -113,8 +114,8 @@ export function JamDialog(): JSX.Element | null {
                 inSessions.map((f) => (
                   <div key={f.id} className="collab-row">
                     <UserAvatar user={f} size={30} />
-                    <span className="collab-name">{f.username}</span>
-                    <button className="btn small" disabled={busy} onClick={() => run(async () => { await joinSession(f.jam!); toast(`Listening together with ${f.username}`) })}>
+                    <span className="collab-name">{nameOf(f)}</span>
+                    <button className="btn small" disabled={busy} onClick={() => run(async () => { await joinSession(f.jam!); toast(`Listening together with ${nameOf(f)}`) })}>
                       Join
                     </button>
                   </div>

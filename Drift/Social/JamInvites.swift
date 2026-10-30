@@ -20,27 +20,36 @@ struct JamInvite: Identifiable, Equatable {
 final class JamInvites {
     static let shared = JamInvites()
 
-    /// The invite being asked about (shown as a popup).
-    var incoming: JamInvite?
-    /// Why joining didn't work (shown once).
-    var failure: String?
+    /// The invite being asked about (shown as a popup above everything, see InviteOverlay).
+    @ObservationIgnored private(set) var incoming: JamInvite? {
+        didSet {
+            if let incoming { InviteOverlay.shared.ask(incoming) } else if oldValue != nil { InviteOverlay.shared.hide() }
+        }
+    }
 
-    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var asked = Set<String>()
     @ObservationIgnored private var checking = false
+    /// Invites found while Drift was in the background (told with a notification), by id.
+    @ObservationIgnored private var waiting: [String: JamInvite] = [:]
 
     /// Invites older than this are cleared without asking.
     private static let maxAge: TimeInterval = 15 * 60
 
     private init() {}
 
-    /// Looks for invites every 20 s while Drift is open.
+    /// Looks for invites every 10 s while Drift is on screen, and every 20 s while it plays in the
+    /// background (iOS keeps Drift running then; the invite arrives as a notification).
     func start() {
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { _ in
-            Task { @MainActor in await JamInvites.shared.check() }
+        guard loop == nil else { return }
+        LocalNotifications.shared.setUp()
+        loop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.check()
+                let active = UIApplication.shared.applicationState == .active
+                try? await Task.sleep(for: .seconds(active ? 10 : 20))
+            }
         }
-        Task { await check() }
     }
 
     /// Friends you can invite: people you follow who follow you back and accept invites.
@@ -61,17 +70,17 @@ final class JamInvites {
         var refused = false
         for f in friends {
             let fields: [String: Any] = [
-                "from": FV.s(me.id), "fromName": FV.s(me.username), "code": FV.s(code),
+                "from": FV.s(me.id), "fromName": FV.s(me.name), "code": FV.s(code),
                 "title": FV.s(track.title), "artist": FV.s(track.artist),
                 "at": FV.i(Int(Date().timeIntervalSince1970 * 1000)),
             ]
             do {
                 try await Firestore.patch("users/\(f.id)/invites/\(me.id)", fields: fields)
             } catch SocialError.server(403, _) {
-                failed.append(f.username)
+                failed.append(f.name)
                 refused = true
             } catch {
-                failed.append(f.username)
+                failed.append(f.name)
             }
         }
         if !failed.isEmpty { throw InviteError.notSent(failed, refused: refused) }
@@ -92,11 +101,11 @@ final class JamInvites {
     // MARK: Getting
 
     func check() async {
-        guard !checking, incoming == nil, UIApplication.shared.applicationState == .active,
-              let me = SocialStore.shared.me, me.acceptsInvites,
-              let docs = try? await Firestore.list("users/\(me.id)/invites") else { return }
+        guard !checking, incoming == nil, let me = SocialStore.shared.me, me.acceptsInvites else { return }
         checking = true
         defer { checking = false }
+        guard let docs = try? await Firestore.list("users/\(me.id)/invites") else { return }
+        let inBackground = UIApplication.shared.applicationState != .active
         for d in docs {
             guard let f = d["fields"] as? [String: Any], let from = FV.string(f, "from"),
                   let code = FV.string(f, "code") else { continue }
@@ -108,25 +117,47 @@ final class JamInvites {
                 remove(invite, me: me.id)
                 continue
             }
-            if incoming == nil {
-                asked.insert(invite.id)
+            asked.insert(invite.id)
+            if inBackground {
+                // Drift isn't on screen: a notification (Join / Decline right on it).
+                waiting[invite.id] = invite
+                LocalNotifications.shared.invite(invite)
+            } else if incoming == nil {
                 incoming = invite
             }
         }
     }
 
+    /// Drift came back on screen: ask about an invite that arrived meanwhile (if it's still fresh).
+    func appBecameActive() {
+        if incoming == nil, let invite = waiting.values.sorted(by: { $0.at > $1.at }).first,
+           Date().timeIntervalSince(invite.at) < Self.maxAge {
+            waiting[invite.id] = nil
+            LocalNotifications.shared.clear(invite)
+            incoming = invite
+        }
+        Task { await check() }
+    }
+
+    /// The invite a notification is about (answered from the notification).
+    func waitingInvite(_ id: String) -> JamInvite? { waiting[id] }
+
     func accept(_ invite: JamInvite) async {
         incoming = nil
+        waiting[invite.id] = nil
+        LocalNotifications.shared.clear(invite)
         if let me = SocialStore.shared.me?.id { remove(invite, me: me) }
         do {
             try await JamSession.shared.join(invite.code)
         } catch {
-            failure = error.localizedDescription
+            InviteOverlay.shared.tell("Couldn't join", error.localizedDescription)
         }
     }
 
     func decline(_ invite: JamInvite) {
         incoming = nil
+        waiting[invite.id] = nil
+        LocalNotifications.shared.clear(invite)
         if let me = SocialStore.shared.me?.id { remove(invite, me: me) }
     }
 

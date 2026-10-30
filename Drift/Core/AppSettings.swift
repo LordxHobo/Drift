@@ -62,6 +62,13 @@ final class AppSettings {
     /// Play the explicit (uncensored) version of a song when there is one.
     var preferExplicit: Bool { didSet { defaults.set(preferExplicit, forKey: "preferExplicit") } }
     var downloadOverCellular: Bool { didSet { defaults.set(downloadOverCellular, forKey: "downloadOverCellular") } }
+    /// How much space recently played songs may take (MB, 0 = don't keep them).
+    var songCacheMB: Int {
+        didSet {
+            defaults.set(songCacheMB, forKey: PlayCache.limitKey)
+            Task { await PlayCache.shared.limitChanged() }
+        }
+    }
     /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
     /// Move on when a song ends in a long stretch of silence.
     var skipSilence: Bool { didSet { defaults.set(skipSilence, forKey: "skipSilence") } }
@@ -111,6 +118,7 @@ final class AppSettings {
         preferOfficialAudio = d.object(forKey: "preferOfficialAudio") as? Bool ?? true
         preferExplicit = d.object(forKey: "preferExplicit") as? Bool ?? true
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")
+        songCacheMB = d.object(forKey: PlayCache.limitKey) as? Int ?? PlayCache.defaultLimitMB
         lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true

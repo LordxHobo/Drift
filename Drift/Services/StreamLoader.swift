@@ -10,11 +10,14 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Se
 
     let realURL: URL
     let asset: AVURLAsset
+    /// Songs: the audio that arrives is also kept (PlayCache) under this key, so a replay starts at once.
+    let cacheKey: String?
     private let queue = DispatchQueue(label: "drift.stream-loader")
     private var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]   // only touched on `queue`
 
-    init(url: URL) {
+    init(url: URL, cacheKey: String? = nil) {
         realURL = url
+        self.cacheKey = cacheKey
         var c = URLComponents(url: url, resolvingAgainstBaseURL: false)!
         c.scheme = Self.scheme
         asset = AVURLAsset(url: c.url!)
@@ -63,6 +66,9 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Se
                     let upto = min(end, Int64(head.count))
                     let slice = head.subdata(in: Int(offset)..<Int(upto))
                     queue.sync { data.respond(with: slice) }
+                    if let cacheKey {
+                        await PlayCache.shared.write(key: cacheKey, url: realURL, total: total, offset: offset, data: slice)
+                    }
                     offset = upto
                 }
 
@@ -76,6 +82,9 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Se
                     guard !bytes.isEmpty else { break }
                     try Task.checkCancellation()
                     queue.sync { data.respond(with: bytes) }
+                    if let cacheKey {
+                        await PlayCache.shared.write(key: cacheKey, url: realURL, total: total, offset: offset, data: bytes)
+                    }
                     offset += Int64(bytes.count)
                 }
             }

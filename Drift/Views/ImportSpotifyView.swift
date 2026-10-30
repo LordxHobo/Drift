@@ -149,7 +149,7 @@ struct ImportSpotifyView: View {
             }
             if importer.hitLimit || importer.spotifyTotal != nil {
                 Button("Copy reading log") {
-                    let url = URL.documentsDirectory.appending(path: "spotify-import.log")
+                    let url = AppFiles.data.appending(path: "spotify-import.log")
                     UIPasteboard.general.string = (try? String(contentsOf: url, encoding: .utf8)) ?? "No log"
                 }
                 .font(.system(size: 13, weight: .semibold))

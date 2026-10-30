@@ -10,6 +10,7 @@ import { formatTotal, plural } from '../util'
 import { CollectionHeader, Failed, Loading, cleanError, useMusic } from './common'
 import { editProfileStore } from './editProfile'
 import { joinFriend } from './jam'
+import { nameOf } from '@shared/types'
 
 // MARK: Helpers
 
@@ -29,12 +30,12 @@ function activityText(u: UserProfile): string | undefined {
   return `${Math.round(s / (7 * 86400))} w`
 }
 
-export function UserAvatar({ user, size = 40 }: { user: Pick<UserProfile, 'username' | 'avatar'>; size?: number }): JSX.Element {
+export function UserAvatar({ user, size = 40 }: { user: Pick<UserProfile, 'username' | 'avatar'> & { displayName?: string | null }; size?: number }): JSX.Element {
   return user.avatar ? (
     <img className="avatar" src={user.avatar} alt="" style={{ width: size, height: size }} />
   ) : (
     <span className="avatar avatar-letter" style={{ width: size, height: size, fontSize: size * 0.42 }}>
-      {user.username.slice(0, 1).toUpperCase()}
+      {nameOf(user).slice(0, 1).toUpperCase()}
     </span>
   )
 }
@@ -64,7 +65,7 @@ function FollowButton({ user }: { user: UserProfile }): JSX.Element | null {
 }
 
 const playActivity = (u: UserProfile): void => {
-  if (u.nowPlaying) playList([u.nowPlaying], 0, { kind: 'song', name: `${u.username}’s activity` })
+  if (u.nowPlaying) playList([u.nowPlaying], 0, { kind: 'song', name: `${nameOf(u)}’s activity` })
 }
 
 /** A friend and what they're playing. */
@@ -85,7 +86,7 @@ function FriendRow({ user, button }: { user: UserProfile; button?: boolean }): J
       </span>
       <span className="friend-text">
         <span className="friend-top">
-          <b>{user.username}</b>
+          <b>{nameOf(user)}</b>
           {when && <span className={`friend-when ${now ? 'now' : ''}`}>{when}</span>}
         </span>
         {user.nowPlaying ? (
@@ -107,7 +108,7 @@ function FriendRow({ user, button }: { user: UserProfile; button?: boolean }): J
       {user.jam && (
         <button
           className="btn small jam-join-btn"
-          title={`Listen together with ${user.username}`}
+          title={`Listen together with ${nameOf(user)}`}
           onClick={(e) => {
             e.stopPropagation()
             joinFriend(user)
@@ -232,7 +233,7 @@ export function FriendsPage(): JSX.Element {
       </div>
       <label className="search-box people-search">
         <Icon name="search" size={18} />
-        <input value={q} placeholder="Find people by username" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setQ('')} />
+        <input value={q} placeholder="Find people by name or username" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setQ('')} />
       </label>
 
       {results ? (
@@ -298,7 +299,7 @@ function FollowDialog({ title, load, empty, close }: { title: string; load: () =
                 }}
               >
                 <UserAvatar user={u} size={30} />
-                <span className="collab-name">{u.username}</span>
+                <span className="collab-name">{nameOf(u)}<span className="handle">@{u.username}</span></span>
               </button>
             ))
           )}
@@ -343,8 +344,8 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
   }, [id])
 
   useEffect(() => {
-    if (me && me.id === id) setUser((u) => (u ? { ...u, username: me.username, avatar: me.avatar } : u))
-  }, [me?.username, me?.avatar])
+    if (me && me.id === id) setUser((u) => (u ? { ...u, username: me.username, displayName: me.displayName, avatar: me.avatar } : u))
+  }, [me?.username, me?.displayName, me?.avatar])
 
   if (error && !user) return <div className="page"><Failed message={error} /></div>
   if (!user) return <div className="page"><Loading /></div>
@@ -355,7 +356,7 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
     <div className="page user-page">
       {showing && (
         <FollowDialog
-          title={showing === 'followers' ? `${isMe ? 'Your' : `${user.username}’s`} followers` : `${isMe ? 'You follow' : `${user.username} follows`}`}
+          title={showing === 'followers' ? `${isMe ? 'Your' : `${nameOf(user)}’s`} followers` : `${isMe ? 'You follow' : `${nameOf(user)} follows`}`}
           load={() => (showing === 'followers' ? (followerList ? Promise.resolve(followerList) : drift.followers(user.id)) : drift.users(user.following))}
           empty={showing === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
           close={() => setShowing(null)}
@@ -372,7 +373,8 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
         )}
         <div className="user-text">
           <div className="d-kind">Profile</div>
-          <h1>{user.username}</h1>
+          <h1>{nameOf(user)}</h1>
+          <div className="user-handle">@{user.username}</div>
           <div className="user-counts">
             <span><b>{lists?.length ?? '–'}</b> public {lists?.length === 1 ? 'playlist' : 'playlists'}</span>
             <button className="link count-link" onClick={() => setShowing('followers')}>
@@ -414,7 +416,7 @@ export function UserPage({ id, hint }: { id: string; hint?: UserProfile }): JSX.
           </button>
         </div>
       ) : !user.shareActivity && !isMe ? (
-        <div className="empty small">{user.username} keeps their listening activity private.</div>
+        <div className="empty small">{nameOf(user)} keeps their listening activity private.</div>
       ) : null}
 
       <section className="section">

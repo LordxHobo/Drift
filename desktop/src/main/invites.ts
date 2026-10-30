@@ -2,6 +2,8 @@
 // Each invite is a small document at users/{them}/invites/{you}; the server only accepts it when you
 // follow each other and they allow invites. Same documents as the phone's JamInvites.
 import type { JamInvite, Track } from '@shared/types'
+import { nameOf } from '@shared/types'
+import { BrowserWindow, Notification } from 'electron'
 import * as account from './account'
 import { FV } from './firebase'
 import { emit } from './store'
@@ -26,7 +28,7 @@ export async function sendInvites(friendIds: string[], code: string, track: Trac
     try {
       await l.db.patch(`users/${id}/invites/${l.uid}`, {
         from: FV.s(l.uid),
-        fromName: FV.s(mine?.username ?? 'A friend'),
+        fromName: FV.s(mine ? nameOf(mine) : 'A friend'),
         code: FV.s(code),
         title: FV.s(track.title),
         artist: FV.s(track.artist),
@@ -67,6 +69,7 @@ async function check(): Promise<void> {
       }
       asked.add(inviteKey(invite))
       emit('jamInvite', invite)
+      notify(invite)
     }
   } catch {
     // offline: try again next time
@@ -81,9 +84,27 @@ export async function answerInvite(invite: JamInvite): Promise<void> {
   if (l) await l.db.delete(`users/${l.uid}/invites/${invite.from}`).catch(() => undefined)
 }
 
-/** Looks for invites every 20 s. */
+/** Drift isn't the window in front (minimised, behind others, or closed to the tray): a system notification. */
+function notify(invite: JamInvite): void {
+  const win = BrowserWindow.getAllWindows()[0]
+  if ((win && win.isVisible() && win.isFocused()) || !Notification.isSupported()) return
+  const n = new Notification({
+    title: `${invite.fromName} invited you to listen together`,
+    body: invite.title ? `“${invite.title}” by ${invite.artist}` : 'Open Drift to join.'
+  })
+  n.on('click', () => {
+    const w = BrowserWindow.getAllWindows()[0]
+    if (!w) return
+    if (w.isMinimized()) w.restore()
+    w.show()
+    w.focus()
+  })
+  n.show()
+}
+
+/** Looks for invites every 10 s. */
 export function startInvites(): void {
   if (timer) return
-  timer = setInterval(() => void check(), 20_000)
+  timer = setInterval(() => void check(), 10_000)
   setTimeout(() => void check(), 5_000)
 }

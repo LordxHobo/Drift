@@ -6,6 +6,7 @@ import type { Playlist, UserProfile } from '@shared/types'
 import { accountStore, drift, libraryStore, Store, toast, useStore } from '../state'
 import { Spinner } from '../ui'
 import { UserAvatar } from './social'
+import { nameOf } from '@shared/types'
 
 /** The playlist whose collaborators are shown. */
 export const collabStore = new Store<string | null>(null)
@@ -53,7 +54,7 @@ export function CollabDialog(): JSX.Element | null {
   }
 
   // People to pick from: who you follow, plus anyone already in it.
-  const people: { id: string; username: string }[] = [...(friends ?? []).map((f) => ({ id: f.id, username: f.username }))]
+  const people: { id: string; username: string }[] = [...(friends ?? []).map((f) => ({ id: f.id, username: nameOf(f) }))]
   for (const m of p.collab?.members ?? []) {
     if (m !== me && !people.some((x) => x.id === m)) people.push({ id: m, username: p.collab!.names[m] ?? 'Someone' })
   }

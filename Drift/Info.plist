@@ -28,6 +28,11 @@
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<true/>
+	<!-- Drift's Downloads folder shows in the Files app (On My iPhone › Drift). -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Some podcast hosts still serve episodes over plain http. -->

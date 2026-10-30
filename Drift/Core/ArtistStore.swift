@@ -29,7 +29,7 @@ final class ArtistStore {
     /// How long a release counts as new.
     static let newFor: TimeInterval = 30 * 86400
 
-    @ObservationIgnored private let url = URL.documentsDirectory.appending(path: "artists.json")
+    @ObservationIgnored private let url = AppFiles.data.appending(path: "artists.json")
     @ObservationIgnored private let lastCheckKey = "artists.lastCheck"
     @ObservationIgnored private var checking = false
 

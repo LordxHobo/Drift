@@ -19,13 +19,20 @@ final class Library {
         var downloaded: [Track]
     }
 
-    @ObservationIgnored private let storeURL = URL.documentsDirectory.appending(path: "library.json")
-    @ObservationIgnored let downloadsDirectory = URL.documentsDirectory.appending(path: "Downloads", directoryHint: .isDirectory)
+    @ObservationIgnored private let storeURL = AppFiles.data.appending(path: "library.json")
+    @ObservationIgnored let downloadsDirectory = AppFiles.downloads
+    /// Downloaded songs are named "Artist - Title.m4a" (they show in the Files app): song id → file name.
+    @ObservationIgnored private let namesURL = AppFiles.data.appending(path: "download-names.json")
+    @ObservationIgnored private var fileNames: [String: String] = [:]
 
     private init() {
         load()
         try? FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
-        // Drop download entries whose file is gone.
+        if let data = try? Data(contentsOf: namesURL), let names = try? JSONDecoder().decode([String: String].self, from: data) {
+            fileNames = names
+        }
+        nameOldDownloads()
+        // Drop download entries whose file is gone (deleted or renamed in the Files app, say).
         downloaded.removeAll { !FileManager.default.fileExists(atPath: fileURL(for: $0.id).path) }
     }
 
@@ -60,6 +67,26 @@ final class Library {
         } else {
             playlists.insert(p, at: 0)
         }
+        save()
+    }
+
+    /// A collaborative playlist's cover as someone else set it (colour, symbol or photo).
+    func setCollabCover(_ id: UUID, style: Playlist.CoverStyle, symbol: String?, colorIndex: Int, photo: Data?) {
+        guard let i = playlists.firstIndex(where: { $0.id == id }) else { return }
+        playlists[i].colorIndex = colorIndex
+        playlists[i].coverSymbol = symbol
+        if style == .photo, let photo {
+            try? FileManager.default.createDirectory(at: coversDirectory, withIntermediateDirectories: true)
+            let file = "\(id.uuidString)-collab-\(Int(Date().timeIntervalSince1970)).jpg"
+            if (try? photo.write(to: coversDirectory.appending(path: file), options: .atomic)) != nil {
+                if let old = playlists[i].coverFile, old != file {
+                    try? FileManager.default.removeItem(at: coversDirectory.appending(path: old))
+                    coverCache[old] = nil
+                }
+                playlists[i].coverFile = file
+            }
+        }
+        playlists[i].coverStyle = style == .photo && playlists[i].coverFile == nil ? .auto : style
         save()
     }
 
@@ -209,7 +236,7 @@ final class Library {
 
     // MARK: Playlist covers
 
-    @ObservationIgnored let coversDirectory = URL.documentsDirectory.appending(path: "Covers", directoryHint: .isDirectory)
+    @ObservationIgnored let coversDirectory = AppFiles.data.appending(path: "Covers", directoryHint: .isDirectory)
     @ObservationIgnored private var coverCache: [String: UIImage] = [:]
 
     /// The custom photo for a playlist, if it uses one.
@@ -328,6 +355,12 @@ final class Library {
     // MARK: Downloads
 
     func fileURL(for id: String) -> URL {
+        if let name = fileNames[id] { return downloadsDirectory.appending(path: name) }
+        return legacyFileURL(for: id)
+    }
+
+    /// How older builds named downloads (by song id).
+    private func legacyFileURL(for id: String) -> URL {
         // Feed episodes keep their file's own type (usually MP3).
         if id.hasPrefix("rss-") {
             let m4a = downloadsDirectory.appending(path: "\(id).m4a")
@@ -336,11 +369,48 @@ final class Library {
         return downloadsDirectory.appending(path: "\(id).m4a")
     }
 
-    /// Where a download of this file goes (feed episodes: by the file's type).
-    func downloadDestination(for id: String, source: URL) -> URL {
-        guard id.hasPrefix("rss-") else { return fileURL(for: id) }
-        let ext = ["m4a", "mp4", "aac", "m4b"].contains(source.pathExtension.lowercased()) ? "m4a" : "mp3"
-        return downloadsDirectory.appending(path: "\(id).\(ext)")
+    /// Where a download goes: "Artist - Title.m4a" (feed episodes keep their file's type, usually MP3).
+    func downloadDestination(for t: Track, source: URL) -> URL {
+        let ext = t.id.hasPrefix("rss-") && !["m4a", "mp4", "aac", "m4b"].contains(source.pathExtension.lowercased()) ? "mp3" : "m4a"
+        let name = uniqueFileName(for: t, ext: ext)
+        fileNames[t.id] = name
+        saveNames()
+        return downloadsDirectory.appending(path: name)
+    }
+
+    private func uniqueFileName(for t: Track, ext: String) -> String {
+        let bad = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.newlines).union(.controlCharacters)
+        func clean(_ s: String) -> String {
+            s.components(separatedBy: bad).joined(separator: " ")
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: ".")))
+        }
+        let artist = clean(t.artist), title = clean(t.title)
+        var base = artist.isEmpty ? title : "\(artist) - \(title)"
+        if base.isEmpty { base = t.id }
+        base = String(base.prefix(120))
+        let taken = Set(fileNames.filter { $0.key != t.id }.values.map { $0.lowercased() })
+        var name = "\(base).\(ext)"
+        if taken.contains(name.lowercased()) { name = "\(base) [\(t.id)].\(ext)" }
+        return name
+    }
+
+    private func saveNames() {
+        if let data = try? JSONEncoder().encode(fileNames) { try? data.write(to: namesURL, options: .atomic) }
+    }
+
+    /// Downloads from older builds (named by song id) get their song's name.
+    private func nameOldDownloads() {
+        let fm = FileManager.default
+        for t in downloaded where fileNames[t.id] == nil {
+            let old = legacyFileURL(for: t.id)
+            guard fm.fileExists(atPath: old.path) else { continue }
+            let name = uniqueFileName(for: t, ext: old.pathExtension.isEmpty ? "m4a" : old.pathExtension)
+            if (try? fm.moveItem(at: old, to: downloadsDirectory.appending(path: name))) != nil {
+                fileNames[t.id] = name
+            }
+        }
+        saveNames()
     }
 
     func isDownloaded(_ id: String) -> Bool {
@@ -356,12 +426,16 @@ final class Library {
     func removeDownload(_ id: String) {
         try? FileManager.default.removeItem(at: fileURL(for: id))
         downloaded.removeAll { $0.id == id }
+        fileNames[id] = nil
+        saveNames()
         save()
     }
 
     func removeAllDownloads() {
         for t in downloaded { try? FileManager.default.removeItem(at: fileURL(for: t.id)) }
         downloaded.removeAll()
+        fileNames = [:]
+        saveNames()
         save()
     }
 

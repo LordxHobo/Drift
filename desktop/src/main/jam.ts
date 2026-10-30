@@ -121,7 +121,7 @@ function end(): void {
 export async function startJam(): Promise<JamState> {
   const l = link()
   if (code) await leaveJam()
-  const me = account.getAccount().username ?? 'Someone'
+  const me = account.myName()
   for (let attempt = 0; attempt < 5; attempt++) {
     const c = newCode()
     try {
@@ -162,7 +162,7 @@ export async function joinJam(raw: string): Promise<JamState> {
     const s = parse(c, doc, l.uid)
     if (!s) throw new Error('No session with that code.')
     if (!s.members.includes(l.uid)) {
-      const names = { ...s.names, [l.uid]: account.getAccount().username ?? 'Someone' }
+      const names = { ...s.names, [l.uid]: account.myName() }
       try {
         await timed(() =>
           l.db.patch(path(c), { members: FV.strings([...s.members, l.uid]), names: namesFields(names) }, { mask: ['members', 'names'], updateTime: doc.updateTime })

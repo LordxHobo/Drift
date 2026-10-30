@@ -2,6 +2,73 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 4,
+      "date": "2026-10-30",
+      "title": "Display names, a song cache, and smoother Listen Together",
+      "notes": [
+        {
+          "text": "Display names: pick the name friends see, with capitals, spaces and emoji. Your @username stays as it is, and people can be found by either.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Display names: pick the name friends see (Edit profile), with capitals, spaces and emoji. Your @username stays as it is, and people can be found by either.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Listen Together invites now pop up right away while Drift is open, even over the player or another screen."
+        },
+        {
+          "text": "Invites that arrive while Drift plays in the background come as a notification, with Join and Decline right on it.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Invites that arrive while Drift is minimised or in the tray come as a notification.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Listen Together: when a friend's song is still loading, your music no longer jumps back to the start."
+        },
+        {
+          "text": "Songs you've played are kept on your iPhone (up to 1 GB, change it in Settings), so they start instantly next time and use no data.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Your downloads now show in the Files app (On My iPhone › Drift › Downloads), named by artist and title.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Add to playlist and the other song options now open right away in the full-screen player.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Shared playlists update within a few seconds while you're looking at them (pull down to refresh), and cover changes are shared too.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Shared playlists update within a few seconds while you're looking at them, and cover changes are shared too.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 3,
       "date": "2026-10-29",
       "title": "Build numbers in What's new",

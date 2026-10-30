@@ -1,6 +1,7 @@
 // Friends: profiles, following, what people are listening to, and the playlists they show.
 // Same Firestore documents as the phone's SocialStore and PlaylistSharing.
 import type { SharedPlaylist, Track, UserProfile } from '@shared/types'
+import { displayNameLimit, searchKey } from '@shared/types'
 import { FV, FirebaseError, docName } from './firebase'
 import { linked, loadProfile } from './account'
 import { emit } from './store'
@@ -44,6 +45,7 @@ function profile(doc: any): UserProfile | null {
     playing: FV.bool(f, 'playing') ?? false,
     jam: FV.string(f, 'jam') ?? null,
     allowInvites: FV.bool(f, 'allowInvites') ?? null,
+    displayName: FV.string(f, 'displayName') || null,
     updatedAt: FV.int(f, 'updatedAt')
   }
 }
@@ -118,25 +120,34 @@ export async function followers(id?: string): Promise<UserProfile[]> {
 }
 
 /** Usernames starting with what was typed. */
+/** People whose username or display name starts with what was typed. */
 export async function searchUsers(text: string): Promise<UserProfile[]> {
   const { db, uid } = need()
-  const q = text.toLowerCase().replace(/[^a-z0-9_.]/g, '')
-  if (!q) return []
-  const docs = await db.query({
-    from: [{ collectionId: 'users' }],
-    where: {
-      compositeFilter: {
-        op: 'AND',
-        filters: [
-          { fieldFilter: { field: { fieldPath: 'usernameLower' }, op: 'GREATER_THAN_OR_EQUAL', value: FV.s(q) } },
-          { fieldFilter: { field: { fieldPath: 'usernameLower' }, op: 'LESS_THAN', value: FV.s(q + '') } }
-        ]
-      }
-    },
-    orderBy: [{ field: { fieldPath: 'usernameLower' } }],
-    limit: 20
-  })
-  return docs.map(profile).filter((u): u is UserProfile => !!u && u.id !== uid)
+  const prefix = (field: string, q: string): Promise<any[]> =>
+    db.query({
+      from: [{ collectionId: 'users' }],
+      where: {
+        compositeFilter: {
+          op: 'AND',
+          filters: [
+            { fieldFilter: { field: { fieldPath: field }, op: 'GREATER_THAN_OR_EQUAL', value: FV.s(q) } },
+            { fieldFilter: { field: { fieldPath: field }, op: 'LESS_THAN', value: FV.s(q + '\uf8ff') } }
+          ]
+        }
+      },
+      orderBy: [{ field: { fieldPath: field } }],
+      limit: 20
+    })
+  const handle = text.toLowerCase().replace(/[^a-z0-9_.]/g, '')
+  const display = searchKey(text.trim())
+  if (!handle && !display) return []
+  const [a, b] = await Promise.all([
+    handle ? prefix('usernameLower', handle).catch(() => []) : Promise.resolve([]),
+    display ? prefix('displayNameLower', display).catch(() => []) : Promise.resolve([])
+  ])
+  const out: UserProfile[] = []
+  for (const u of [...a, ...b].map(profile)) if (u && u.id !== uid && !out.some((x) => x.id === u.id)) out.push(u)
+  return out
 }
 
 export async function followUser(id: string, follow: boolean): Promise<UserProfile | null> {
@@ -289,7 +300,7 @@ export async function usernameAvailable(name: string): Promise<boolean | null> {
   }
 }
 
-export async function updateProfile(change: { username?: string; avatar?: string | null }): Promise<UserProfile | null> {
+export async function updateProfile(change: { username?: string; displayName?: string; avatar?: string | null }): Promise<UserProfile | null> {
   const { db, uid } = need()
   const mine = await me()
   if (!mine) throw new Error('No profile found.')
@@ -303,8 +314,17 @@ export async function updateProfile(change: { username?: string; avatar?: string
       if (e instanceof FirebaseError && (e.status === 400 || e.status === 409)) throw new Error('That username was just taken.')
       throw e
     }
-    await db.patch(`users/${uid}`, { username: FV.s(name), usernameLower: FV.s(name) }, { mask: ['username', 'usernameLower'] })
+    await db.patch(
+      `users/${uid}`,
+      { username: FV.s(name), usernameLower: FV.s(name), displayNameLower: FV.s(searchKey(mine.displayName?.trim() || name)) },
+      { mask: ['username', 'usernameLower', 'displayNameLower'] }
+    )
     await db.delete(`usernames/${mine.username}`).catch(() => undefined)
+  }
+  if (change.displayName !== undefined) {
+    const name = change.displayName.replace(/\s*\n\s*/g, ' ').trim().slice(0, displayNameLimit)
+    const shown = name || change.username || mine.username
+    await db.patch(`users/${uid}`, { displayName: FV.s(name), displayNameLower: FV.s(searchKey(shown)) }, { mask: ['displayName', 'displayNameLower'] })
   }
   if (change.avatar !== undefined) {
     await db.patch(`users/${uid}`, { avatar: change.avatar ? FV.bytes(change.avatar) : FV.null() }, { mask: ['avatar'] })

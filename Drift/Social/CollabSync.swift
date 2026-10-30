@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Collaborative playlists: one shared document per playlist (collabs/{playlist id}) that every
 /// member can change. Each device remembers the list as it last saw it there, so only its own changes
@@ -12,6 +13,10 @@ final class CollabSync {
         var updateTime: String
         var ids: [String]
         var name: String
+        /// The cover as it was here after the last sync (to notice a change here), and when the shared
+        /// cover last changed (to notice a change by someone else).
+        var coverSig: String?
+        var coverAt: Int?
     }
 
     private struct Stored: Codable {
@@ -26,13 +31,21 @@ final class CollabSync {
         var name: String
         let colorIndex: Int
         var tracks: [Track]
+        var coverStyle: String? = nil
+        var coverSymbol: String? = nil
+        var cover: Data? = nil
+        var coverAt: Int = 0
     }
 
     private var state: Stored
     private var running = false
     private var again = false
     private var scheduled: Task<Void, Never>?
-    private var timer: Timer?
+    private var loop: Task<Void, Never>?
+    /// A collaborative playlist on screen: checked every few seconds instead of every 30.
+    var watching: UUID? {
+        didSet { if watching != nil && oldValue == nil { schedule(after: 0) } }
+    }
     private static let key = "collabSync.state"
 
     private init() {
@@ -43,13 +56,23 @@ final class CollabSync {
         if let data = try? JSONEncoder().encode(state) { UserDefaults.standard.set(data, forKey: Self.key) }
     }
 
-    /// Starts looking for changes from the others (every 30 s while Drift is open).
+    /// Starts looking for changes from the others: every 4 s while a shared playlist is on screen,
+    /// every 30 s otherwise (while Drift is open), and whenever Drift comes back.
     func start() {
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
-            MainActor.assumeIsolated { CollabSync.shared.schedule(after: 0) }
+        guard loop == nil else { return }
+        loop = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            var last = Date.distantPast
+            while !Task.isCancelled {
+                guard let self else { return }
+                let gap: Double = self.watching != nil ? 4 : 30
+                if Date().timeIntervalSince(last) >= gap, UIApplication.shared.applicationState != .background {
+                    last = Date()
+                    await self.run()
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
-        schedule(after: 2)
     }
 
     /// A change in the library: send it a moment later (only when you have shared playlists).
@@ -89,7 +112,7 @@ final class CollabSync {
     }
 
     private var uid: String? { SocialStore.shared.me?.id }
-    private var myName: String { SocialStore.shared.me?.username ?? "Someone" }
+    private var myName: String { SocialStore.shared.me?.name ?? "Someone" }
 
     // MARK: Reading and writing the shared document
 
@@ -106,7 +129,9 @@ final class CollabSync {
         }
         return Remote(id: id, updateTime: updateTime,
                       info: CollabInfo(owner: owner, members: FV.stringArray(f, "members"), names: names),
-                      name: FV.string(f, "name") ?? "Playlist", colorIndex: FV.int(f, "colorIndex") ?? 0, tracks: tracks)
+                      name: FV.string(f, "name") ?? "Playlist", colorIndex: FV.int(f, "colorIndex") ?? 0, tracks: tracks,
+                      coverStyle: FV.string(f, "coverStyle"), coverSymbol: FV.string(f, "coverSymbol"),
+                      cover: FV.data(f, "cover"), coverAt: FV.int(f, "coverAt") ?? 0)
     }
 
     private static func infoFields(_ info: CollabInfo) -> [String: Any] {
@@ -119,14 +144,65 @@ final class CollabSync {
 
     /// Takes the server's version as it is (nothing changed here).
     private func adopt(_ r: Remote) {
+        let isNew = Library.shared.playlist(r.id) == nil
         var p = Library.shared.playlist(r.id) ?? Playlist(name: r.name)
         p.id = r.id
         p.name = r.name
         p.tracks = r.tracks
         p.collab = r.info
-        if Library.shared.playlist(r.id) == nil { p.colorIndex = r.colorIndex }
+        if isNew { p.colorIndex = r.colorIndex }
         Library.shared.setCollabPlaylist(p)
-        state.bases[r.id.uuidString] = Base(updateTime: r.updateTime, ids: r.tracks.map(\.id), name: r.name)
+        var base = state.bases[r.id.uuidString]
+        base = Base(updateTime: r.updateTime, ids: r.tracks.map(\.id), name: r.name,
+                    coverSig: base?.coverSig, coverAt: base?.coverAt)
+        state.bases[r.id.uuidString] = base
+        // A cover set by someone else (or the shared one, the first time).
+        if r.coverAt != 0 && (isNew || r.coverAt != base?.coverAt) { adoptCover(r) }
+    }
+
+    // MARK: The cover (colour, symbol or photo): whoever changed it last wins
+
+    private func coverSig(_ p: Playlist?) -> String {
+        guard let p else { return "" }
+        return "\(p.style.rawValue)|\(p.coverSymbol ?? "")|\(p.colorIndex)|\(p.coverFile ?? "")"
+    }
+
+    private func adoptCover(_ r: Remote) {
+        Library.shared.setCollabCover(r.id, style: r.coverStyle.flatMap(Playlist.CoverStyle.init(rawValue:)) ?? .auto,
+                                      symbol: r.coverSymbol, colorIndex: r.colorIndex, photo: r.cover)
+        state.bases[r.id.uuidString]?.coverAt = r.coverAt
+        state.bases[r.id.uuidString]?.coverSig = coverSig(Library.shared.playlist(r.id))
+    }
+
+    /// Sends the cover as it is here (changed here since the last sync).
+    private func sendCover(_ p: Playlist) async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let photo = p.style == .photo ? Library.shared.coverData(p) : nil
+        let fields: [String: Any] = [
+            "coverStyle": FV.s(photo == nil && p.style == .photo ? "auto" : p.style.rawValue),
+            "coverSymbol": FV.s(p.coverSymbol ?? ""), "colorIndex": FV.i(p.colorIndex),
+            "cover": photo.map(FV.bytes) ?? FV.null, "coverAt": FV.i(now),
+        ]
+        let updateTime = try await Firestore.patch(Self.path(p.id), fields: fields,
+                                                   mask: ["coverStyle", "coverSymbol", "colorIndex", "cover", "coverAt"])
+        state.bases[p.id.uuidString]?.coverAt = now
+        state.bases[p.id.uuidString]?.coverSig = coverSig(p)
+        if let updateTime { state.bases[p.id.uuidString]?.updateTime = updateTime }
+    }
+
+    /// After the songs: a cover changed here goes up; one changed by someone else comes down.
+    private func syncCover(_ r: Remote) async throws {
+        guard let base = state.bases[r.id.uuidString], let local = Library.shared.playlist(r.id) else { return }
+        let now = coverSig(local)
+        if base.coverSig == nil {
+            // First sync with covers: remember how it is now.
+            state.bases[r.id.uuidString]?.coverSig = now
+            if r.coverAt != 0 { state.bases[r.id.uuidString]?.coverAt = r.coverAt }
+        } else if base.coverSig != now {
+            try await sendCover(local)
+        } else if r.coverAt != 0 && r.coverAt != (base.coverAt ?? 0) {
+            adoptCover(r)
+        }
     }
 
     private func sync() async throws {
@@ -154,6 +230,7 @@ final class CollabSync {
             } else if local.collab != r.info {
                 Library.shared.setCollabInfo(r.id, r.info)
             }
+            try? await syncCover(r)
         }
 
         // Shared playlists that are gone (stopped by their owner, or you were removed).
@@ -209,7 +286,7 @@ final class CollabSync {
         guard let p = Library.shared.playlist(id) else { return }
         if p.collab != nil { return try await setMembers(id, people) }
         var names = [uid: myName]
-        for f in people { names[f.id] = f.username }
+        for f in people { names[f.id] = f.name }
         let info = CollabInfo(owner: uid, members: [uid] + people.map(\.id), names: names)
         let tracks = p.tracks.map { t -> Track in
             var t = t
@@ -230,15 +307,17 @@ final class CollabSync {
         shared.tracks = tracks
         shared.collab = info
         Library.shared.setCollabPlaylist(shared)
-        state.bases[id.uuidString] = Base(updateTime: updateTime ?? "", ids: tracks.map(\.id), name: p.name)
+        state.bases[id.uuidString] = Base(updateTime: updateTime ?? "", ids: tracks.map(\.id), name: p.name,
+                                          coverSig: "", coverAt: 0)   // "" = sends the cover on the next sync
         save()
+        schedule(after: 0)
     }
 
     /// The owner changes who's in it.
     private func setMembers(_ id: UUID, _ people: [UserProfile]) async throws {
         guard let uid, let r = parse(try await Firestore.get(Self.path(id))), r.info.owner == uid else { return }
         var names = [uid: myName]
-        for f in people { names[f.id] = f.username }
+        for f in people { names[f.id] = f.name }
         let info = CollabInfo(owner: uid, members: [uid] + people.map(\.id).filter { $0 != uid }, names: names)
         let updateTime = try await Firestore.patch(Self.path(id), fields: Self.infoFields(info),
                                                    mask: ["owner", "members", "names"], updateTime: r.updateTime)

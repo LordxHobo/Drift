@@ -29,7 +29,7 @@ struct HomeView: View {
                         UIState.shared.showDrawer = true
                     } label: {
                         UserAvatar(data: SocialStore.shared.me?.avatar,
-                                   name: SocialStore.shared.me?.username ?? "?", size: 34)
+                                   name: SocialStore.shared.me?.name ?? "?", size: 34)
                             .overlay(alignment: .topTrailing) {
                                 if NotificationStore.shared.unreadCount > 0 {
                                     Circle()
@@ -199,7 +199,7 @@ struct MusicHomeView: View {
                     Button {
                         UIState.shared.showDrawer = true
                     } label: {
-                        UserAvatar(data: social.me?.avatar, name: social.me?.username ?? "?", size: 34)
+                        UserAvatar(data: social.me?.avatar, name: social.me?.name ?? "?", size: 34)
                             .overlay(alignment: .topTrailing) {
                                 if NotificationStore.shared.unreadCount > 0 {
                                     Circle().fill(AppSettings.shared.accent)

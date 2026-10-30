@@ -16,6 +16,14 @@ struct UserProfile: Codable, Hashable, Identifiable {
     var jam: String? = nil
     /// Friends may invite them to listen together (nil = yes, the default).
     var allowInvites: Bool? = nil
+    /// The name shown everywhere (capitals, spaces, emoji welcome); the @username stays unique.
+    var displayName: String? = nil
+
+    /// What to call them: their display name, or their username until they set one.
+    var name: String {
+        let d = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return d.isEmpty ? username : d
+    }
 
     var acceptsInvites: Bool { allowInvites ?? true }
 
@@ -42,6 +50,7 @@ struct UserProfile: Codable, Hashable, Identifiable {
         playing = FV.bool(f, "playing") ?? false
         jam = FV.string(f, "jam")
         allowInvites = FV.bool(f, "allowInvites")
+        displayName = FV.string(f, "displayName")
         updatedAt = FV.int(f, "updatedAt").map { Date(timeIntervalSince1970: TimeInterval($0)) }
         if let np = FV.mapFields(f, "nowPlaying"), let tid = FV.string(np, "id"), let title = FV.string(np, "title") {
             var t = Track(id: tid, title: title, artist: FV.string(np, "artist") ?? "", album: nil,
@@ -188,11 +197,13 @@ final class SocialStore {
 
     // MARK: Profile
 
-    func createProfile(username: String, photo: UIImage?) async throws {
+    func createProfile(username: String, displayName: String = "", photo: UIImage?) async throws {
         let uid = try await FirebaseAuth.shared.signedInUID()
         try await Firestore.patch("usernames/\(username)", fields: ["uid": FV.s(uid)], mustNotExist: true)
         let avatar = photo.flatMap(Self.avatarData)
-        let profile = UserProfile(id: uid, username: username, avatar: avatar)
+        var profile = UserProfile(id: uid, username: username, avatar: avatar)
+        let display = Self.cleanedDisplayName(displayName)
+        profile.displayName = display.isEmpty ? nil : display
         try await Firestore.patch("users/\(uid)", fields: Self.fields(profile))
         me = profile
         status = .ready
@@ -207,8 +218,9 @@ final class SocialStore {
         guard var profile = me, newName != profile.username else { return }
         try await Firestore.patch("usernames/\(newName)", fields: ["uid": FV.s(profile.id)], mustNotExist: true)
         try await Firestore.patch("users/\(profile.id)",
-                                  fields: ["username": FV.s(newName), "usernameLower": FV.s(newName)],
-                                  mask: ["username", "usernameLower"])
+                                  fields: ["username": FV.s(newName), "usernameLower": FV.s(newName),
+                                           "displayNameLower": FV.s(Self.searchKey(profile.displayName ?? newName))],
+                                  mask: ["username", "usernameLower", "displayNameLower"])
         try? await Firestore.delete("usernames/\(profile.username)")
         profile.username = newName
         me = profile
@@ -242,6 +254,34 @@ final class SocialStore {
         me = profile
         cache()
         try? await Firestore.patch("users/\(profile.id)", fields: ["allowInvites": FV.b(on)], mask: ["allowInvites"])
+    }
+
+    // MARK: Display name
+
+    static let displayNameLimit = 30
+
+    /// Trimmed, on one line, at most 30 characters.
+    static func cleanedDisplayName(_ s: String) -> String {
+        let one = s.components(separatedBy: .newlines).joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return String(one.prefix(displayNameLimit))
+    }
+
+    /// For searching: lowercase, without accents ("João" is found by "joao").
+    static func searchKey(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
+    }
+
+    /// Changes the name shown everywhere (empty = show the username).
+    func setDisplayName(_ raw: String) async throws {
+        guard var profile = me else { return }
+        let name = Self.cleanedDisplayName(raw)
+        profile.displayName = name.isEmpty ? nil : name
+        try await Firestore.patch("users/\(profile.id)",
+                                  fields: ["displayName": FV.s(name), "displayNameLower": FV.s(Self.searchKey(profile.name))],
+                                  mask: ["displayName", "displayNameLower"])
+        me = profile
+        cache()
     }
 
     func deleteProfile() async throws {
@@ -278,6 +318,8 @@ final class SocialStore {
         [
             "username": FV.s(p.username),
             "usernameLower": FV.s(p.username),
+            "displayName": FV.s(p.displayName ?? ""),
+            "displayNameLower": FV.s(searchKey(p.name)),
             "avatar": p.avatar.map(FV.bytes) ?? FV.null,
             "following": FV.strings(p.following),
             "shareActivity": FV.b(p.shareActivity),
@@ -359,23 +401,31 @@ final class SocialStore {
         return docs.compactMap(UserProfile.init(document:))
     }
 
-    /// Usernames starting with what was typed.
+    /// People whose username or display name starts with what was typed.
     func search(_ text: String) async -> [UserProfile] {
-        let q = Self.cleaned(text)
-        guard !q.isEmpty else { return [] }
-        let query: [String: Any] = [
-            "from": [["collectionId": "users"]],
-            "where": ["compositeFilter": ["op": "AND", "filters": [
-                ["fieldFilter": ["field": ["fieldPath": "usernameLower"], "op": "GREATER_THAN_OR_EQUAL",
-                                 "value": FV.s(q)]],
-                ["fieldFilter": ["field": ["fieldPath": "usernameLower"], "op": "LESS_THAN",
-                                 "value": FV.s(q + "\u{f8ff}")]],
-            ]]],
-            "orderBy": [["field": ["fieldPath": "usernameLower"]]],
-            "limit": 20,
-        ]
-        let docs = (try? await Firestore.query(query)) ?? []
-        return docs.compactMap(UserProfile.init(document:)).filter { $0.id != me?.id }
+        func prefix(_ field: String, _ q: String) -> [String: Any] {
+            [
+                "from": [["collectionId": "users"]],
+                "where": ["compositeFilter": ["op": "AND", "filters": [
+                    ["fieldFilter": ["field": ["fieldPath": field], "op": "GREATER_THAN_OR_EQUAL", "value": FV.s(q)]],
+                    ["fieldFilter": ["field": ["fieldPath": field], "op": "LESS_THAN", "value": FV.s(q + "\u{f8ff}")]],
+                ]]],
+                "orderBy": [["field": ["fieldPath": field]]],
+                "limit": 20,
+            ]
+        }
+        let handle = Self.cleaned(text)
+        let display = Self.searchKey(text.trimmingCharacters(in: .whitespaces))
+        guard !handle.isEmpty || !display.isEmpty else { return [] }
+        var docs: [[String: Any]] = []
+        if !handle.isEmpty, let found = try? await Firestore.query(prefix("usernameLower", handle)) { docs += found }
+        if !display.isEmpty, let found = try? await Firestore.query(prefix("displayNameLower", display)) { docs += found }
+        var out: [UserProfile] = []
+        for doc in docs {
+            guard let u = UserProfile(document: doc), u.id != me?.id, !out.contains(where: { $0.id == u.id }) else { continue }
+            out.append(u)
+        }
+        return out
     }
 
     // MARK: Sharing what's playing

@@ -50,7 +50,7 @@ struct UserFollowButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(following ? "Unfollow \(user.username)" : "Follow \(user.username)")
+        .accessibilityLabel(following ? "Unfollow \(user.name)" : "Follow \(user.name)")
     }
 }
 
@@ -62,7 +62,7 @@ struct FriendRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                UserAvatar(data: user.avatar, name: user.username, size: 52)
+                UserAvatar(data: user.avatar, name: user.name, size: 52)
                 if user.isListeningNow {
                     Image(systemName: "waveform")
                         .font(.system(size: 10, weight: .bold))
@@ -74,7 +74,7 @@ struct FriendRow: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(user.username).font(.system(size: 15, weight: .bold)).lineLimit(1)
+                    Text(user.name).font(.system(size: 15, weight: .bold)).lineLimit(1)
                     Spacer(minLength: 4)
                     if let when = user.activityText {
                         Text(when)
@@ -95,7 +95,7 @@ struct FriendRow: View {
                 }
             }
             if let code = user.jam, JamSession.shared.state?.code != code {
-                JamJoinButton(code: code, name: user.username)
+                JamJoinButton(code: code, name: user.name)
             }
         }
         .padding(.vertical, 6)
@@ -111,6 +111,8 @@ struct OnboardingView: View {
     }
 
     @State private var name = ""
+    /// Shown to friends; capitals, spaces and emoji welcome (the @username stays unique).
+    @State private var displayName = ""
     @State private var photo: UIImage?
     @State private var pickerItem: PhotosPickerItem?
     @State private var cropping: CropRequest?
@@ -141,7 +143,7 @@ struct OnboardingView: View {
                             Image(uiImage: photo).resizable().scaledToFill()
                                 .frame(width: 120, height: 120).clipShape(Circle())
                         } else {
-                            UserAvatar(data: nil, name: name.isEmpty ? "?" : name, size: 120)
+                            UserAvatar(data: nil, name: !displayName.isEmpty ? displayName : (name.isEmpty ? "?" : name), size: 120)
                         }
                         Image(systemName: "camera.fill")
                             .font(.system(size: 14))
@@ -154,6 +156,19 @@ struct OnboardingView: View {
                 .accessibilityLabel(photo == nil ? "Add a profile photo" : "Change profile photo")
 
                 VStack(alignment: .leading, spacing: 8) {
+                    TextField("", text: $displayName, prompt: Text("Display name").foregroundStyle(Color(hex: 0x71717A)))
+                        .font(.system(size: 17, weight: .semibold))
+                        .textInputAutocapitalization(.words)
+                        .padding(.horizontal, 14)
+                        .frame(height: 52)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .onChange(of: displayName) { _, new in
+                            if new.count > SocialStore.displayNameLimit { displayName = String(new.prefix(SocialStore.displayNameLimit)) }
+                        }
+                    Text("The name friends see. Capitals, spaces and emoji are fine.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.bottom, 6)
                     HStack(spacing: 4) {
                         Text("@").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.muted)
                         TextField("", text: $name, prompt: Text("username").foregroundStyle(Color(hex: 0x71717A)))
@@ -270,7 +285,7 @@ struct OnboardingView: View {
         focused = false
         Task {
             do {
-                try await social.createProfile(username: name, photo: photo)
+                try await social.createProfile(username: name, displayName: displayName, photo: photo)
             } catch SocialError.usernameTaken {
                 check = .taken
             } catch {
@@ -288,6 +303,8 @@ struct ProfileView: View {
     @State private var cropping: CropRequest?
     @State private var renaming = false
     @State private var newName = ""
+    @State private var renamingDisplay = false
+    @State private var newDisplayName = ""
     @State private var confirmDelete = false
     @State private var error: String?
     @State private var busy = false
@@ -300,7 +317,7 @@ struct ProfileView: View {
                 VStack(spacing: 22) {
                     PhotosPicker(selection: $pickerItem, matching: .images) {
                         ZStack(alignment: .bottomTrailing) {
-                            UserAvatar(data: me.avatar, name: me.username, size: 120)
+                            UserAvatar(data: me.avatar, name: me.name, size: 120)
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.onAccent)
@@ -312,7 +329,10 @@ struct ProfileView: View {
                     .accessibilityLabel("Change profile photo")
                     .padding(.top, 12)
 
-                    Text("@\(me.username)").font(.system(size: 24, weight: .heavy))
+                    VStack(spacing: 2) {
+                        Text(me.name).font(.system(size: 24, weight: .heavy)).multilineTextAlignment(.center)
+                        Text("@\(me.username)").font(.system(size: 14)).foregroundStyle(Theme.muted)
+                    }
 
                     HStack(spacing: 28) {
                         NavigationLink(value: Route.followList(followers: true)) {
@@ -344,6 +364,12 @@ struct ProfileView: View {
                     .tint(accent)
 
                     VStack(spacing: 0) {
+                        Button {
+                            newDisplayName = me.displayName ?? ""
+                            renamingDisplay = true
+                        } label: {
+                            row("Change display name", "textformat")
+                        }
                         Button {
                             newName = me.username
                             renaming = true
@@ -406,6 +432,18 @@ struct ProfileView: View {
                     do { try await social.setPhoto(img) } catch { self.error = error.localizedDescription }
                 }
             }, onCancel: { cropping = nil })
+        }
+        .alert("Display name", isPresented: $renamingDisplay) {
+            TextField("Display name", text: $newDisplayName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let name = newDisplayName
+                Task {
+                    do { try await social.setDisplayName(name); error = nil } catch { self.error = error.localizedDescription }
+                }
+            }
+        } message: {
+            Text("The name friends see. Capitals, spaces and emoji are fine (up to \(SocialStore.displayNameLimit) characters). Leave it empty to show your @username.")
         }
         .alert("Change username", isPresented: $renaming) {
             TextField("username", text: $newName)
@@ -503,8 +541,11 @@ struct FriendsView: View {
                         HStack {
                             NavigationLink(value: Route.user(u)) {
                                 HStack(spacing: 12) {
-                                    UserAvatar(data: u.avatar, name: u.username, size: 44)
-                                    Text(u.username).font(.system(size: 15, weight: .semibold))
+                                    UserAvatar(data: u.avatar, name: u.name, size: 44)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(u.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                                        Text("@\(u.username)").font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                                    }
                                 }
                             }
                             UserFollowButton(user: u)
@@ -528,7 +569,7 @@ struct FriendsView: View {
                     .listRowBackground(Theme.bg)
                     .contextMenu {
                         if let t = u.nowPlaying {
-                            Button { player.play([t], from: "\(u.username)'s activity") } label: {
+                            Button { player.play([t], from: "\(u.name)'s activity") } label: {
                                 Label("Play \(t.title)", systemImage: "play.fill")
                             }
                         }
@@ -591,8 +632,11 @@ struct UserView: View {
         let u = isMe ? (social.me ?? initial) : (user ?? initial)
         ScrollView {
             VStack(spacing: 16) {
-                UserAvatar(data: u.avatar, name: u.username, size: 120).padding(.top, 12)
-                Text("@\(u.username)").font(.system(size: 24, weight: .heavy))
+                UserAvatar(data: u.avatar, name: u.name, size: 120).padding(.top, 12)
+                VStack(spacing: 2) {
+                    Text(u.name).font(.system(size: 24, weight: .heavy)).multilineTextAlignment(.center)
+                    Text("@\(u.username)").font(.system(size: 14)).foregroundStyle(Theme.muted)
+                }
                 HStack(spacing: 28) {
                     NavigationLink(value: Route.userFollows(u, followers: true)) {
                         count(followerCount, "Followers")
@@ -620,7 +664,7 @@ struct UserView: View {
 
                 if let t = u.nowPlaying {
                     Button {
-                        player.play([t], from: "\(u.username)'s activity")
+                        player.play([t], from: "\(u.name)'s activity")
                     } label: {
                         HStack(spacing: 12) {
                             ArtworkView(url: t.artworkURL ?? t.artwork(size: 200), size: 56, corner: 6, seed: t.id)
@@ -642,7 +686,7 @@ struct UserView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Play \(t.title) by \(t.artist)")
                 } else if !u.shareActivity {
-                    Text("@\(u.username) keeps their listening activity private.")
+                    Text("\(u.name) keeps their listening activity private.")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 }
 
@@ -698,7 +742,7 @@ struct UserView: View {
             } else if playlistsFailed && shared.isEmpty {
                 note("Couldn't load playlists.")
             } else if shared.isEmpty {
-                note("@\(u.username) has no public playlists.")
+                note("\(u.name) has no public playlists.")
             } else {
                 ForEach(shared) { p in
                     NavigationLink(value: Route.sharedPlaylist(p)) {
@@ -897,8 +941,11 @@ struct FollowListView: View {
                 HStack {
                     NavigationLink(value: Route.user(u)) {
                         HStack(spacing: 12) {
-                            UserAvatar(data: u.avatar, name: u.username, size: 44)
-                            Text(u.username).font(.system(size: 15, weight: .semibold))
+                            UserAvatar(data: u.avatar, name: u.name, size: 44)
+                            VStack(alignment: .leading, spacing: 1) {
+                                    Text(u.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                                    Text("@\(u.username)").font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                                }
                         }
                     }
                     UserFollowButton(user: u)
@@ -915,7 +962,11 @@ struct FollowListView: View {
         .task {
             if let user, user.id != social.me?.id {
                 // Someone else's lists.
-                users = followers ? await SocialStore.followers(of: user.id) : await social.users(user.following)
+                if followers {
+                    users = await SocialStore.followers(of: user.id)
+                } else {
+                    users = await social.users(user.following)
+                }
             } else if followers {
                 await social.loadFollowers()
                 users = social.followers

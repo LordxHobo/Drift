@@ -16,7 +16,7 @@ final class PodcastStore {
     @ObservationIgnored private var feedsUpdated: Date?
     @ObservationIgnored private var lastSave = Date.distantPast
     @ObservationIgnored private var dirty = false
-    @ObservationIgnored private let fileURL = URL.documentsDirectory.appending(path: "podcasts.json")
+    @ObservationIgnored private let fileURL = AppFiles.data.appending(path: "podcasts.json")
 
     private struct Stored: Codable {
         var subscriptions: [PodcastChannel]?

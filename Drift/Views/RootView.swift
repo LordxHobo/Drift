@@ -71,13 +71,7 @@ struct RootView: View {
                 .environment(\.colorScheme, .dark)
                 .preferredColorScheme(.dark)
         }
-        .sheet(item: $ui.addToPlaylist) { track in
-            AddToPlaylistSheet(track: track)
-        }
-        .sheet(item: $ui.replacing) { r in
-            ReplaceSongSheet(request: r)
-        }
-        .jamInvites()
+        .songSheets()
         .sheet(isPresented: Binding(get: { !patchNotes.isEmpty && !social.showOnboarding },
                                     set: { if !$0 { patchNotes = [] } })) {
             PatchNotesSheet(entries: patchNotes)
@@ -91,7 +85,8 @@ struct RootView: View {
                 Task { await ArtistStore.shared.check() }
                 LibrarySync.shared.refresh()
                 LyricsActivity.shared.appBecameActive()
-                Task { await JamInvites.shared.check() }
+                JamInvites.shared.appBecameActive()
+                CollabSync.shared.schedule(after: 0)
             }
             if phase == .background {
                 player.savePosition()

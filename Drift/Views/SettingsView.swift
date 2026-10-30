@@ -4,6 +4,8 @@ struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var confirmDelete = false
     @State private var linkComputer = false
+    /// Songs and bytes in the song cache.
+    @State private var cacheUsage: (songs: Int, bytes: Int64)?
     /// What's new, opened by tapping the version.
     @State private var patchNotes: [PatchNotes.Entry] = []
     private var library: Library { .shared }
@@ -92,10 +94,51 @@ struct SettingsView: View {
                     .disabled(library.downloaded.isEmpty)
                 }
 
+                section("Song cache") {
+                    Text("Songs you've played are kept on your iPhone, so they start right away next time and use no data. The ones played longest ago make room for new ones.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.bottom, 4)
+                    HStack {
+                        Text("Keep up to").font(.system(size: 15, weight: .semibold))
+                        Spacer()
+                        Picker("Keep up to", selection: $settings.songCacheMB) {
+                            Text("Off").tag(0)
+                            Text("500 MB").tag(500)
+                            Text("1 GB").tag(1024)
+                            Text("2 GB").tag(2048)
+                            Text("5 GB").tag(5120)
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.muted)
+                    }
+                    HStack {
+                        Text("Used").font(.system(size: 15, weight: .semibold))
+                        Spacer()
+                        Text(cacheUsage.map { "\($0.songs) songs · \(ByteCountFormatter.string(fromByteCount: $0.bytes, countStyle: .file))" } ?? "–")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .padding(.vertical, 6)
+                    Button(role: .destructive) {
+                        Task {
+                            await PlayCache.shared.clear()
+                            cacheUsage = await PlayCache.shared.usage()
+                        }
+                    } label: {
+                        Text("Clear song cache")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0xFF6B5B))
+                            .frame(height: 44)
+                    }
+                    .disabled((cacheUsage?.songs ?? 0) == 0)
+                }
+                .task(id: settings.songCacheMB) { cacheUsage = await PlayCache.shared.usage() }
+
                 section("Profile") {
                     NavigationLink(value: Route.profile) {
                         HStack {
-                            Text(SocialStore.shared.me.map { "@\($0.username)" } ?? "Create a profile")
+                            Text(SocialStore.shared.me.map { "\($0.name) (@\($0.username))" } ?? "Create a profile")
                                 .font(.system(size: 15, weight: .semibold))
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(Theme.muted)

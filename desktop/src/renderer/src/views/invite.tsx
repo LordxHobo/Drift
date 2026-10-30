@@ -9,6 +9,7 @@ import { playList } from '../player'
 import { jamStore, joinSession, startSession } from '../jam'
 import { resized } from '../util'
 import { UserAvatar } from './social'
+import { nameOf } from '@shared/types'
 
 const cleanMessage = (e: unknown): string =>
   e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'That didn’t work.'
@@ -60,7 +61,7 @@ export function InviteDialog(): JSX.Element | null {
       if (!code) throw new Error('Couldn’t start a session.')
       const ids = [...picked]
       const failed = await drift.jamInvite(ids, code, track)
-      const names = (ids: string[]): string => ids.map((id) => invitable.find((f) => f.id === id)?.username ?? 'someone').join(', ')
+      const names = (ids: string[]): string => ids.map((id) => (invitable.find((f) => f.id === id) ? nameOf(invitable.find((f) => f.id === id)!) : 'someone')).join(', ')
       if (failed.length) toast(`Drift’s server refused the invite to ${names(failed)}. They may have turned invites off or stopped following you, or the security rules need updating.`)
       const sent = ids.filter((id) => !failed.includes(id))
       if (sent.length) toast(`Invited ${names(sent)} to listen together`)
@@ -98,7 +99,7 @@ export function InviteDialog(): JSX.Element | null {
               invitable.map((f) => (
                 <label key={f.id} className="collab-row">
                   <UserAvatar user={f} size={30} />
-                  <span className="collab-name">{f.username}</span>
+                  <span className="collab-name">{nameOf(f)}</span>
                   <input
                     type="checkbox"
                     checked={picked.has(f.id)}

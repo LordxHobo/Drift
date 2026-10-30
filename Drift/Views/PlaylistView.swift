@@ -22,6 +22,12 @@ struct PlaylistView: View {
     private var downloads: DownloadManager { .shared }
     private var accent: Color { AppSettings.shared.accent }
 
+    /// A collaborative playlist's id (nil for everything else).
+    private var collabID: UUID? {
+        if case .playlist(let id) = kind, library.playlist(id)?.collab != nil { return id }
+        return nil
+    }
+
     private var title: String {
         switch kind {
         case .liked: "Liked songs"
@@ -160,6 +166,21 @@ struct PlaylistView: View {
                 .presentationDetents([.medium])
         }
         .onAppear { sort = SongSort.saved(for: listKey) }
+        // A shared playlist on screen: the others' changes show up within a few seconds.
+        .task(id: collabID) {
+            guard let collabID else { return }
+            CollabSync.shared.watching = collabID
+            await withTaskCancellationHandler {
+                while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
+            } onCancel: {
+                Task { @MainActor in
+                    if CollabSync.shared.watching == collabID { CollabSync.shared.watching = nil }
+                }
+            }
+        }
+        .refreshable {
+            if collabID != nil { await CollabSync.shared.syncNow() }
+        }
         .onChange(of: library.playlists.count) { _, _ in
             // Playlist deleted from the edit sheet: go back to the library.
             if case .playlist(let id) = kind, library.playlist(id) == nil { dismiss() }
@@ -214,8 +235,8 @@ struct PlaylistView: View {
             guard let p = library.playlist(id) else { return nil }
             if p.isAlbum == true { return p.albumArtist ?? "Album" }
             if let c = p.collab { return "Collaborative · \(c.names(me: SocialStore.shared.me?.id))" }
-            return SocialStore.shared.me?.username ?? "Playlist"
-        case .liked: return SocialStore.shared.me?.username
+            return SocialStore.shared.me?.name ?? "Playlist"
+        case .liked: return SocialStore.shared.me?.name
         case .downloads: return nil
         }
     }

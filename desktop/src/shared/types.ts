@@ -200,6 +200,8 @@ export interface Account {
   linked: boolean
   uid?: string
   username?: string
+  /** Shown instead of the username when set. */
+  displayName?: string
   /** Profile photo as a data URL. */
   avatar?: string
   syncing: boolean
@@ -328,6 +330,21 @@ export interface UserProfile {
   jam?: string | null
   /** Friends may invite them to listen together (null = yes, the default). */
   allowInvites?: boolean | null
+  /** The name shown everywhere (capitals, spaces, emoji welcome); the username stays unique. */
+  displayName?: string | null
+}
+
+/** What to call someone: their display name, or their username until they set one. */
+export function nameOf(u: { username: string; displayName?: string | null }): string {
+  return u.displayName?.trim() || u.username
+}
+
+/** Display names: one line, at most this many characters (same as the phone). */
+export const displayNameLimit = 30
+
+/** For searching: lowercase, without accents ("João" is found by "joao"), like the phone. */
+export function searchKey(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
 /** An invite to listen together, from a friend. */
@@ -456,6 +473,8 @@ export interface DriftApi {
   collabLeave(playlistId: string): Promise<void>
   collabStop(playlistId: string): Promise<void>
   collabSync(): Promise<void>
+  /** A shared playlist on screen (checked every few seconds), or null. */
+  collabWatch(id: string | null): Promise<void>
   /** Swaps the song at a place in a playlist (or Liked songs) for another version. */
   replaceTrack(place: { playlistId: string } | { liked: true }, index: number, oldId: string, track: Track): Promise<void>
   lyrics(track: Track): Promise<Lyrics>
@@ -527,7 +546,7 @@ export interface DriftApi {
   /** Clears an invite once answered. */
   jamInviteAnswered(invite: JamInvite): Promise<void>
   usernameAvailable(name: string): Promise<boolean | null>
-  updateProfile(change: { username?: string; avatar?: string | null }): Promise<UserProfile | null>
+  updateProfile(change: { username?: string; displayName?: string; avatar?: string | null }): Promise<UserProfile | null>
   setPrivateSession(on: boolean): Promise<void>
   playerState(state: PlayerPresence): Promise<void>
   connections(): Promise<ConnectionsStatus>
@@ -557,7 +576,7 @@ export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
-  'prepare', 'prefetch', 'jamStart', 'jamJoin', 'jamLeave', 'jamPublish', 'jamState', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
+  'prepare', 'prefetch', 'jamStart', 'jamJoin', 'jamLeave', 'jamPublish', 'jamState', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'collabWatch', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
   'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',

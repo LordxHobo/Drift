@@ -131,6 +131,7 @@ const api: DriftApi = {
   collabLeave: (id) => collab.leave(id),
   collabStop: (id) => collab.stop(id),
   collabSync: () => collab.syncNow(),
+  collabWatch: async (id) => collab.watch(id),
   searchYouTube: (q, more) => searchYouTube(q, more),
   versions: (q) => yt.versions(q),
   replaceTrack: async (place, index, oldId, track) => {

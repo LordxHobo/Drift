@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct DriftApp: App {
     init() {
+        // Older builds kept everything in Documents (now shown in the Files app): move Drift's own files.
+        AppFiles.migrate()
         Player.shared.configureAudioSession()
         // Make sure the library is loaded before the first screen.
         _ = Library.shared

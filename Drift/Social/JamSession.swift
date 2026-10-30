@@ -117,7 +117,7 @@ final class JamSession {
     }
 
     func start() async throws {
-        guard let me, let name = SocialStore.shared.me?.username else { throw JamError.noProfile }
+        guard let me, let name = SocialStore.shared.me?.name else { throw JamError.noProfile }
         if state != nil { await leave() }
         let letters = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
         for _ in 0..<5 {
@@ -141,7 +141,7 @@ final class JamSession {
     }
 
     func join(_ raw: String) async throws {
-        guard let me, let name = SocialStore.shared.me?.username else { throw JamError.noProfile }
+        guard let me, let name = SocialStore.shared.me?.name else { throw JamError.noProfile }
         let code = raw.uppercased().filter { $0.isLetter || $0.isNumber }
         if state?.code == code { return }
         if state != nil { await leave() }
@@ -300,6 +300,9 @@ final class JamSession {
     /// Runs twice a second while in a session.
     private func tick() {
         guard let s = state, Date() >= applyingUntil else { return }
+        // Still opening the song (or waiting for its first audio): nothing to tell the others yet. While
+        // loading, the player looks paused at 0:00, which would pull everyone back to the start.
+        if player.isLoading || (player.isBuffering && player.audioClock.time < 0.5) { return }
         let sig = signature(player.current, localPlaying, localQueue)
         if sig != lastSignature {
             // A song ended by itself and the next one started: the host announces it, everyone else waits.

@@ -4,8 +4,7 @@ import { join } from 'node:path'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type {
-  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, PlaylistChange, Settings, Track
-} from '@shared/types'
+  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, PlaylistChange, Settings, Track, CoverStyle } from '@shared/types'
 import { nowApple } from '@shared/types'
 
 const path = (name: string): string => join(app.getPath('userData'), name)
@@ -208,6 +207,17 @@ export function updatePlaylist(id: string, change: PlaylistChange): void {
   if (change.colorIndex !== undefined) p.colorIndex = change.colorIndex
   if (change.cover !== undefined) p.cover = change.cover
   if (change.isPublic !== undefined) p.isPublic = change.isPublic
+  save()
+}
+
+/** A collaborative playlist's cover as someone else set it (colour, symbol or photo). */
+export function setCollabCover(id: string, c: { coverStyle: CoverStyle; coverSymbol: string | null; colorIndex: number; cover: string | null }): void {
+  const p = playlist(id)
+  if (!p) return
+  p.colorIndex = c.colorIndex
+  p.coverSymbol = c.coverSymbol
+  p.cover = c.coverStyle === 'photo' ? c.cover ?? p.cover ?? null : p.cover
+  p.coverStyle = c.coverStyle === 'photo' && !p.cover ? 'auto' : c.coverStyle
   save()
 }
 

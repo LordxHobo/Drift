@@ -47,6 +47,13 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
   const music = useMusic()
   const p = lib.playlists.find((x) => x.id === id)
   const [sort, onSort] = useSort(id)
+  // A shared playlist on screen: the others' changes (songs, name, cover) show up within a few seconds.
+  const shared = !!p?.collab
+  useEffect(() => {
+    if (!shared) return
+    void drift.collabWatch(id)
+    return () => void drift.collabWatch(null)
+  }, [id, shared])
   if (!p) return <div className="empty">This playlist was deleted.</div>
   // Albums keep their track order; playlists can be sorted by any column.
   const sortBy = p.isAlbum ? null : sort
@@ -57,7 +64,7 @@ export function PlaylistPage({ id }: { id: string }): JSX.Element {
     ? p.albumArtist ?? ''
     : p.collab
       ? `Collaborative · ${collabNames(p, account.uid)}`
-      : account.username ?? 'You'
+      : account.displayName || account.username || 'You'
   return (
     <div className="page">
       <CollectionHeader
@@ -111,7 +118,7 @@ export function LikedPage(): JSX.Element {
         seed="liked"
         kind="Playlist"
         title={music ? 'Liked Songs' : 'Liked songs'}
-        subtitle={account.username ?? 'You'}
+        subtitle={account.displayName || account.username || 'You'}
         meta={`${plural(lib.liked.length, 'song')}, ${formatTotal(lib.liked)}`}
         tracks={playOrder}
         context={{ kind: 'liked', id: 'liked', name: 'Liked songs' }}

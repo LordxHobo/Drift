@@ -225,7 +225,7 @@ final class SpotifyWebReader: NSObject, WKScriptMessageHandler, WKNavigationDele
 
     /// A short record of the last import's reading (Files app → Drift → spotify-import.log).
     private static func saveLog(_ lines: [String]) {
-        let url = URL.documentsDirectory.appending(path: "spotify-import.log")
+        let url = AppFiles.data.appending(path: "spotify-import.log")
         try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 

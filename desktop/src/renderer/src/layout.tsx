@@ -20,6 +20,7 @@ import { FriendActivityPanel } from './views/social'
 import { SpeedButton } from './views/podcasts'
 import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
+import { nameOf } from '@shared/types'
 
 const createItems = (): MenuItem[] => [
   { label: 'New playlist…', icon: 'plus', action: () => newPlaylist([]) },
@@ -247,13 +248,13 @@ function ProfileButton(): JSX.Element {
   return (
     <button
       className="profile-btn"
-      title={account.username ?? 'Profile'}
+      title={account.displayName || account.username || 'Profile'}
       aria-label="Profile and settings"
       onClick={(e) =>
         openMenuAt(e.currentTarget, [
           ...(account.linked
             ? [
-                { label: me ? `Your profile (${me.username})` : 'Your profile', icon: 'person', action: () => me && go({ name: 'user', id: me.id, hint: me }), disabled: !me },
+                { label: me ? `Your profile (${nameOf(me)})` : 'Your profile', icon: 'person', action: () => me && go({ name: 'user', id: me.id, hint: me }), disabled: !me },
                 { label: 'Friends', icon: 'person', action: () => go({ name: 'friends' }) },
                 {
                   label: 'Private session',
@@ -536,7 +537,7 @@ export function MusicSidebar(): JSX.Element {
       <UpdateButton className="m-update" />
       <button className="m-profile" onClick={() => go({ name: 'settings' })}>
         <Avatar size={28} />
-        <span>{account.username ?? 'Settings'}</span>
+        <span>{account.displayName || account.username || 'Settings'}</span>
         <Icon name="gear" size={16} />
       </button>
     </aside>
