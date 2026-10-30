@@ -2,6 +2,19 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 5,
+      "date": "2026-10-31",
+      "title": "A Drift button for your lock screen",
+      "notes": [
+        {
+          "text": "Lock screen widget: add Drift's logo to your lock screen and tap it to open the app. Hold the lock screen, tap Customize, then tap the widget area under the clock and pick Drift.",
+          "platforms": [
+            "ios"
+          ]
+        }
+      ]
+    },
+    {
       "id": 4,
       "date": "2026-10-30",
       "title": "Display names, a song cache, and smoother Listen Together",

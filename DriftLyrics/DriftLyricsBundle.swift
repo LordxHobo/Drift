@@ -6,6 +6,7 @@ import WidgetKit
 struct DriftLyricsBundle: WidgetBundle {
     var body: some Widget {
         LyricsLiveActivity()
+        DriftLauncherWidget()
     }
 }
 
