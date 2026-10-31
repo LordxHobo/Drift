@@ -7,6 +7,8 @@ import { editPlaylist } from './views/editPlaylist'
 import { openReplace } from './views/replace'
 import { openCollab } from './views/collab'
 import { openInvite } from './views/invite'
+import { openShare } from './views/share'
+import { moveToFolderItem } from './views/folders'
 import type { SongPlace } from './views/replace'
 import { addedText } from './sort'
 import type { Sort, SortClick, SortKey } from './sort'
@@ -195,6 +197,7 @@ export function trackMenu(t: Track, opts: { playlistId?: string; index?: number;
     { label: 'Go to artist', icon: 'mic', action: () => void goToArtist(t.artist), disabled: !t.artist },
     { label: 'Go to album', icon: 'album', action: () => void goToAlbum(t), disabled: !t.album },
     { label: 'Song details', icon: 'info', action: () => go({ name: 'song', track: t }) },
+    { label: 'Share…', icon: 'share', action: () => openShare(t) },
     { label: 'Copy link', icon: 'link', action: () => void navigator.clipboard.writeText(ytLink(t)).then(() => toast('Link copied')) },
     ...(opts.extra ?? [])
   ]
@@ -599,6 +602,7 @@ export function playlistMenu(p: Playlist): MenuItem[] {
     { label: 'Add to queue', icon: 'list', action: () => addToQueue(p.tracks) },
     { label: '', separator: true },
     { label: 'Edit details…', icon: 'edit', action: () => editPlaylist(p.id) },
+    moveToFolderItem(p),
     ...(p.isAlbum
       ? []
       : [{ label: p.collab ? 'Collaborators…' : 'Make collaborative…', icon: 'person', action: () => openCollab(p.id) }]),

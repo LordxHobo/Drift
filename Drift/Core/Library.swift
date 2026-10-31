@@ -11,12 +11,15 @@ final class Library {
     private(set) var liked: [Track] = []
     private(set) var recent: [Track] = []
     private(set) var downloaded: [Track] = []
+    private(set) var folders: [PlaylistFolder] = []
 
     private struct Stored: Codable {
         var playlists: [Playlist]
         var liked: [Track]
         var recent: [Track]
         var downloaded: [Track]
+        /// Optional so libraries saved by older builds still load.
+        var folders: [PlaylistFolder]?
     }
 
     @ObservationIgnored private let storeURL = AppFiles.data.appending(path: "library.json")
@@ -45,10 +48,11 @@ final class Library {
         liked = s.liked
         recent = s.recent
         downloaded = s.downloaded
+        folders = s.folders ?? []
     }
 
     private func save() {
-        let s = Stored(playlists: playlists, liked: liked, recent: recent, downloaded: downloaded)
+        let s = Stored(playlists: playlists, liked: liked, recent: recent, downloaded: downloaded, folders: folders)
         guard let data = try? JSONEncoder().encode(s) else { return }
         try? data.write(to: storeURL, options: .atomic)
         PlaylistSharing.shared.libraryChanged()
@@ -231,6 +235,55 @@ final class Library {
     func deletePlaylist(_ id: UUID) {
         if let file = playlist(id)?.coverFile { try? FileManager.default.removeItem(at: coversDirectory.appending(path: file)) }
         playlists.removeAll { $0.id == id }
+        save()
+    }
+
+    // MARK: Folders
+
+    func folder(_ id: UUID) -> PlaylistFolder? { folders.first { $0.id == id } }
+
+    /// Playlists in a folder (nil: the ones not in any folder).
+    func playlists(in folder: UUID?) -> [Playlist] {
+        let known = Set(folders.map(\.id))
+        return playlists.filter { p in
+            guard let f = p.folder, known.contains(f) else { return folder == nil }
+            return f == folder
+        }
+    }
+
+    @discardableResult
+    func createFolder(_ name: String) -> PlaylistFolder {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let f = PlaylistFolder(name: trimmed.isEmpty ? "New folder" : trimmed)
+        folders.append(f)
+        save()
+        return f
+    }
+
+    func renameFolder(_ id: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = folders.firstIndex(where: { $0.id == id }) else { return }
+        folders[i].name = trimmed
+        save()
+    }
+
+    /// Deletes a folder. Its playlists stay in Your Library, outside any folder.
+    func deleteFolder(_ id: UUID) {
+        folders.removeAll { $0.id == id }
+        for i in playlists.indices where playlists[i].folder == id { playlists[i].folder = nil }
+        save()
+    }
+
+    /// Puts a playlist in a folder (nil: takes it out).
+    func move(_ playlist: UUID, toFolder folder: UUID?) {
+        guard let i = playlists.firstIndex(where: { $0.id == playlist }), playlists[i].folder != folder else { return }
+        playlists[i].folder = folder
+        save()
+    }
+
+    /// Folders from your other devices (library sync).
+    func replaceFolders(_ list: [PlaylistFolder]) {
+        folders = list
         save()
     }
 

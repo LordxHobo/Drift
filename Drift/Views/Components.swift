@@ -4,6 +4,8 @@ enum Route: Hashable {
     case liked
     case downloads
     case playlist(UUID)
+    case folder(UUID)
+    case stats
     case settings
     case channel(PodcastChannel)
     case profile
@@ -31,6 +33,8 @@ extension View {
             case .liked: PlaylistView(kind: .liked)
             case .downloads: PlaylistView(kind: .downloads)
             case .playlist(let id): PlaylistView(kind: .playlist(id))
+            case .folder(let id): FolderView(id: id)
+            case .stats: StatsView()
             case .channel(let c): ChannelView(channel: c)
             case .profile: ProfileView()
             case .friends: FriendsView()
@@ -329,6 +333,10 @@ struct TrackMenuItems: View {
         } label: { Label("Play next", systemImage: "text.insert") }
 
         Button {
+            Player.shared.addToQueue(track)
+        } label: { Label("Add to queue", systemImage: "text.append") }
+
+        Button {
             library.toggleLike(track)
         } label: {
             library.isLiked(track.id)
@@ -339,6 +347,10 @@ struct TrackMenuItems: View {
         Button {
             UIState.shared.addToPlaylist = track
         } label: { Label("Add to playlist", systemImage: "text.badge.plus") }
+
+        Button {
+            UIState.shared.shareTrack = track
+        } label: { Label("Share", systemImage: "square.and.arrow.up") }
 
         if SocialStore.shared.me != nil {
             Button {

@@ -6,6 +6,7 @@ struct LibraryView: View {
     @State private var editing: Playlist?
     @State private var showImport = false
     @State private var openPlaylist: UUID?
+    @State private var folderRequest: FolderRequest?
     private var library: Library { .shared }
 
     var body: some View {
@@ -28,6 +29,9 @@ struct LibraryView: View {
                         newName = ""
                         showNew = true
                     } label: { Label("New playlist", systemImage: "music.note.list") }
+                    Button {
+                        folderRequest = .new(moving: nil)
+                    } label: { Label("New folder", systemImage: "folder.badge.plus") }
                     Button {
                         showImport = true
                     } label: { Label("Import from Spotify", systemImage: "square.and.arrow.down") }
@@ -56,7 +60,24 @@ struct LibraryView: View {
                 }
                 .listRowBackground(Theme.bg)
 
-                ForEach(library.playlists) { p in
+                ForEach(library.folders) { f in
+                    NavigationLink(value: Route.folder(f.id)) {
+                        row(title: f.name, subtitle: "Folder · \(library.playlists(in: f.id).count) playlists") {
+                            FolderTile(size: 64)
+                        }
+                    }
+                    .listRowBackground(Theme.bg)
+                    .contextMenu {
+                        Button {
+                            folderRequest = .rename(f.id)
+                        } label: { Label("Rename folder", systemImage: "pencil") }
+                        Button(role: .destructive) {
+                            library.deleteFolder(f.id)
+                        } label: { Label("Delete folder (keeps its playlists)", systemImage: "trash") }
+                    }
+                }
+
+                ForEach(library.playlists(in: nil)) { p in
                     NavigationLink(value: Route.playlist(p.id)) {
                         row(title: p.name, subtitle: "Playlist · \(p.tracks.count) songs") {
                             PlaylistArt(playlist: p, size: 64, corner: 0)
@@ -67,6 +88,7 @@ struct LibraryView: View {
                         Button {
                             editing = p
                         } label: { Label("Edit playlist", systemImage: "pencil") }
+                        MoveToFolderMenu(playlist: p) { folderRequest = .new(moving: p.id) }
                         Button(role: .destructive) {
                             library.deletePlaylist(p.id)
                         } label: { Label("Delete playlist", systemImage: "trash") }
@@ -124,6 +146,7 @@ struct LibraryView: View {
         .sheet(item: $editing) { p in
             EditPlaylistView(playlist: p)
         }
+        .folderNameAlert($folderRequest)
     }
 
     private func row<Art: View>(title: String, subtitle: String, @ViewBuilder art: () -> Art) -> some View {

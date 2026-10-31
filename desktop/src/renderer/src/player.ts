@@ -226,6 +226,7 @@ export function setSpeed(speed: number): void {
 
 async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
   const token = ++loadToken
+  newListen()
   saveEpisodeProgress()
   if (t.podcast && at === 0) at = resumePosition(t)
   audio.pause()
@@ -384,6 +385,11 @@ audio.addEventListener('playing', () => {
 })
 audio.addEventListener('pause', () => {
   patch({ playing: false })
+  const t = playerStore.get().current
+  if (t && !t.podcast && listen.id === t.id && listen.secs >= 30 && listen.secs > listen.reported) {
+    listen.reported = listen.secs
+    void drift.listened(t, listen.key, listen.secs).catch(() => undefined)
+  }
   saveEpisodeProgress()
 })
 audio.addEventListener('waiting', () => patch({ loading: true }))
@@ -413,7 +419,41 @@ function saveEpisodeProgress(force = true): void {
   void drift.episodeProgress(t, audio.currentTime, d)
 }
 
+// Listening stats: how long the current song has really been listened to (paused, buffering and
+// jumps don't count). Reported every 10 s once it's been 30 s; one listen per time a song starts.
+const listen = { key: '', id: '', secs: 0, last: 0, reported: 0 }
+
+function trackListening(): void {
+  const t = playerStore.get().current
+  if (!t || t.podcast || audio.paused) {
+    listen.last = 0
+    return
+  }
+  if (listen.id !== t.id) {
+    listen.key = `${Date.now()}-${t.id}`
+    listen.id = t.id
+    listen.secs = 0
+    listen.reported = 0
+  }
+  const now = performance.now()
+  if (listen.last && now - listen.last < 2000) listen.secs += (now - listen.last) / 1000
+  listen.last = now
+  if (listen.secs >= 30 && listen.secs - listen.reported >= 10) {
+    listen.reported = listen.secs
+    void drift.listened(t, listen.key, listen.secs).catch(() => undefined)
+  }
+}
+
+/** A new song (or the same one again) is starting: it's a new listen. */
+function newListen(): void {
+  const t = playerStore.get().current
+  if (t && !t.podcast && listen.secs >= 30 && listen.secs > listen.reported) void drift.listened(t, listen.key, listen.secs).catch(() => undefined)
+  listen.id = ''
+  listen.last = 0
+}
+
 audio.addEventListener('timeupdate', () => {
+  trackListening()
   positionStore.set(audio.currentTime)
   updatePositionState()
   checkSkip(audio.currentTime)

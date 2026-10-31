@@ -1,5 +1,6 @@
 // Shapes shared by the main process and the window. Tracks, playlists and followed artists use the
 // same JSON as the phone app, so they sync both ways without conversion.
+import type { PlayRecord } from './stats'
 
 /** A song (backed by a YouTube video ID). Unknown fields from the phone are kept as they are. */
 export interface Track {
@@ -48,6 +49,14 @@ export interface Playlist {
   cover?: string | null
   /** Collaborative: shared with friends who can add, remove and move songs too. */
   collab?: CollabInfo | null
+  /** The folder it's in (Your Library), if any. */
+  folder?: string | null
+}
+
+/** A folder of playlists in Your Library. Upper-case UUID, same as on the phone. */
+export interface PlaylistFolder {
+  id: string
+  name: string
 }
 
 export interface CollabInfo {
@@ -140,6 +149,7 @@ export interface Library {
   artists: FollowedArtist[]
   /** Recently played on this computer (not synced). */
   recent: Track[]
+  folders?: PlaylistFolder[]
 }
 
 export type UIStyle = 'drift' | 'music'
@@ -492,10 +502,18 @@ export interface DriftApi {
   renamePlaylist(id: string, name: string): Promise<void>
   updatePlaylist(id: string, change: PlaylistChange): Promise<void>
   deletePlaylist(id: string): Promise<void>
+  /** Folders of playlists: make one (with playlists already in it), rename, delete (its playlists stay), move a playlist in or out. */
+  createFolder(name: string, playlistIds: string[]): Promise<string>
+  renameFolder(id: string, name: string): Promise<void>
+  deleteFolder(id: string): Promise<void>
+  setPlaylistFolder(playlistId: string, folderId: string | null): Promise<void>
   saveAlbum(page: AlbumPage): Promise<string>
   follow(artist: ArtistRef, page: ArtistPage | null): Promise<void>
   unfollow(id: string): Promise<void>
   played(track: Track): Promise<void>
+  /** Listening stats: how long a song has been listened to so far (`key` is one listen of it), and every play you've made. */
+  listened(track: Track, key: string, secs: number): Promise<void>
+  listeningHistory(): Promise<{ plays: PlayRecord[]; devices: number }>
   checkNewReleases(): Promise<void>
 
   settings(): Promise<Settings>
@@ -577,7 +595,7 @@ export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
   'prepare', 'prefetch', 'jamStart', 'jamJoin', 'jamLeave', 'jamPublish', 'jamState', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'collabWatch', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
-  'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'saveAlbum', 'follow', 'unfollow', 'played',
+  'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'createFolder', 'renameFolder', 'deleteFolder', 'setPlaylistFolder', 'saveAlbum', 'follow', 'unfollow', 'played', 'listened', 'listeningHistory',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
   'startImport', 'importState', 'retryMissing', 'notifications', 'markNotificationsRead', 'removeNotification', 'retryReport', 'clearImport',

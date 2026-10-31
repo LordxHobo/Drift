@@ -106,6 +106,8 @@ final class LibrarySync {
             guard let name = (doc["name"] as? String)?.split(separator: "/").last.map(String.init) else { continue }
             let f = doc["fields"] as? [String: Any]
             let updatedAt = FV.int(f, "updatedAt") ?? 0
+            // Listening history is read by the stats page, not synced into the library.
+            if name.hasPrefix("plays-") { continue }
             if let known = synced[name], known.updatedAt >= updatedAt { continue }
             if FV.bool(f, "deleted") == true {
                 applyDeletion(name)
@@ -128,6 +130,7 @@ final class LibrarySync {
         var items: [(String, String)] = []   // (document, fingerprint)
         if let fp = currentFingerprint("liked") { items.append(("liked", fp)) }
         if let fp = currentFingerprint("artists") { items.append(("artists", fp)) }
+        if let fp = currentFingerprint("folders") { items.append(("folders", fp)) }
         let playlists = Library.shared.playlists
         // Collaborative playlists sync through their shared document instead (CollabSync).
         for p in playlists where p.collab == nil { items.append(("pl-\(p.id.uuidString)", Self.fingerprint(p, playlists))) }
@@ -165,6 +168,8 @@ final class LibrarySync {
             return Self.hash(Library.shared.liked.map(\.id).joined(separator: ","))
         case "artists":
             return Self.hash(ArtistStore.shared.followed.map(\.id).joined(separator: ","))
+        case "folders":
+            return Self.hash(Library.shared.folders.map { "\($0.id.uuidString):\($0.name)" }.joined(separator: ","))
         default:
             let playlists = Library.shared.playlists
             guard let id = UUID(uuidString: String(name.dropFirst(3))),
@@ -176,7 +181,7 @@ final class LibrarySync {
     private static func fingerprint(_ p: Playlist, _ all: [Playlist]) -> String {
         let position = all.firstIndex(where: { $0.id == p.id }) ?? 0
         let s = [String(position), p.name, p.style.rawValue, String(p.colorIndex), p.symbol, p.coverFile ?? "",
-                 String(p.isShared), String(p.isAlbum == true), p.albumArtist ?? ""].joined(separator: "|")
+                 String(p.isShared), String(p.isAlbum == true), p.albumArtist ?? "", p.folder?.uuidString ?? ""].joined(separator: "|")
             + "|" + p.tracks.map(\.id).joined(separator: ",")
         return hash(s)
     }
@@ -217,6 +222,10 @@ final class LibrarySync {
         case "artists":
             guard let d = try? JSONEncoder().encode(ArtistStore.shared.followed) else { return nil }
             f["artists"] = FV.s(String(decoding: d, as: UTF8.self))
+        case "folders":
+            let list = Library.shared.folders.map { ["id": $0.id.uuidString, "name": $0.name] }
+            guard let d = try? JSONSerialization.data(withJSONObject: list) else { return nil }
+            f["folders"] = FV.s(String(decoding: d, as: UTF8.self))
         default:
             let playlists = Library.shared.playlists
             guard let id = UUID(uuidString: String(name.dropFirst(3))),
@@ -231,6 +240,7 @@ final class LibrarySync {
             f["isPublic"] = FV.b(p.isShared)
             f["isAlbum"] = FV.b(p.isAlbum == true)
             if let a = p.albumArtist { f["albumArtist"] = FV.s(a) }
+            f["folder"] = FV.s(p.folder?.uuidString ?? "")
             if let cover = Library.shared.coverData(p), cover.count < 200_000 { f["cover"] = FV.bytes(cover) }
         }
         return f
@@ -256,8 +266,21 @@ final class LibrarySync {
             } else {
                 ArtistStore.shared.replaceFollowed(remote)
             }
+        case "folders":
+            guard let s = FV.string(f, "folders"),
+                  let list = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [[String: Any]] else { return }
+            let remote = list.compactMap { d -> PlaylistFolder? in
+                guard let raw = d["id"] as? String, let id = UUID(uuidString: raw), let name = d["name"] as? String else { return nil }
+                return PlaylistFolder(id: id, name: name)
+            }
+            if synced["folders"] == nil {
+                let ids = Set(remote.map(\.id))
+                Library.shared.replaceFolders(remote + Library.shared.folders.filter { !ids.contains($0.id) })
+            } else {
+                Library.shared.replaceFolders(remote)
+            }
         default:
-            guard let id = UUID(uuidString: String(name.dropFirst(3))),
+            guard name.hasPrefix("pl-"), let id = UUID(uuidString: String(name.dropFirst(3))),
                   Library.shared.playlist(id)?.collab == nil,
                   let title = FV.string(f, "name"),
                   let tracks = Self.decodeTracks(FV.string(f, "tracks")) else { return }
@@ -271,6 +294,7 @@ final class LibrarySync {
             p.isPublic = FV.bool(f, "isPublic")
             p.isAlbum = FV.bool(f, "isAlbum") == true ? true : nil
             p.albumArtist = FV.string(f, "albumArtist")
+            p.folder = FV.string(f, "folder").flatMap { UUID(uuidString: $0) }
             Library.shared.applyRemotePlaylist(p, cover: FV.data(f, "cover"), position: FV.int(f, "position") ?? 0)
         }
     }

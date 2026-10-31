@@ -163,6 +163,61 @@ final class Player {
         }
     }
 
+    /// The songs after the one playing (the queue view).
+    var upNext: [Track] { queue.indices.contains(index) ? Array(queue[(index + 1)...]) : [] }
+
+    /// Adds a song to the end of the queue.
+    func addToQueue(_ t: Track) {
+        guard current != nil else { play([t], from: "Queue"); return }
+        queue.append(t)
+        originalQueue.append(t)
+        saveSession()
+    }
+
+    /// Plays a song from further down the queue (the queue view).
+    func jump(to i: Int) {
+        guard queue.indices.contains(i), i != index else { return }
+        index = i
+        load()
+    }
+
+    /// Moves songs in Up next (offsets count from the song after the current one).
+    func moveUpNext(from: IndexSet, to: Int) {
+        guard queue.indices.contains(index) else { return }
+        let base = index + 1
+        var rest = Array(queue[base...])
+        rest.move(fromOffsets: from, toOffset: to)
+        queue = Array(queue[..<base]) + rest
+        if !shuffle { originalQueue = queue }
+        saveSession()
+    }
+
+    /// Removes songs from Up next (offsets count from the song after the current one).
+    func removeUpNext(at offsets: IndexSet) {
+        guard queue.indices.contains(index) else { return }
+        let base = index + 1
+        var rest = Array(queue[base...])
+        let removed = offsets.filter { rest.indices.contains($0) }.map { rest[$0] }
+        rest.remove(atOffsets: offsets)
+        queue = Array(queue[..<base]) + rest
+        if shuffle {
+            for t in removed {
+                if let j = originalQueue.lastIndex(where: { $0.id == t.id }) { originalQueue.remove(at: j) }
+            }
+        } else {
+            originalQueue = queue
+        }
+        saveSession()
+    }
+
+    /// Empties Up next (the current song keeps playing).
+    func clearUpNext() {
+        guard queue.indices.contains(index) else { return }
+        queue = Array(queue[...index])
+        originalQueue = queue
+        saveSession()
+    }
+
     func cycleRepeat() {
         switch repeatMode {
         case .off: repeatMode = .all
@@ -359,6 +414,7 @@ final class Player {
         updateCommands()
         lastProgressReport = -10
         if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
+        PlayHistory.shared.started(track)
         var resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
         if let p = pendingResume, p.id == track.id { resumeAt = p.time }
         pendingResume = nil
@@ -744,6 +800,7 @@ final class Player {
         guard t.isFinite, av.currentItem != nil else { return }
         currentTime = t
         LyricsActivity.shared.tick(t)
+        PlayHistory.shared.tick(playing: isPlaying && !isBuffering)
         if knownDuration == nil, let d = av.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duration) > 0.5 {
             duration = d
             updateNowPlaying()

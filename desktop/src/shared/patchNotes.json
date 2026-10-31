@@ -2,6 +2,36 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 6,
+      "date": "2026-10-31",
+      "title": "Queue, folders, sharing and your listening stats",
+      "notes": [
+        {
+          "text": "Queue: tap the list button in the player to see what's next. Tap a song to play it, hold and drag to move it, swipe to remove it. Songs also have Add to queue now.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Playlist folders: group playlists in Your Library. Make one with + (New folder), then hold a playlist and pick Move to folder. Folders sync with your computer.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Playlist folders: group playlists in Your Library. Make one with + (New folder), then right-click a playlist and pick Move to folder. Folders sync with your phone.",
+          "platforms": ["desktop"]
+        },
+        {
+          "text": "Share a song: pick Share in a song's menu to send a link, or a picture of the song (cover, title and artist) for a story or a chat."
+        },
+        {
+          "text": "Listening stats: your minutes, top artists and top songs for the last 4 weeks, 6 months, this year or all time. Open the menu with your profile picture. Songs count from now on, once you've listened for 30 seconds, and your phone and computer add up.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Listening stats: your minutes, top artists and top songs for the last 4 weeks, 6 months, this year or all time. Find it in your profile menu (top right), or in the sidebar in the Apple Music style. Songs count from now on, once you've listened for 30 seconds, and your phone and computer add up.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 5,
       "date": "2026-10-31",
       "title": "A Drift button for your lock screen",

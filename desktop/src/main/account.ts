@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { createDecipheriv, createECDH, hkdfSync, randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
-import type { Account, FollowedArtist, PairingState, Playlist, Track } from '@shared/types'
+import type { Account, FollowedArtist, PairingState, Playlist, PlaylistFolder, Track } from '@shared/types'
 import { Auth, Firestore, FV, docName, deleteSession, loadSession, saveSession, FirebaseError } from './firebase'
 import * as store from './store'
 import { artistPage } from './ytmusic'
@@ -167,7 +167,7 @@ function hash(s: string): string {
 function playlistFingerprint(p: Playlist, position: number): string {
   return hash(
     [position, p.name, p.coverStyle ?? 'auto', p.colorIndex, p.coverSymbol ?? '', p.cover ? `${p.cover.length}:${p.cover.slice(-16)}` : '',
-      p.isPublic ?? true, p.isAlbum === true, p.albumArtist ?? ''].join('|') +
+      p.isPublic ?? true, p.isAlbum === true, p.albumArtist ?? '', p.folder ?? ''].join('|') +
       '|' + p.tracks.map((t) => t.id).join(',')
   )
 }
@@ -176,6 +176,7 @@ function currentFingerprint(name: string): string | undefined {
   const lib = store.getLibrary()
   if (name === 'liked') return hash(lib.liked.map((t) => t.id).join(','))
   if (name === 'artists') return hash(lib.artists.map((a) => a.artist.id).join(','))
+  if (name === 'folders') return hash((lib.folders ?? []).map((f) => `${f.id}:${f.name}`).join(','))
   const i = lib.playlists.findIndex((p) => `pl-${p.id}` === name)
   return i >= 0 ? playlistFingerprint(lib.playlists[i], i) : undefined
 }
@@ -204,6 +205,8 @@ async function pull(uid: string): Promise<void> {
   for (const doc of docs) {
     const name = docName(doc)
     const updatedAt = FV.int(doc.fields, 'updatedAt') ?? 0
+    // Listening history is read by the stats page, not synced into the library.
+    if (name.startsWith('plays-')) continue
     const known = synced[name]
     if (known && known.updatedAt >= updatedAt) continue
     if (FV.bool(doc.fields, 'deleted') === true) {
@@ -247,6 +250,21 @@ function apply(name: string, f: any): void {
     } else {
       store.replaceFollowed(remote)
     }
+  } else if (name === 'folders') {
+    let remote: PlaylistFolder[]
+    try {
+      remote = JSON.parse(FV.string(f, 'folders') ?? '')
+    } catch {
+      return
+    }
+    if (!Array.isArray(remote)) return
+    remote = remote.filter((x) => typeof x?.id === 'string' && typeof x?.name === 'string').map((x) => ({ id: x.id, name: x.name }))
+    if (!synced.folders) {
+      const ids = new Set(remote.map((x) => x.id))
+      store.replaceFolders([...remote, ...(lib.folders ?? []).filter((x) => !ids.has(x.id))])
+    } else {
+      store.replaceFolders(remote)
+    }
   } else if (name.startsWith('pl-')) {
     // Collaborative playlists sync through their shared document instead.
     if (lib.playlists.some((x) => x.id === name.slice(3) && x.collab)) return
@@ -264,7 +282,8 @@ function apply(name: string, f: any): void {
       isPublic: FV.bool(f, 'isPublic') ?? null,
       isAlbum: FV.bool(f, 'isAlbum') === true ? true : null,
       albumArtist: FV.string(f, 'albumArtist') ?? null,
-      cover: FV.data(f, 'cover') ?? null
+      cover: FV.data(f, 'cover') ?? null,
+      folder: FV.string(f, 'folder') || null
     }
     store.applyRemotePlaylist(p, FV.int(f, 'position') ?? 0)
   }
@@ -277,6 +296,8 @@ function documentFields(name: string, updatedAt: number): Record<string, unknown
     f.tracks = FV.s(tracksJSON(lib.liked))
   } else if (name === 'artists') {
     f.artists = FV.s(JSON.stringify(lib.artists))
+  } else if (name === 'folders') {
+    f.folders = FV.s(JSON.stringify((lib.folders ?? []).map((x) => ({ id: x.id, name: x.name }))))
   } else {
     const i = lib.playlists.findIndex((p) => `pl-${p.id}` === name)
     if (i < 0) return undefined
@@ -290,6 +311,7 @@ function documentFields(name: string, updatedAt: number): Record<string, unknown
     f.isPublic = FV.b(p.isPublic ?? true)
     f.isAlbum = FV.b(p.isAlbum === true)
     if (p.albumArtist) f.albumArtist = FV.s(p.albumArtist)
+    f.folder = FV.s(p.folder ?? '')
     if (p.cover && p.cover.length < 270_000) f.cover = FV.bytes(p.cover)
   }
   return f
@@ -299,7 +321,7 @@ async function push(uid: string): Promise<void> {
   const now = Date.now()
   const lib = store.getLibrary()
   const items: [string, string][] = []
-  for (const name of ['liked', 'artists']) {
+  for (const name of ['liked', 'artists', 'folders']) {
     const fp = currentFingerprint(name)
     if (fp) items.push([name, fp])
   }

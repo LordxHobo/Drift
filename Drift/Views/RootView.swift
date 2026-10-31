@@ -91,6 +91,7 @@ struct RootView: View {
             if phase == .background {
                 player.savePosition()
                 PodcastStore.shared.flush()
+                PlayHistory.shared.flush()
                 LyricsActivity.shared.appWentToBackground(playing: player.isPlaying)
             }
         }

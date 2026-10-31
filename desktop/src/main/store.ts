@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type {
-  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, PlaylistChange, Settings, Track, CoverStyle } from '@shared/types'
+  AlbumPage, ArtistPage, ArtistRef, DriftEvent, FollowedArtist, Library, NewRelease, Playlist, PlaylistChange, PlaylistFolder, Settings, Track, CoverStyle } from '@shared/types'
 import { nowApple } from '@shared/types'
 
 const path = (name: string): string => join(app.getPath('userData'), name)
@@ -226,6 +226,45 @@ export function deletePlaylist(id: string, local = true): void {
   const before = lib.playlists.length
   lib.playlists = lib.playlists.filter((p) => p.id !== id)
   if (lib.playlists.length !== before) save(local)
+}
+
+// MARK: Folders
+
+export function createFolder(name: string, playlistIds: string[] = []): string {
+  const lib = getLibrary()
+  const f: PlaylistFolder = { id: randomUUID().toUpperCase(), name: name.trim() || 'New folder' }
+  lib.folders = [...(lib.folders ?? []), f]
+  for (const p of lib.playlists) if (playlistIds.includes(p.id)) p.folder = f.id
+  save()
+  return f.id
+}
+
+export function renameFolder(id: string, name: string): void {
+  const f = getLibrary().folders?.find((x) => x.id === id)
+  if (!f || !name.trim()) return
+  f.name = name.trim()
+  save()
+}
+
+/** Deletes a folder. Its playlists stay in Your Library, outside any folder. */
+export function deleteFolder(id: string): void {
+  const lib = getLibrary()
+  lib.folders = (lib.folders ?? []).filter((f) => f.id !== id)
+  for (const p of lib.playlists) if (p.folder === id) p.folder = null
+  save()
+}
+
+export function setPlaylistFolder(playlistId: string, folderId: string | null): void {
+  const p = playlist(playlistId)
+  if (!p || (p.folder ?? null) === folderId) return
+  p.folder = folderId
+  save()
+}
+
+/** Folders from other devices (library sync). */
+export function replaceFolders(list: PlaylistFolder[]): void {
+  getLibrary().folders = list
+  save(false)
 }
 
 export function saveAlbum(page: AlbumPage): string {

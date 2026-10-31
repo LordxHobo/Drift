@@ -103,6 +103,7 @@ export type Route =
   | { name: 'lyrics' }
   | { name: 'settings' }
   | { name: 'friends' }
+  | { name: 'stats' }
   | { name: 'video' }
   | { name: 'podcasts'; q?: string }
   | { name: 'channel'; channel: PodcastChannel }

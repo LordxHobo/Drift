@@ -70,6 +70,8 @@ struct Playlist: Codable, Hashable, Identifiable {
     var albumArtist: String?
     /// Collaborative: shared with friends who can add, remove and move songs too.
     var collab: CollabInfo?
+    /// The folder it's in (Your Library), if any.
+    var folder: UUID?
 
     enum CoverStyle: String, Codable {
         case auto, color, photo
@@ -78,6 +80,12 @@ struct Playlist: Codable, Hashable, Identifiable {
     var style: CoverStyle { coverStyle ?? .auto }
     var symbol: String { coverSymbol ?? "music.note.list" }
     var isShared: Bool { isPublic ?? true }
+}
+
+/// A folder of playlists in Your Library.
+struct PlaylistFolder: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
 }
 
 func formatTime(_ t: Double) -> String {

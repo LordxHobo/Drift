@@ -21,9 +21,11 @@ import { SpeedButton } from './views/podcasts'
 import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 import { nameOf } from '@shared/types'
+import { folderMenu, newFolder, openFolder, playlistsIn, useOpenFolders } from './views/folders'
 
 const createItems = (): MenuItem[] => [
   { label: 'New playlist…', icon: 'plus', action: () => newPlaylist([]) },
+  { label: 'New folder…', icon: 'folder', action: () => newFolder() },
   { label: 'Import from Spotify…', icon: 'list', action: openImport }
 ]
 
@@ -47,6 +49,23 @@ export function DriftSidebar(): JSX.Element {
   const artists = filter === 'all' || filter === 'artists' ? lib.artists.filter((a) => match(a.artist.name)) : []
   const showLiked = (filter === 'all' || filter === 'playlists') && match('Liked songs')
   const downloads = useStore(downloadsStore)
+  const openFolders = useOpenFolders()
+  // Folders show (with their playlists inside) unless you're searching or looking at albums only.
+  const grouped = !q && filter !== 'albums' && filter !== 'artists'
+  const folders = grouped ? lib.folders ?? [] : []
+  const topPlaylists = grouped ? playlistsIn(lib, null, playlists) : playlists
+  const playlistRow = (p: Playlist, nested = false): JSX.Element => (
+    <LibRow
+      key={p.id}
+      nested={nested}
+      on={same(route, { name: 'playlist', id: p.id })}
+      onClick={() => go({ name: 'playlist', id: p.id })}
+      onContextMenu={(e) => openMenu(e, playlistMenu(p))}
+      art={<PlaylistCover p={p} size={44} radius={4} />}
+      title={p.name}
+      sub={p.isAlbum ? `Album · ${p.albumArtist ?? ''}` : `Playlist · ${plural(p.tracks.length, 'song')}`}
+    />
+  )
   const showDownloaded = downloads.done.length > 0 && (filter === 'all' || filter === 'playlists') && match('Downloaded')
 
   return (
@@ -108,17 +127,27 @@ export function DriftSidebar(): JSX.Element {
               sub={`Playlist · ${plural(lib.liked.length, 'song')}`}
             />
           )}
-          {playlists.map((p) => (
-            <LibRow
-              key={p.id}
-              on={same(route, { name: 'playlist', id: p.id })}
-              onClick={() => go({ name: 'playlist', id: p.id })}
-              onContextMenu={(e) => openMenu(e, playlistMenu(p))}
-              art={<PlaylistCover p={p} size={44} radius={4} />}
-              title={p.name}
-              sub={p.isAlbum ? `Album · ${p.albumArtist ?? ''}` : `Playlist · ${plural(p.tracks.length, 'song')}`}
-            />
-          ))}
+          {folders.map((f) => {
+            const inside = playlistsIn(lib, f.id, playlists)
+            const isOpen = openFolders.includes(f.id)
+            return (
+              <div key={f.id} className="lib-folder">
+                <LibRow
+                  on={false}
+                  onClick={() => openFolder(f.id, !isOpen)}
+                  onContextMenu={(e) => openMenu(e, folderMenu(f))}
+                  art={<span className="art folder-cover" style={{ width: 44, height: 44, borderRadius: 4 }}><Icon name={isOpen ? 'folderOpen' : 'folder'} size={22} /></span>}
+                  title={f.name}
+                  sub={`Folder · ${plural(inside.length, 'playlist')}`}
+                  expanded={isOpen}
+                />
+                {isOpen && (inside.length ? inside.map((p) => playlistRow(p, true)) : (
+                  <div className="lib-folder-empty">Empty. Right-click a playlist and pick Move to folder.</div>
+                ))}
+              </div>
+            )
+          })}
+          {topPlaylists.map((p) => playlistRow(p))}
           {artists.map((a) => (
             <LibRow
               key={a.artist.id}
@@ -138,7 +167,7 @@ export function DriftSidebar(): JSX.Element {
               sub={`On this computer · ${plural(downloads.done.length, 'song')}`}
             />
           )}
-          {!showLiked && !playlists.length && !artists.length && !showDownloaded && <div className="empty small">Nothing here yet.</div>}
+          {!showLiked && !playlists.length && !folders.length && !artists.length && !showDownloaded && <div className="empty small">Nothing here yet.</div>}
         </div>
         <button className={`lib-settings ${route.name === 'settings' ? 'on' : ''}`} onClick={() => go({ name: 'settings' })}>
           <Icon name="gear" size={18} />
@@ -149,11 +178,13 @@ export function DriftSidebar(): JSX.Element {
   )
 }
 
-function LibRow({ on, onClick, onContextMenu, art, title, sub }: {
+function LibRow({ on, onClick, onContextMenu, art, title, sub, nested, expanded }: {
   on: boolean; onClick: () => void; onContextMenu?: (e: React.MouseEvent) => void; art: JSX.Element; title: string; sub: string
+  nested?: boolean; expanded?: boolean
 }): JSX.Element {
   return (
-    <button className={`lib-row ${on ? 'on' : ''}`} onClick={onClick} onContextMenu={onContextMenu}>
+    <button className={`lib-row ${on ? 'on' : ''} ${nested ? 'nested' : ''}`} onClick={onClick} onContextMenu={onContextMenu}
+      aria-expanded={expanded}>
       {art}
       <span className="lib-text">
         <span className="lib-name">{title}</span>
@@ -270,6 +301,7 @@ function ProfileButton(): JSX.Element {
                 { label: '', separator: true }
               ]
             : [{ label: 'Link your phone…', icon: 'phone', action: () => go({ name: 'settings' }) }]),
+          { label: 'Listening stats', icon: 'chart', action: () => go({ name: 'stats' }) },
           { label: 'Import from Spotify…', icon: 'plus', action: openImport },
           { label: 'Settings', icon: 'gear', action: () => go({ name: 'settings' }) }
         ])
@@ -489,6 +521,18 @@ export function MusicSidebar(): JSX.Element {
     </button>
   )
   const lists = lib.playlists.filter((p) => !p.isAlbum)
+  const openFolders = useOpenFolders()
+  const musicRow = (p: Playlist, nested = false): JSX.Element => (
+    <button
+      key={p.id}
+      className={`m-item ${nested ? 'nested' : ''} ${same(route, { name: 'playlist', id: p.id }) ? 'on' : ''}`}
+      onClick={() => go({ name: 'playlist', id: p.id })}
+      onContextMenu={(e) => openMenu(e, playlistMenu(p))}
+    >
+      <Icon name="list" size={18} className="m-icon" />
+      <span>{p.name}</span>
+    </button>
+  )
   return (
     <aside className="m-sidebar">
       <div className="m-search">
@@ -510,6 +554,7 @@ export function MusicSidebar(): JSX.Element {
         {item({ name: 'friends' }, 'person', 'Friends')}
         <div className="m-section">Library</div>
         {item({ name: 'collection', kind: 'recent' }, 'clock', 'Recently Played')}
+        {item({ name: 'stats' }, 'chart', 'Listening Stats')}
         {item({ name: 'collection', kind: 'artists' }, 'mic', 'Artists')}
         {item({ name: 'collection', kind: 'albums' }, 'album', 'Albums')}
         {item({ name: 'collection', kind: 'songs' }, 'note', 'Songs')}
@@ -520,17 +565,19 @@ export function MusicSidebar(): JSX.Element {
           <IconButton icon="plus" label="New playlist or import" size={14} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
         </div>
         {item({ name: 'collection', kind: 'playlists' }, 'grid', 'All Playlists')}
-        {lists.map((p: Playlist) => (
-          <button
-            key={p.id}
-            className={`m-item ${same(route, { name: 'playlist', id: p.id }) ? 'on' : ''}`}
-            onClick={() => go({ name: 'playlist', id: p.id })}
-            onContextMenu={(e) => openMenu(e, playlistMenu(p))}
-          >
-            <Icon name="list" size={18} className="m-icon" />
-            <span>{p.name}</span>
-          </button>
-        ))}
+        {(lib.folders ?? []).map((f) => {
+          const isOpen = openFolders.includes(f.id)
+          return (
+            <div key={f.id}>
+              <button className="m-item" onClick={() => openFolder(f.id, !isOpen)} onContextMenu={(e) => openMenu(e, folderMenu(f))} aria-expanded={isOpen}>
+                <Icon name={isOpen ? 'folderOpen' : 'folder'} size={18} className="m-icon" />
+                <span>{f.name}</span>
+              </button>
+              {isOpen && playlistsIn(lib, f.id, lists).map((p) => musicRow(p, true))}
+            </div>
+          )
+        })}
+        {playlistsIn(lib, null, lists).map((p) => musicRow(p))}
       </div>
       <ImportPill className="m-import" />
       <DownloadPill className="m-import" />

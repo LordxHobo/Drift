@@ -128,6 +128,9 @@ struct SongSheetsModifier: ViewModifier {
             .sheet(item: binding(\.inviteTrack)) { track in
                 InviteSheet(track: track)
             }
+            .sheet(item: binding(\.shareTrack)) { track in
+                ShareSongSheet(track: track)
+            }
     }
 }
 

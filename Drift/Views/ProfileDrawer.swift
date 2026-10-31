@@ -101,6 +101,7 @@ struct ProfileDrawer: View {
                     }
                 }
             }
+            item("Listening stats", icon: "chart.bar", route: .stats) { EmptyView() }
 
             Spacer(minLength: 0)
             Divider().overlay(Theme.line.opacity(0.5))

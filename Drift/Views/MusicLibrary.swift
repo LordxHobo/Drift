@@ -166,13 +166,14 @@ struct MusicLibraryView: View {
 struct CollectionView: View {
     let kind: LibraryCollection
     @State private var filter = ""
+    @State private var folderRequest: FolderRequest?
     private var library: Library { .shared }
     private var player: Player { .shared }
 
     var body: some View {
         Group {
             switch kind {
-            case .playlists: grid(library.playlists.filter { $0.isAlbum != true })
+            case .playlists: grid(library.playlists(in: nil).filter { $0.isAlbum != true }, folders: library.folders)
             case .albums: grid(library.playlists.filter { $0.isAlbum == true })
             case .artists: artists
             case .songs: songs
@@ -182,11 +183,43 @@ struct CollectionView: View {
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(Theme.bg, for: .navigationBar)
+        .toolbar {
+            if kind == .playlists {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { folderRequest = .new(moving: nil) } label: { Image(systemName: "folder.badge.plus") }
+                        .accessibilityLabel("New folder")
+                }
+            }
+        }
+        .folderNameAlert($folderRequest)
     }
 
-    private func grid(_ items: [Playlist]) -> some View {
+    private func grid(_ items: [Playlist], folders: [PlaylistFolder] = []) -> some View {
         ScrollView {
-            if items.isEmpty {
+            if !folders.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(folders) { f in
+                        NavigationLink(value: Route.folder(f.id)) {
+                            HStack(spacing: 12) {
+                                FolderTile(size: 48)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                Text(f.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                                Spacer()
+                                Text("\(library.playlists(in: f.id).count)")
+                                    .font(.system(size: 14)).foregroundStyle(Theme.muted)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                            }
+                            .frame(minHeight: 60)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider().overlay(Theme.line.opacity(0.5))
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            if items.isEmpty && folders.isEmpty {
                 Text(kind == .albums
                      ? "Albums you save with + on an album page appear here."
                      : "Playlists you make or import appear here.")
@@ -208,6 +241,11 @@ struct CollectionView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            if p.isAlbum != true {
+                                MoveToFolderMenu(playlist: p) { folderRequest = .new(moving: p.id) }
+                            }
+                        }
                     }
                 }
             }

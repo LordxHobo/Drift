@@ -19,6 +19,8 @@ import { ReportDialog } from './views/report'
 import { CollabDialog } from './views/collab'
 import { JamDialog } from './views/jam'
 import { IncomingInvite, InviteDialog } from './views/invite'
+import { ShareDialog } from './views/share'
+import { StatsPage } from './views/stats'
 import { PatchNotes } from './views/patchNotes'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
@@ -61,6 +63,8 @@ function Page({ route }: { route: Route }): JSX.Element {
       return <LyricsView />
     case 'friends':
       return <FriendsPage />
+    case 'stats':
+      return <StatsPage />
     case 'video':
       return <VideoPage />
     case 'podcasts':
@@ -161,6 +165,7 @@ export function App(): JSX.Element {
         <CollabDialog />
         <JamDialog />
         <InviteDialog />
+        <ShareDialog />
         <IncomingInvite />
         <PatchNotes />
         <EditProfileDialog />
@@ -193,6 +198,7 @@ export function App(): JSX.Element {
       <CollabDialog />
       <JamDialog />
       <InviteDialog />
+      <ShareDialog />
       <IncomingInvite />
       <PatchNotes />
       <EditProfileDialog />

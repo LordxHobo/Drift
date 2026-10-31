@@ -12,6 +12,7 @@ struct NowPlayingView: View {
     @State private var showChapters = false
     @State private var showVideoFull = false
     @State private var showJam = false
+    @State private var showQueue = false
     /// Live artwork drag. A @GestureState resets itself even when iOS cancels the drag,
     /// so the artwork can never get stuck halfway.
     @GestureState private var drag = SwipeDrag()
@@ -372,6 +373,19 @@ struct NowPlayingView: View {
                     }
                     .accessibilityLabel(jam != nil ? "Listening together, \(jam!.members.count) people" : "Listen together")
                     .sheet(isPresented: $showJam) { JamSheet() }
+
+                    Button { showQueue = true } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 16, weight: .semibold))
+                            .padding(.horizontal, DriftGlass.isOn ? 12 : 6)
+                            .frame(height: DriftGlass.isOn ? 38 : 44)
+                            .driftGlass(in: Capsule(), interactive: true)
+                            .frame(height: 44)
+                            .fixedSize()
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Queue")
+                    .sheet(isPresented: $showQueue) { QueueSheet() }
 
                     if t.isFeedEpisode {
                         // Episodes from a show's feed are audio only.
