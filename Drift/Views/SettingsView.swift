@@ -28,6 +28,24 @@ struct SettingsView: View {
                         .lineSpacing(2)
                 }
 
+                section("Equalizer") {
+                    NavigationLink(value: Route.equalizer) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Equalizer").font(.system(size: 15, weight: .semibold))
+                                Text(settings.eqEnabled ? Equalizer.presetName(settings.eqGains) : "Off")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 section("Ad-free listening") {
                     toggle("Skip non-music segments",
                            "Jumps past intros, outros and talking in music videos using community-marked timestamps (SponsorBlock).",

@@ -8,6 +8,7 @@ import { formatBytes } from '../downloads'
 import { editProfileStore } from './editProfile'
 import { bestQuality } from '../video'
 import { showPatchNotes } from './patchNotes'
+import { EqualizerSettings } from './equalizer'
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }): JSX.Element {
   return (
@@ -133,6 +134,14 @@ export function SettingsPage(): JSX.Element {
         <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
           <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
         </Row>
+      </section>
+
+      <section className="set-section">
+        <h2>Equalizer</h2>
+        <Row title="Equalizer" detail="Shape the sound of everything you play on this computer.">
+          <Toggle on={s.eqEnabled} onChange={(v) => setSettings({ eqEnabled: v })} label="Equalizer" />
+        </Row>
+        <EqualizerSettings />
       </section>
 
       <section className="set-section">

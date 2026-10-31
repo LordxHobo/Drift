@@ -29,7 +29,7 @@ export const libraryStore = new Store<Library>({ liked: [], playlists: [], artis
 export const settingsStore = new Store<Settings>({
   style: 'drift', musicIcon: 'pink', appearance: 'device', accent: 0, preferOfficialAudio: true, preferExplicit: true, volume: 0.8, openAtLogin: false,
   skipNonMusic: true, skipSponsors: true, podcastSpeed: 1, orbitEnabled: false, orbitUrl: '', discordEnabled: false,
-  discordAppId: '', closeToTray: true, podcastVideo: false, videoQuality: 720
+  discordAppId: '', closeToTray: true, podcastVideo: false, videoQuality: 720, eqEnabled: false, eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 })
 export const accountStore = new Store<Account>({ linked: false, syncing: false })
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })

@@ -72,6 +72,19 @@ final class AppSettings {
     /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
     /// Move on when a song ends in a long stretch of silence.
     var skipSilence: Bool { didSet { defaults.set(skipSilence, forKey: "skipSilence") } }
+    /// The equalizer (this phone only): on or off, and the gain of each band in dB.
+    var eqEnabled: Bool {
+        didSet {
+            defaults.set(eqEnabled, forKey: "eqEnabled")
+            EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
+        }
+    }
+    var eqGains: [Double] {
+        didSet {
+            defaults.set(eqGains, forKey: "eqGains")
+            EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
+        }
+    }
     var lyricsLiveActivity: Bool { didSet { defaults.set(lyricsLiveActivity, forKey: "lyricsLiveActivity") } }
     /// Skip sponsor reads, self-promotion and subscribe reminders in podcasts (SponsorBlock).
     var skipSponsors: Bool { didSet { defaults.set(skipSponsors, forKey: "skipSponsors") } }
@@ -121,6 +134,12 @@ final class AppSettings {
         songCacheMB = d.object(forKey: PlayCache.limitKey) as? Int ?? PlayCache.defaultLimitMB
         lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
+        let eqOn = d.bool(forKey: "eqEnabled")
+        let saved = d.array(forKey: "eqGains") as? [Double] ?? []
+        let gains = saved.count == Equalizer.bands.count ? saved : [Double](repeating: 0, count: Equalizer.bands.count)
+        eqEnabled = eqOn
+        eqGains = gains
+        EqualizerState.shared.set(enabled: eqOn, gains: gains)
         skipSponsors = d.object(forKey: "skipSponsors") as? Bool ?? true
         podcastSpeed = d.object(forKey: "podcastSpeed") as? Double ?? 1
         podcastVideo = d.bool(forKey: "podcastVideo")

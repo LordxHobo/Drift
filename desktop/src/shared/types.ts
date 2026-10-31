@@ -185,6 +185,9 @@ export interface Settings {
   podcastVideo: boolean
   /** Highest video quality (lines): 480, 720 or 1080. */
   videoQuality: number
+  /** The equalizer (this computer only): on or off, and each band's gain in dB. */
+  eqEnabled: boolean
+  eqGains: number[]
 }
 
 /** What the player is doing, for friends, Orbit, Discord and the tray. */

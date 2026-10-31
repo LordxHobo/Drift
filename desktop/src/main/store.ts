@@ -56,7 +56,9 @@ const defaultSettings: Settings = {
   discordAppId: '',
   closeToTray: true,
   podcastVideo: false,
-  videoQuality: 720
+  videoQuality: 720,
+  eqEnabled: false,
+  eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 
 let settings: Settings | undefined

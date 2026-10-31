@@ -1,7 +1,8 @@
 // Playback: queue, shuffle, repeat, media keys, and picking up where you left off.
 import type { SkipSegment, StreamInfo, Track } from '@shared/types'
 import { drift, podcastsStore, readLocal, settingsStore, setSettings, Store, toast, useStore, writeLocal } from './state'
-import { artwork } from './util'
+import { artwork, formatTime } from './util'
+import { connectAudio, peakLevel } from './audioGraph'
 
 export type Repeat = 'off' | 'all' | 'one'
 
@@ -49,6 +50,8 @@ export const usePosition = (): number => useStore(positionStore)
 
 const audio = new Audio()
 audio.preload = 'auto'
+// Drift's own links allow the sound to go through the equalizer (see audioGraph.ts).
+audio.crossOrigin = 'anonymous'
 /** The sound (the episode video follows it). */
 export const audioElement = audio
 let loadToken = 0
@@ -227,6 +230,8 @@ export function setSpeed(speed: number): void {
 async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
   const token = ++loadToken
   newListen()
+  silence.since = 0
+  silence.heard = false
   saveEpisodeProgress()
   if (t.podcast && at === 0) at = resumePosition(t)
   audio.pause()
@@ -380,6 +385,7 @@ export function toggleMute(): void {
 // MARK: Audio events
 
 audio.addEventListener('playing', () => {
+  connectAudio(audio)
   failures = 0
   patch({ playing: true, loading: false, error: undefined })
 })
@@ -452,8 +458,40 @@ function newListen(): void {
   listen.last = 0
 }
 
+// Songs that end in minutes of dead air (or a hidden track after it): 6 s of near-silence after the
+// first 40% of a song, with more left, ends it. Only once the song has been heard (so a sound Drift
+// can't measure never counts as silence).
+const silence = { since: 0, heard: false }
+
+function checkSilence(): void {
+  const s = playerStore.get()
+  const t = s.current
+  const d = s.duration || audio.duration
+  const now = audio.currentTime
+  // Measured after the volume is applied, so turned back to the song's own level.
+  const volume = audio.muted ? 0 : audio.volume
+  const raw = peakLevel()
+  const peak = raw === null || volume < 0.02 ? null : raw / volume
+  if (peak === null || !t || t.podcast || audio.paused || s.loading) {
+    silence.since = 0
+    return
+  }
+  if (peak > 0.01) silence.heard = true
+  if (!silence.heard || !Number.isFinite(d) || d <= 60 || now < d * 0.4 || d - now <= 8 || peak >= 0.002) {
+    silence.since = 0
+    return
+  }
+  if (!silence.since) silence.since = performance.now()
+  else if (performance.now() - silence.since >= 6000) {
+    silence.since = 0
+    toast(`Skipped ${formatTime(d - now)} of silence`)
+    next(true)
+  }
+}
+
 audio.addEventListener('timeupdate', () => {
   trackListening()
+  checkSilence()
   positionStore.set(audio.currentTime)
   updatePositionState()
   checkSkip(audio.currentTime)

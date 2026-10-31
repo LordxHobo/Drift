@@ -589,10 +589,10 @@ final class Player {
         av.replaceCurrentItem(with: item)
         av.defaultRate = effectiveRate
 
-        // Songs: listen for dead air at the end (hidden tracks, long silences).
+        // Listen for dead air at the end of songs (hidden tracks, long silences), and apply the equalizer.
         meter = nil
         silentSince = nil
-        if let t = current, !t.isEpisode {
+        if current != nil {
             Task { [weak self] in
                 guard let audio = try? await item.asset.loadTracks(withMediaType: .audio).first,
                       let self, item === self.av.currentItem else { return }
@@ -825,7 +825,8 @@ final class Player {
         // silence). The listed length is a little short for some songs, so the last notes get up to 4 s
         // more: it ends once the audio has gone quiet, or at the latest 4 s past the listed length.
         if let k = knownDuration, isPlaying, t >= k - 0.15 {
-            let quiet = meter?.isQuiet(below: 0.003, starved: !av.isExternalPlaybackActive) ?? false
+            // (Episodes: a listed length can be off, and a pause in talking isn't the end.)
+            let quiet = !isEpisode && (meter?.isQuiet(below: 0.003, starved: !av.isExternalPlaybackActive) ?? false)
             if quiet {
                 if tailSilentSince == nil { tailSilentSince = t }
             } else {

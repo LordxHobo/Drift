@@ -8,6 +8,8 @@ final class LevelMeter: @unchecked Sendable {
     var peak: Float = 1
     /// When audio last came through (seconds since the phone started; 0 = not yet).
     var lastAudio: Double = 0
+    /// The equalizer, applied to the sound as it passes (audio thread only).
+    let equalizer = EqualizerFilter()
 
     /// Quiet, or (`starved`) no sound coming through at all while the song's time moves on: iOS "playing"
     /// past the real end of a file it misread as longer. Not for AirPlay, where the sound never comes
@@ -18,7 +20,7 @@ final class LevelMeter: @unchecked Sendable {
     }
 }
 
-/// Listens to the audio of a song through an audio tap, without changing it.
+/// Listens to the audio of a song through an audio tap (for silence), and applies the equalizer to it.
 enum SilenceDetector {
     static func audioMix(for track: AVAssetTrack, meter: LevelMeter) -> AVAudioMix? {
         var callbacks = MTAudioProcessingTapCallbacks(
@@ -30,7 +32,10 @@ enum SilenceDetector {
             finalize: { tap in
                 Unmanaged<LevelMeter>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).release()
             },
-            prepare: nil,
+            prepare: { tap, _, format in
+                let meter = Unmanaged<LevelMeter>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
+                meter.equalizer.prepare(sampleRate: format.pointee.mSampleRate)
+            },
             unprepare: nil,
             process: { tap, frames, _, bufferList, framesOut, flagsOut in
                 guard MTAudioProcessingTapGetSourceAudio(tap, frames, bufferList, flagsOut, nil, framesOut) == noErr
@@ -47,6 +52,7 @@ enum SilenceDetector {
                 }
                 meter.peak = peak
                 meter.lastAudio = ProcessInfo.processInfo.systemUptime
+                meter.equalizer.process(UnsafeMutableAudioBufferListPointer(bufferList), frames: Int(framesOut.pointee))
             }
         )
         // Xcode 26 (Codemagic) and Xcode 16 (GitHub) declare this function differently.

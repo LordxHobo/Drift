@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 8,
+      "date": "2026-11-01",
+      "title": "Equalizer",
+      "notes": [
+        {
+          "text": "Equalizer: 10 bands and presets like Bass boost, Vocal and Loudness, in Settings › Equalizer. It shapes everything you play on this iPhone (not over AirPlay, where the speaker plays the sound).",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Equalizer: 10 bands and presets like Bass boost, Vocal and Loudness, in Settings › Equalizer. It shapes everything you play on this computer.",
+          "platforms": ["desktop"]
+        },
+        {
+          "text": "Songs that end in minutes of silence now move on to the next song by themselves, like on the phone.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 7,
       "date": "2026-10-31",
       "title": "No more silence at the end of songs",

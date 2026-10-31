@@ -6,6 +6,7 @@ enum Route: Hashable {
     case playlist(UUID)
     case folder(UUID)
     case stats
+    case equalizer
     case settings
     case channel(PodcastChannel)
     case profile
@@ -35,6 +36,7 @@ extension View {
             case .playlist(let id): PlaylistView(kind: .playlist(id))
             case .folder(let id): FolderView(id: id)
             case .stats: StatsView()
+            case .equalizer: EqualizerView()
             case .channel(let c): ChannelView(channel: c)
             case .profile: ProfileView()
             case .friends: FriendsView()
