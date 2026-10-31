@@ -150,6 +150,7 @@ final class DownloadManager {
             let stream = try await StreamResolver.shared.resolve(playID, dataSaver: false, forDownload: true)
             // A stream-only video (no audio file to save) can play but not be downloaded.
             guard stream.source != "ios-hls" else { throw StreamError.noAudio }
+            SongLengths.remember(t.id, stream.duration ?? StreamResolver.lengthFromURL(stream.url))
             let total = try await Self.size(of: stream.url)
             let parts = max(1, Int((Double(total) / Double(Self.partSize)).rounded(.up)))
             var p = Pending(track: t, url: stream.url, total: total, parts: parts)

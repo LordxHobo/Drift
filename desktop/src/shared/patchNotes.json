@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 7,
+      "date": "2026-10-31",
+      "title": "No more silence at the end of songs",
+      "notes": [
+        {
+          "text": "Songs that end in minutes of silence now move on to the next song by themselves. This is always on, so the Skip silence setting is gone.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Downloaded and cached songs end right on time, even when iOS thinks the file is longer than the song.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 6,
       "date": "2026-10-31",
       "title": "Queue, folders, sharing and your listening stats",

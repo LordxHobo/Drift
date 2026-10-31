@@ -444,6 +444,12 @@ final class Player {
             }
             do {
                 let url: URL
+                if (downloaded || cached != nil), let exact = SongLengths.exact(track.id) {
+                    // Known from when it was streamed or downloaded: end on time even if iOS misreads the file.
+                    self.knownDuration = exact
+                    self.durationIsExact = true
+                    self.duration = exact
+                }
                 if downloaded {
                     url = Library.shared.fileURL(for: track.id)
                     self.qualityLabel = "Downloaded"
@@ -471,6 +477,7 @@ final class Player {
                         self.knownDuration = d
                         self.durationIsExact = true
                         self.duration = d
+                        if !track.isEpisode { SongLengths.remember(track.id, d) }
                     }
                     url = s.url
                     let note = await AudioVersion.shared.note(track.id)
@@ -818,7 +825,7 @@ final class Player {
         // silence). The listed length is a little short for some songs, so the last notes get up to 4 s
         // more: it ends once the audio has gone quiet, or at the latest 4 s past the listed length.
         if let k = knownDuration, isPlaying, t >= k - 0.15 {
-            let quiet = (meter?.peak ?? 1) < 0.003
+            let quiet = meter?.isQuiet(below: 0.003, starved: !av.isExternalPlaybackActive) ?? false
             if quiet {
                 if tailSilentSince == nil { tailSilentSince = t }
             } else {
@@ -854,14 +861,15 @@ final class Player {
         }
     }
 
-    /// 6 s of near-total silence in the second half of a song (with more left): move on.
+    /// 6 s of near-total silence after the first 40% of a song (with more left): the song is over, move on.
+    /// Always on: some uploads and album tracks end with minutes of dead air (or a hidden track after it).
     private func checkSilence(at t: Double) -> Bool {
-        guard let m = meter, !isEpisode, AppSettings.shared.skipSilence, isPlaying, !isBuffering,
-              duration > 60, t > duration * 0.5, duration - t > 8 else {
+        guard let m = meter, !isEpisode, isPlaying, !isBuffering,
+              duration > 60, t > duration * 0.4, duration - t > 8 else {
             silentSince = nil
             return false
         }
-        guard m.peak < 0.002 else {
+        guard m.isQuiet(below: 0.002, starved: !av.isExternalPlaybackActive) else {
             silentSince = nil
             return false
         }

@@ -6,6 +6,16 @@ import MediaToolbox
 final class LevelMeter: @unchecked Sendable {
     /// Starts "loud" so nothing is skipped until real measurements arrive.
     var peak: Float = 1
+    /// When audio last came through (seconds since the phone started; 0 = not yet).
+    var lastAudio: Double = 0
+
+    /// Quiet, or (`starved`) no sound coming through at all while the song's time moves on: iOS "playing"
+    /// past the real end of a file it misread as longer. Not for AirPlay, where the sound never comes
+    /// through here.
+    func isQuiet(below level: Float, starved: Bool) -> Bool {
+        if peak < level { return true }
+        return starved && lastAudio > 0 && ProcessInfo.processInfo.systemUptime - lastAudio > 1.5
+    }
 }
 
 /// Listens to the audio of a song through an audio tap, without changing it.
@@ -36,6 +46,7 @@ enum SilenceDetector {
                     peak = max(peak, m)
                 }
                 meter.peak = peak
+                meter.lastAudio = ProcessInfo.processInfo.systemUptime
             }
         )
         // Xcode 26 (Codemagic) and Xcode 16 (GitHub) declare this function differently.
