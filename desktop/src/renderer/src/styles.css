@@ -4643,18 +4643,18 @@ a.btn.disabled {
 }
 
 /* Equalizer */
-.eq {
+.eqz {
   padding: 14px 0 6px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-.eq-presets {
+.eqz-presets {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.eq-bands {
+.eqz-bands {
   display: flex;
   align-items: stretch;
   gap: 4px;
@@ -4662,10 +4662,10 @@ a.btn.disabled {
   max-width: 640px;
   transition: opacity 0.15s;
 }
-.eq-bands.off {
+.eqz-bands.off {
   opacity: 0.5;
 }
-.eq-scale {
+.eqz-scale {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -4675,7 +4675,7 @@ a.btn.disabled {
   padding: 26px 6px 26px 0;
   text-align: right;
 }
-.eq-band {
+.eqz-band {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -4683,7 +4683,7 @@ a.btn.disabled {
   align-items: center;
   gap: 6px;
 }
-.eq-band input[type='range'] {
+.eqz-band input[type='range'] {
   flex: 1;
   writing-mode: vertical-lr;
   direction: rtl;
@@ -4691,17 +4691,17 @@ a.btn.disabled {
   accent-color: var(--accent);
   cursor: pointer;
 }
-.eq-value,
-.eq-hz {
+.eqz-value,
+.eqz-hz {
   font-size: 11px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   height: 14px;
 }
-.eq-hz {
+.eqz-hz {
   font-weight: 600;
 }
-.eq-foot {
+.eqz-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4710,4 +4710,65 @@ a.btn.disabled {
   font-size: 12px;
   color: var(--muted);
   max-width: 640px;
+}
+
+/* Control other device */
+.remote-bar {
+  position: relative;
+}
+.remote-bar .pb-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.remote-bar .pb-title {
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remote-bar .pb-artist {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remote-bar .pb-right {
+  gap: 10px;
+}
+.remote-bar .btn {
+  white-space: nowrap;
+}
+.remote-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.remote-pill.offline {
+  color: #f87171;
+}
+.remote-bar.music {
+  height: 64px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.remote-bar.music .m-top-nav {
+  display: flex;
+  gap: 2px;
+  margin-right: 6px;
+}
+.remote-bar .pb-error {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
 }

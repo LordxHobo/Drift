@@ -14,6 +14,8 @@ final class UIState {
     /// Song being swapped for another YouTube version (from a playlist or Liked songs).
     var replacing: ReplaceRequest?
     var showPlayer = false
+    /// The player for another device (Control other device).
+    var showRemote = false
     /// The side drawer (profile, notifications, friends, settings).
     var showDrawer = false
     /// Height of the mini player + tab bar floating over the pages (pages leave this much room at the bottom).

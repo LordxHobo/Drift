@@ -374,6 +374,12 @@ struct NowPlayingView: View {
                     .accessibilityLabel(jam != nil ? "Listening together, \(jam!.members.count) people" : "Listen together")
                     .sheet(isPresented: $showJam) { JamSheet() }
 
+                    if SocialStore.shared.me != nil {
+                        DevicesButton(size: 16)
+                            .padding(.horizontal, DriftGlass.isOn ? 2 : 0)
+                            .driftGlass(in: Capsule(), interactive: true)
+                    }
+
                     Button { showQueue = true } label: {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 16, weight: .semibold))

@@ -19,8 +19,8 @@ export function EqualizerSettings(): JSX.Element {
   }
 
   return (
-    <div className="eq">
-      <div className="eq-presets" role="group" aria-label="Presets">
+    <div className="eqz">
+      <div className="eqz-presets" role="group" aria-label="Presets">
         {eqPresets.map((p) => (
           <button
             key={p.name}
@@ -32,15 +32,15 @@ export function EqualizerSettings(): JSX.Element {
           </button>
         ))}
       </div>
-      <div className={`eq-bands ${s.eqEnabled ? '' : 'off'}`}>
-        <div className="eq-scale" aria-hidden="true">
+      <div className={`eqz-bands ${s.eqEnabled ? '' : 'off'}`}>
+        <div className="eqz-scale" aria-hidden="true">
           <span>+{eqMax}</span>
           <span>0</span>
           <span>−{eqMax}</span>
         </div>
         {eqBands.map((hz, i) => (
-          <label key={hz} className="eq-band">
-            <span className="eq-value">{gains[i] > 0 ? `+${gains[i]}` : gains[i]}</span>
+          <label key={hz} className="eqz-band">
+            <span className="eqz-value">{gains[i] > 0 ? `+${gains[i]}` : gains[i]}</span>
             <input
               type="range"
               min={-eqMax}
@@ -51,11 +51,11 @@ export function EqualizerSettings(): JSX.Element {
               aria-label={`${eqLabel(hz)} hertz`}
               aria-valuetext={`${gains[i]} decibels`}
             />
-            <span className="eq-hz">{eqLabel(hz)}</span>
+            <span className="eqz-hz">{eqLabel(hz)}</span>
           </label>
         ))}
       </div>
-      <div className="eq-foot">
+      <div className="eqz-foot">
         <span>{current === 'Custom' ? 'Custom' : `Preset: ${current}`}. Drift lowers the volume a little when you boost, so loud songs don’t distort.</span>
         <button className="btn ghost" onClick={() => setSettings({ eqGains: flatGains() })}>Reset to flat</button>
       </div>

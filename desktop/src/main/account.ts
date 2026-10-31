@@ -207,6 +207,8 @@ async function pull(uid: string): Promise<void> {
     const updatedAt = FV.int(doc.fields, 'updatedAt') ?? 0
     // Listening history is read by the stats page, not synced into the library.
     if (name.startsWith('plays-')) continue
+    // Nor are devices and their remote control (remote.ts).
+    if (name === 'devices' || name.startsWith('remote-')) continue
     const known = synced[name]
     if (known && known.updatedAt >= updatedAt) continue
     if (FV.bool(doc.fields, 'deleted') === true) {

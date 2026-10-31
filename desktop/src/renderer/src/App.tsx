@@ -21,6 +21,8 @@ import { JamDialog } from './views/jam'
 import { IncomingInvite, InviteDialog } from './views/invite'
 import { ShareDialog } from './views/share'
 import { StatsPage } from './views/stats'
+import { RemoteBar } from './views/remote'
+import { remoteStore } from './remote'
 import { PatchNotes } from './views/patchNotes'
 import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
@@ -126,6 +128,7 @@ export function App(): JSX.Element {
   const platform = useStore(platformStore)
   const dark = useDark()
   const route = useRoute()
+  const remoteTarget = useStore(remoteStore).target
   const full = useStore(fullPlayerStore)
   useShortcuts()
 
@@ -146,7 +149,7 @@ export function App(): JSX.Element {
         <div className="m-body">
           <MusicSidebar />
           <div className="m-main">
-            <MusicTopPlayer />
+            {remoteTarget ? <RemoteBar music /> : <MusicTopPlayer />}
             <div className="m-content">
               <main className="main-scroll">
                 <Page route={route.name === 'lyrics' ? { name: 'home' } : route} />
@@ -188,7 +191,7 @@ export function App(): JSX.Element {
         </main>
         <SidePanel />
       </div>
-      <DriftPlayerBar />
+      {remoteTarget ? <RemoteBar /> : <DriftPlayerBar />}
       <MiniVideo />
       <ContextMenu />
       <ImportDialog />

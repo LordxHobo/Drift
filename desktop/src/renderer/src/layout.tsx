@@ -22,6 +22,7 @@ import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 import { nameOf } from '@shared/types'
 import { folderMenu, newFolder, openFolder, playlistsIn, useOpenFolders } from './views/folders'
+import { DevicesButton } from './views/remote'
 
 const createItems = (): MenuItem[] => [
   { label: 'New playlist…', icon: 'plus', action: () => newPlaylist([]) },
@@ -348,6 +349,7 @@ export function DriftPlayerBar(): JSX.Element {
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
         <JamButton />
+        <DevicesButton />
         <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />
         <IconButton icon="queue" label="Queue" active={panel === 'queue'} size={18} onClick={() => togglePanel('queue')} />
         <Volume />
@@ -630,6 +632,7 @@ export function MusicTopPlayer(): JSX.Element {
         {t?.podcast && <SpeedButton speed={speed} onPick={setSpeed} />}
         <VideoButton />
         <JamButton />
+        <DevicesButton />
         <NoticesBell />
         <Volume />
         <LyricsButton podcast={!!t?.podcast} active={panel === 'lyrics'} />

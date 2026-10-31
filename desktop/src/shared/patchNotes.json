@@ -4,8 +4,16 @@
     {
       "id": 8,
       "date": "2026-11-01",
-      "title": "Equalizer",
+      "title": "Equalizer, and play on your other devices",
       "notes": [
+        {
+          "text": "Play on another device: tap the speaker button in the player and pick your computer. The music moves there, and this iPhone becomes its remote (play, pause, skip, seek, volume, and anything you pick to play). Tap This iPhone to bring it back. Your computer shows up while Drift is open on it.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Play on another device: click the devices button next to the volume and pick your phone. The music moves there, and this computer becomes its remote (play, pause, skip, seek, volume, and anything you pick to play). Click Play here to bring it back. Your phone shows up while Drift is open or playing on it.",
+          "platforms": ["desktop"]
+        },
         {
           "text": "Equalizer: 10 bands and presets like Bass boost, Vocal and Loudness, in Settings › Equalizer. It shapes everything you play on this iPhone (not over AirPlay, where the speaker plays the sound).",
           "platforms": ["ios"]

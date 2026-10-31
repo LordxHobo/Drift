@@ -432,6 +432,7 @@ final class SocialStore {
 
     /// Called by the player on every song change and play/pause; sends it (a moment later, once) to friends.
     func playerChanged() {
+        RemoteControl.shared.localChanged()
         publishTask?.cancel()
         publishTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))

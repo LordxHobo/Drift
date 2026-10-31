@@ -19,6 +19,7 @@ import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
 import * as plays from './plays'
+import * as remote from './remote'
 import { setToken, testOrbit } from './orbit'
 import { createTray } from './tray'
 import { channelPodcasts, chapters, searchPodcasts, searchYouTube, videoFromLink } from './youtube'
@@ -155,6 +156,10 @@ const api: DriftApi = {
   createFolder: async (name, ids) => store.createFolder(name, ids),
   listened: async (t, key, secs) => plays.listened(t, key, secs),
   listeningHistory: () => plays.everything(),
+  remoteState: async (s) => remote.setState(s),
+  remoteDevices: () => remote.devices(),
+  remoteSend: (id, c) => remote.send(id, c),
+  remoteTarget: async (id) => remote.setTarget(id),
   renameFolder: async (id, name) => store.renameFolder(id, name),
   deleteFolder: async (id) => store.deleteFolder(id),
   setPlaylistFolder: async (id, folder) => store.setPlaylistFolder(id, folder),
@@ -270,6 +275,7 @@ app.whenReady().then(() => {
   account.start()
   collab.startCollab()
   invites.startInvites()
+  remote.start()
   startUpdates()
   downloads.startDownloads()
   podcasts.startPodcasts()

@@ -118,10 +118,44 @@ final class Player {
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
+    // MARK: Control other device
+
+    /// While you control another device (RemoteControl), what you do here goes there instead.
+    /// Returns true when it was sent.
+    @ObservationIgnored var redirect: ((RemoteCommand) -> Bool)?
+
+    private func sent(_ type: String, tracks: [Track]? = nil, start: Int? = nil, track: Track? = nil, source: String? = nil) -> Bool {
+        guard let redirect else { return false }
+        var c = RemoteCommand(type: type)
+        c.tracks = tracks
+        c.start = start
+        c.track = track
+        c.source = source
+        return redirect(c)
+    }
+
+    /// The app's own volume (0–1; the phone's volume buttons work on top of it). Set from another device.
+    var appVolume: Float {
+        get { av.volume }
+        set { av.volume = max(0, min(1, newValue)) }
+    }
+
+    /// Another device handed its music to this one: play this song (and what comes after it) from here.
+    func transferIn(_ track: Track, upcoming: [Track], at position: Double, playing: Bool, source: String) {
+        shuffle = false
+        originalQueue = [track] + upcoming
+        queue = originalQueue
+        index = 0
+        playingFrom = source.isEmpty ? "Another device" : source
+        pendingResume = (track.id, position)
+        load(autoplay: playing)
+    }
+
     // MARK: Queue
 
     func play(_ tracks: [Track], startAt i: Int = 0, from source: String) {
         guard tracks.indices.contains(i) else { return }
+        if sent("play", tracks: tracks, start: i, source: source) { return }
         originalQueue = tracks
         playingFrom = source
         if shuffle {
@@ -139,11 +173,13 @@ final class Player {
     /// Shuffle-play a whole list.
     func shufflePlay(_ tracks: [Track], from source: String) {
         guard !tracks.isEmpty else { return }
+        if sent("play", tracks: tracks.shuffled(), start: 0, source: source) { return }
         shuffle = true
         play(tracks, startAt: Int.random(in: 0..<tracks.count), from: source)
     }
 
     func playNext(_ t: Track) {
+        if sent("playNext", track: t) { return }
         guard current != nil else { play([t], from: "Queue"); return }
         queue.insert(t, at: index + 1)
         originalQueue.append(t)
@@ -168,6 +204,7 @@ final class Player {
 
     /// Adds a song to the end of the queue.
     func addToQueue(_ t: Track) {
+        if sent("addToQueue", track: t) { return }
         guard current != nil else { play([t], from: "Queue"); return }
         queue.append(t)
         originalQueue.append(t)
@@ -229,6 +266,7 @@ final class Player {
     // MARK: Transport
 
     func togglePlay() {
+        if sent("toggle") { return }
         if isPlaying { pause() } else { resume() }
     }
 
@@ -244,6 +282,7 @@ final class Player {
     }
 
     func next() {
+        if sent("next") { return }
         if isEpisode, !chapters.isEmpty { nextChapter(); return }
         advance(auto: false)
     }
@@ -336,6 +375,7 @@ final class Player {
     }
 
     func previous() {
+        if sent("previous") { return }
         guard !queue.isEmpty else { return }
         if isEpisode, !chapters.isEmpty { previousChapter(); return }
         if currentTime > 3 || index == 0 {
@@ -361,6 +401,7 @@ final class Player {
         av.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                 toleranceBefore: .zero, toleranceAfter: tolerance)
         updateNowPlaying()
+        RemoteControl.shared.localChanged()
     }
 
     private func advance(auto: Bool) {
@@ -912,11 +953,17 @@ final class Player {
     private func setupRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
         c.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.resume() }
+            Task { @MainActor in
+                guard let self, !self.sent("resume") else { return }
+                self.resume()
+            }
             return .success
         }
         c.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.pause() }
+            Task { @MainActor in
+                guard let self, !self.sent("pause") else { return }
+                self.pause()
+            }
             return .success
         }
         c.togglePlayPauseCommand.addTarget { [weak self] _ in

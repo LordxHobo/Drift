@@ -72,6 +72,7 @@ struct RootView: View {
                 .preferredColorScheme(.dark)
         }
         .songSheets()
+        .sheet(isPresented: $ui.showRemote) { RemotePlayerSheet() }
         .sheet(isPresented: Binding(get: { !patchNotes.isEmpty && !social.showOnboarding },
                                     set: { if !$0 { patchNotes = [] } })) {
             PatchNotesSheet(entries: patchNotes)
@@ -79,6 +80,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.25), value: player.current?.id)
         .onAppear { settings.applyAppearance() }
         .task { await ArtistStore.shared.check() }
+        .task { RemoteControl.shared.start() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 settings.applyAppearance()
@@ -103,7 +105,14 @@ extension RootView {
         // Glass effects and the Apple Music style both float the bars over the page.
         let floating = DriftGlass.isOn || Theme.isMusic
         VStack(spacing: floating ? 8 : 0) {
-            if player.current != nil {
+            if RemoteControl.shared.target != nil {
+                RemoteMiniPlayer { ui.showRemote = true }
+                    .foregroundStyle(Theme.text)
+                    .environment(\.colorScheme, .dark)
+                    .padding(.horizontal, floating ? 14 : 8)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if player.current != nil {
                 Group {
                     if Theme.isMusic {
                         MusicMiniPlayer { ui.showPlayer = true }

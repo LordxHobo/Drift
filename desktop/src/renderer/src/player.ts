@@ -1,5 +1,6 @@
 // Playback: queue, shuffle, repeat, media keys, and picking up where you left off.
 import type { SkipSegment, StreamInfo, Track } from '@shared/types'
+import type { RemoteCommand } from '@shared/remote'
 import { drift, podcastsStore, readLocal, settingsStore, setSettings, Store, toast, useStore, writeLocal } from './state'
 import { artwork, formatTime } from './util'
 import { connectAudio, peakLevel } from './audioGraph'
@@ -109,10 +110,28 @@ export function jamPlay(track: Track, upcoming: Track[], position: number, playi
   }
 }
 
+// MARK: Control other device
+
+/** While you control another device (remote.ts), what you do here goes there instead. True when sent. */
+export const remoteHook: { send?: (c: Omit<RemoteCommand, 'id' | 'from'>) => boolean } = {}
+
+/** Another device handed its music to this computer: play this song (and what comes after it) from here. */
+export function transferIn(track: Track, upcoming: Track[], position: number, playing: boolean, source: string): void {
+  unshuffled = undefined
+  radioFor = undefined
+  patch({ queue: [track, ...upcoming], index: 0, shuffle: false, context: { kind: 'queue', name: source || 'Another device' } })
+  void load(track, playing, position)
+}
+
 // MARK: Starting
 
 export function playList(tracks: Track[], start: number, context?: PlayContext, opts: { shuffle?: boolean } = {}): void {
   if (!tracks.length) return
+  if (remoteHook.send) {
+    const list = opts.shuffle ? shuffled(tracks) : tracks
+    const at = opts.shuffle ? 0 : Math.max(0, Math.min(start, tracks.length - 1))
+    if (remoteHook.send({ type: 'play', tracks: list.slice(0, 200), start: Math.min(at, 199), source: context?.name })) return
+  }
   const s = playerStore.get()
   const shuffle = opts.shuffle ?? s.shuffle
   let queue = [...tracks]
@@ -136,6 +155,7 @@ export function playTrack(t: Track, context?: PlayContext): void {
 }
 
 export function playNext(tracks: Track[]): void {
+  if (tracks.length === 1 && remoteHook.send?.({ type: 'playNext', track: tracks[0] })) return void toast(`“${tracks[0].title}” plays next`)
   const s = playerStore.get()
   if (s.index < 0) return playList(tracks, 0, { kind: 'queue', name: 'Queue' })
   const queue = [...s.queue]
@@ -145,6 +165,7 @@ export function playNext(tracks: Track[]): void {
 }
 
 export function addToQueue(tracks: Track[]): void {
+  if (tracks.length === 1 && remoteHook.send?.({ type: 'addToQueue', track: tracks[0] })) return void toast(`Added “${tracks[0].title}” to the queue`)
   const s = playerStore.get()
   if (s.index < 0) return playList(tracks, 0, { kind: 'queue', name: 'Queue' })
   patch({ queue: [...s.queue, ...tracks] })
@@ -277,6 +298,7 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
 // MARK: Controls
 
 export function toggle(): void {
+  if (remoteHook.send?.({ type: 'toggle' })) return
   const s = playerStore.get()
   if (!s.current) return
   if (audio.paused) {
@@ -287,7 +309,24 @@ export function toggle(): void {
   }
 }
 
+/** Pause / play here (not sent to another device). */
+export function pauseHere(): void {
+  audio.pause()
+}
+
+export function resumeHere(): void {
+  const s = playerStore.get()
+  if (!s.current || !audio.paused) return
+  if (!audio.src || s.error) void load(s.current, true, positionStore.get())
+  else void audio.play().catch(() => undefined)
+}
+
+export function setRepeat(repeat: Repeat): void {
+  patch({ repeat })
+}
+
 export function next(fromEnd = false): void {
+  if (!fromEnd && remoteHook.send?.({ type: 'next' })) return
   const s = playerStore.get()
   if (!s.current) return
   if (fromEnd && s.repeat === 'one') {
@@ -327,6 +366,7 @@ async function continueWithRadio(fromEnd: boolean): Promise<void> {
 }
 
 export function previous(): void {
+  if (remoteHook.send?.({ type: 'previous' })) return
   const s = playerStore.get()
   if (!s.current) return
   if (audio.currentTime > 3 || s.index <= 0) {

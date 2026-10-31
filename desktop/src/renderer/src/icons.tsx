@@ -31,6 +31,8 @@ const paths: Record<string, JSX.Element> = {
   mic: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="15" cy="8" r="4.5" /><path d="m12 11-7.5 8.5 1 1L14 13" /></g>,
   album: <g fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r=".6" fill="currentColor" /></g>,
   clock: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></g>,
+  computer: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="3.5" y="4.5" width="17" height="11.5" rx="1.5" /><path d="M2 19.5h20" strokeLinecap="round" /></g>,
+  devices: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="2.5" y="5" width="13" height="9" rx="1.5" /><path d="M5.5 18h7M9 14v4" strokeLinecap="round" /><rect x="16.5" y="7" width="5.5" height="11" rx="1.2" /></g>,
   phone: <g fill="none" stroke="currentColor" strokeWidth="2"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" strokeLinecap="round" /></g>,
   sync: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1" /><path d="M18.5 3v4.3h-4.3M5.5 21v-4.3h4.3" /></g>,
   expand: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" /></g>,

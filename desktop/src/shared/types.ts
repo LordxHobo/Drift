@@ -1,6 +1,7 @@
 // Shapes shared by the main process and the window. Tracks, playlists and followed artists use the
 // same JSON as the phone app, so they sync both ways without conversion.
 import type { PlayRecord } from './stats'
+import type { RemoteCommand, RemoteDevice, RemoteState } from './remote'
 
 /** A song (backed by a YouTube video ID). Unknown fields from the phone are kept as they are. */
 export interface Track {
@@ -517,6 +518,11 @@ export interface DriftApi {
   /** Listening stats: how long a song has been listened to so far (`key` is one listen of it), and every play you've made. */
   listened(track: Track, key: string, secs: number): Promise<void>
   listeningHistory(): Promise<{ plays: PlayRecord[]; devices: number }>
+  /** Control other device: what plays here, your other devices, a command for one, the one you control. */
+  remoteState(state: RemoteState): Promise<void>
+  remoteDevices(): Promise<RemoteDevice[]>
+  remoteSend(deviceId: string, command: Omit<RemoteCommand, 'id' | 'from'>): Promise<void>
+  remoteTarget(deviceId: string | null): Promise<void>
   checkNewReleases(): Promise<void>
 
   settings(): Promise<Settings>
@@ -593,12 +599,12 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite' | 'remoteCommand'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
   'prepare', 'prefetch', 'jamStart', 'jamJoin', 'jamLeave', 'jamPublish', 'jamState', 'collabShare', 'collabLeave', 'collabStop', 'collabSync', 'collabWatch', 'searchYouTube', 'versions', 'replaceTrack', 'lyrics', 'chapters', 'videoQualities', 'library', 'setLiked', 'createPlaylist', 'addToPlaylist', 'removeFromPlaylist',
-  'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'createFolder', 'renameFolder', 'deleteFolder', 'setPlaylistFolder', 'saveAlbum', 'follow', 'unfollow', 'played', 'listened', 'listeningHistory',
+  'movePlaylistTrack', 'renamePlaylist', 'updatePlaylist', 'deletePlaylist', 'createFolder', 'renameFolder', 'deleteFolder', 'setPlaylistFolder', 'saveAlbum', 'follow', 'unfollow', 'played', 'listened', 'listeningHistory', 'remoteState', 'remoteDevices', 'remoteSend', 'remoteTarget',
   'checkNewReleases', 'settings', 'setSettings', 'account', 'syncNow', 'startPairing', 'cancelPairing',
   'pairing', 'unlink', 'openExternal', 'updateState', 'checkForUpdates', 'installUpdate',
   'startImport', 'importState', 'retryMissing', 'notifications', 'markNotificationsRead', 'removeNotification', 'retryReport', 'clearImport',

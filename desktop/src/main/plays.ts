@@ -116,3 +116,14 @@ export async function everything(): Promise<{ plays: PlayRecord[]; devices: numb
   }
   return { plays, devices: devices.size }
 }
+
+/** This computer's name in the synced history and for Control other device. */
+let persisted = false
+export function deviceId(): string {
+  const d = get()
+  if (!persisted) {
+    persisted = true
+    if (!readJSON<Partial<Stored> | null>('plays.json', null)) save()
+  }
+  return d.device
+}
