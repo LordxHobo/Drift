@@ -82,6 +82,52 @@ export function moveToFolderItem(p: Playlist): MenuItem {
   }
 }
 
+// Dragging playlists onto folders (the sidebars).
+const dragType = 'application/x-drift-playlist'
+
+/** Props for a playlist row that can be dragged. */
+export function playlistDragProps(p: Playlist): { draggable: true; onDragStart: (e: React.DragEvent) => void } {
+  return {
+    draggable: true,
+    onDragStart: (e) => {
+      e.dataTransfer.setData(dragType, p.id)
+      e.dataTransfer.effectAllowed = 'move'
+    }
+  }
+}
+
+/** Props for something playlists can be dropped on: a folder, or (null) the list itself, out of any folder. */
+export function folderDropProps(folder: string | null, setOver: (on: boolean) => void): {
+  onDragOver: (e: React.DragEvent) => void; onDragLeave: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void
+} {
+  return {
+    onDragOver: (e) => {
+      if (!e.dataTransfer.types.includes(dragType)) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      setOver(true)
+    },
+    onDragLeave: (e) => {
+      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setOver(false)
+    },
+    onDrop: (e) => {
+      const id = e.dataTransfer.getData(dragType)
+      setOver(false)
+      if (!id) return
+      e.preventDefault()
+      e.stopPropagation()
+      const lib = libraryStore.get()
+      const p = lib.playlists.find((x) => x.id === id)
+      if (!p || (p.folder ?? null) === folder) return
+      void drift.setPlaylistFolder(id, folder)
+      const f = lib.folders?.find((x) => x.id === folder)
+      toast(f ? `Moved to ${f.name}` : `Took ${p.name} out of its folder`)
+      if (folder) openFolder(folder, true)
+    }
+  }
+}
+
 /** Playlists in a folder, or (null) the ones in no folder. */
 export function playlistsIn(lib: Library, folder: string | null, list = lib.playlists): Playlist[] {
   const known = new Set((lib.folders ?? []).map((f) => f.id))

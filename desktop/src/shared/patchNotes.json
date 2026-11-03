@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 11,
+      "date": "2026-11-03",
+      "title": "Drag playlists into folders",
+      "notes": [
+        {
+          "text": "Hold a playlist in Your Library and drag it onto a folder to put it there.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Drag a playlist onto a folder in the sidebar to put it there, or drag it back onto the list to take it out.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 10,
       "date": "2026-11-03",
       "title": "A tidier player",

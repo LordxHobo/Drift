@@ -213,6 +213,7 @@ struct CollectionView: View {
                             .frame(minHeight: 60)
                             .contentShape(Rectangle())
                         }
+                        .folderDrop(f.id)
                         .buttonStyle(.plain)
                         Divider().overlay(Theme.line.opacity(0.5))
                     }
@@ -241,6 +242,7 @@ struct CollectionView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .playlistDrag(p)
                         .contextMenu {
                             if p.isAlbum != true {
                                 MoveToFolderMenu(playlist: p) { folderRequest = .new(moving: p.id) }

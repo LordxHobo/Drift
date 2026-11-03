@@ -66,6 +66,7 @@ struct LibraryView: View {
                             FolderTile(size: 64)
                         }
                     }
+                    .folderDrop(f.id)
                     .listRowBackground(Theme.bg)
                     .contextMenu {
                         Button {
@@ -83,6 +84,7 @@ struct LibraryView: View {
                             PlaylistArt(playlist: p, size: 64, corner: 0)
                         }
                     }
+                    .playlistDrag(p)
                     .listRowBackground(Theme.bg)
                     .contextMenu {
                         Button {

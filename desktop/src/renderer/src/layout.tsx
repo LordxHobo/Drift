@@ -21,7 +21,7 @@ import { SpeedButton } from './views/podcasts'
 import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 import { nameOf } from '@shared/types'
-import { folderMenu, newFolder, openFolder, playlistsIn, useOpenFolders } from './views/folders'
+import { folderDropProps, folderMenu, newFolder, openFolder, playlistDragProps, playlistsIn, useOpenFolders } from './views/folders'
 import { DevicesButton } from './views/remote'
 
 const createItems = (): MenuItem[] => [
@@ -51,6 +51,8 @@ export function DriftSidebar(): JSX.Element {
   const showLiked = (filter === 'all' || filter === 'playlists') && match('Liked songs')
   const downloads = useStore(downloadsStore)
   const openFolders = useOpenFolders()
+  // Where a dragged playlist would land: a folder's id, 'top' (out of its folder), or null.
+  const [dropOver, setDropOver] = useState<string | null>(null)
   // Folders show (with their playlists inside) unless you're searching or looking at albums only.
   const grouped = !q && filter !== 'albums' && filter !== 'artists'
   const folders = grouped ? lib.folders ?? [] : []
@@ -65,6 +67,7 @@ export function DriftSidebar(): JSX.Element {
       art={<PlaylistCover p={p} size={44} radius={4} />}
       title={p.name}
       sub={p.isAlbum ? `Album · ${p.albumArtist ?? ''}` : `Playlist · ${plural(p.tracks.length, 'song')}`}
+      extra={playlistDragProps(p)}
     />
   )
   const showDownloaded = downloads.done.length > 0 && (filter === 'all' || filter === 'playlists') && match('Downloaded')
@@ -118,7 +121,7 @@ export function DriftSidebar(): JSX.Element {
             <IconButton icon="search" label="Search in Your Library" size={16} onClick={() => setFinding(true)} />
           )}
         </div>
-        <div className="lib-list">
+        <div className={`lib-list ${dropOver === 'top' ? 'drop-over' : ''}`} {...(grouped ? folderDropProps(null, (on) => setDropOver(on ? 'top' : null)) : {})}>
           {showLiked && (
             <LibRow
               on={route.name === 'liked'}
@@ -132,7 +135,7 @@ export function DriftSidebar(): JSX.Element {
             const inside = playlistsIn(lib, f.id, playlists)
             const isOpen = openFolders.includes(f.id)
             return (
-              <div key={f.id} className="lib-folder">
+              <div key={f.id} className={`lib-folder ${dropOver === f.id ? 'drop-over' : ''}`} {...folderDropProps(f.id, (on) => setDropOver(on ? f.id : null))}>
                 <LibRow
                   on={false}
                   onClick={() => openFolder(f.id, !isOpen)}
@@ -179,13 +182,13 @@ export function DriftSidebar(): JSX.Element {
   )
 }
 
-function LibRow({ on, onClick, onContextMenu, art, title, sub, nested, expanded }: {
+function LibRow({ on, onClick, onContextMenu, art, title, sub, nested, expanded, extra }: {
   on: boolean; onClick: () => void; onContextMenu?: (e: React.MouseEvent) => void; art: JSX.Element; title: string; sub: string
-  nested?: boolean; expanded?: boolean
+  nested?: boolean; expanded?: boolean; extra?: React.ButtonHTMLAttributes<HTMLButtonElement>
 }): JSX.Element {
   return (
     <button className={`lib-row ${on ? 'on' : ''} ${nested ? 'nested' : ''}`} onClick={onClick} onContextMenu={onContextMenu}
-      aria-expanded={expanded}>
+      aria-expanded={expanded} {...extra}>
       {art}
       <span className="lib-text">
         <span className="lib-name">{title}</span>
@@ -524,9 +527,11 @@ export function MusicSidebar(): JSX.Element {
   )
   const lists = lib.playlists.filter((p) => !p.isAlbum)
   const openFolders = useOpenFolders()
+  const [dropOver, setDropOver] = useState<string | null>(null)
   const musicRow = (p: Playlist, nested = false): JSX.Element => (
     <button
       key={p.id}
+      {...playlistDragProps(p)}
       className={`m-item ${nested ? 'nested' : ''} ${same(route, { name: 'playlist', id: p.id }) ? 'on' : ''}`}
       onClick={() => go({ name: 'playlist', id: p.id })}
       onContextMenu={(e) => openMenu(e, playlistMenu(p))}
@@ -570,7 +575,7 @@ export function MusicSidebar(): JSX.Element {
         {(lib.folders ?? []).map((f) => {
           const isOpen = openFolders.includes(f.id)
           return (
-            <div key={f.id}>
+            <div key={f.id} className={dropOver === f.id ? 'drop-over' : ''} {...folderDropProps(f.id, (on) => setDropOver(on ? f.id : null))}>
               <button className="m-item" onClick={() => openFolder(f.id, !isOpen)} onContextMenu={(e) => openMenu(e, folderMenu(f))} aria-expanded={isOpen}>
                 <Icon name={isOpen ? 'folderOpen' : 'folder'} size={18} className="m-icon" />
                 <span>{f.name}</span>
@@ -579,7 +584,9 @@ export function MusicSidebar(): JSX.Element {
             </div>
           )
         })}
-        {playlistsIn(lib, null, lists).map((p) => musicRow(p))}
+        <div className={`m-top-lists ${dropOver === 'top' ? 'drop-over' : ''}`} {...folderDropProps(null, (on) => setDropOver(on ? 'top' : null))}>
+          {playlistsIn(lib, null, lists).map((p) => musicRow(p))}
+        </div>
       </div>
       <ImportPill className="m-import" />
       <DownloadPill className="m-import" />

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// "Move to folder" in a playlist's menu: the folders, a new one, or out of the one it's in.
 struct MoveToFolderMenu: View {
@@ -162,5 +163,50 @@ struct FolderView: View {
         .onChange(of: folder == nil) { _, gone in
             if gone { dismiss() }
         }
+    }
+}
+
+// MARK: Dragging playlists into folders
+
+extension View {
+    /// Hold and drag this playlist (onto a folder).
+    func playlistDrag(_ p: Playlist) -> some View {
+        draggable(p.id.uuidString) {
+            HStack(spacing: 10) {
+                PlaylistArt(playlist: p, size: 44, corner: 4)
+                Text(p.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            }
+            .padding(8)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .foregroundStyle(Theme.text)
+        }
+    }
+
+    /// Playlists dropped here go into this folder (lit while one is held over it).
+    func folderDrop(_ folder: UUID) -> some View { modifier(FolderDrop(folder: folder)) }
+}
+
+private struct FolderDrop: ViewModifier {
+    let folder: UUID
+    @State private var over = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(AppSettings.shared.accent.opacity(over ? 0.22 : 0))
+                    .padding(.horizontal, -8)
+            }
+            .dropDestination(for: String.self) { items, _ in
+                let library = Library.shared
+                var moved = false
+                for s in items {
+                    guard let id = UUID(uuidString: s), library.playlist(id) != nil else { continue }
+                    library.move(id, toFolder: folder)
+                    moved = true
+                }
+                if moved { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+                return moved
+            } isTargeted: { over = $0 }
     }
 }
