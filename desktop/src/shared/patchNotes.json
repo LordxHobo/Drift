@@ -7,6 +7,10 @@
       "title": "A tidier player",
       "notes": [
         {
+          "text": "The lock screen widget is now a filled circle with the Drift logo cut out, like Spotify's.",
+          "platforms": ["ios"]
+        },
+        {
           "text": "The bottom of the player now has three buttons: Devices (AirPlay, Bluetooth and your computer, all in one place), Lyrics and Queue. Listen Together and the stream info moved to the ••• menu, and the top of the player shows when you're listening together.",
           "platforms": ["ios"]
         }

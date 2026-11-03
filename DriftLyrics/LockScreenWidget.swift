@@ -32,11 +32,14 @@ struct LauncherProvider: TimelineProvider {
 
 struct LauncherView: View {
     var body: some View {
+        // A filled circle with the logo cut out of it (like Spotify's), so the lock screen shows through the bars.
         ZStack {
-            AccessoryWidgetBackground()
+            Circle().fill(.white)
             DriftLogo()
                 .padding(13)
+                .blendMode(.destinationOut)
         }
+        .compositingGroup()
         .widgetAccentable()
         .containerBackground(for: .widget) { Color.clear }
         .accessibilityLabel("Open Drift")
