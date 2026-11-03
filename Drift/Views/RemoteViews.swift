@@ -33,6 +33,23 @@ struct DevicesSheet: View {
                         .disabled(!d.online)
                         .listRowBackground(Theme.bg)
                     }
+                }
+
+                Section {
+                    // The system's AirPlay and Bluetooth picker, invisible over the row so the whole row opens it.
+                    HStack(spacing: 14) {
+                        Image(systemName: "airplayaudio").font(.system(size: 22)).frame(width: 34)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("AirPlay or Bluetooth").font(.system(size: 16, weight: .semibold))
+                            Text(player.routeName == "This iPhone" ? "Speakers, headphones, TVs" : "Now: \(player.routeName)")
+                                .font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                    }
+                    .frame(minHeight: 56)
+                    .overlay { RoutePicker(tint: .clear) }
+                    .listRowBackground(Theme.bg)
                 } footer: {
                     Text(SocialStore.shared.me == nil
                          ? "Create a Drift profile and link your computer (Settings › Computer) to play there from here."
@@ -88,7 +105,35 @@ struct DevicesSheet: View {
     }
 }
 
-/// The devices button (player, mini player): lit while playing on another device.
+/// The player's output button: where the sound goes (this iPhone, AirPlay, Bluetooth, or another device
+/// with Drift). Shows the speaker's name when it isn't the iPhone.
+struct OutputButton: View {
+    @State private var show = false
+    private var player: Player { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        let external = player.routeName != "This iPhone"
+        Button { show = true } label: {
+            VStack(spacing: 3) {
+                Image(systemName: external ? (player.isCarRoute ? "car.fill" : "airplayaudio") : "hifispeaker.and.homepod")
+                    .font(.system(size: 18))
+                Text(external ? player.routeName : "Devices")
+                    .font(.system(size: 10, weight: .bold))
+                    .lineLimit(1)
+                    .frame(maxWidth: 110)
+            }
+            .foregroundStyle(external ? accent : Theme.text)
+            .frame(minWidth: 64, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(external ? "Playing on \(player.routeName). Choose where to play" : "Choose where to play")
+        .sheet(isPresented: $show) { DevicesSheet() }
+    }
+}
+
+/// The devices button (mini player, remote player): lit while playing on another device.
 struct DevicesButton: View {
     var size: CGFloat = 17
     @State private var show = false

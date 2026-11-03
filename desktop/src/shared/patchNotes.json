@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 10,
+      "date": "2026-11-03",
+      "title": "A tidier player",
+      "notes": [
+        {
+          "text": "The bottom of the player now has three buttons: Devices (AirPlay, Bluetooth and your computer, all in one place), Lyrics and Queue. Listen Together and the stream info moved to the ••• menu, and the top of the player shows when you're listening together.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 9,
       "date": "2026-11-03",
       "title": "Songs start cleanly",

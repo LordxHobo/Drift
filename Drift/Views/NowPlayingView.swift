@@ -59,8 +59,41 @@ struct NowPlayingView: View {
         .fullScreenCover(isPresented: $showVideoFull) {
             if let t = player.current { EpisodeVideoFullScreen(track: t) }
         }
+        .sheet(isPresented: $showQueue) { QueueSheet() }
+        .sheet(isPresented: $showJam) { JamSheet() }
+        .sheet(isPresented: $showStreamInfo) { StreamInfoSheet() }
         // Add to playlist, Replace and Invite from this screen's song menu open over the player.
         .songSheets(inPlayer: true)
+    }
+
+    /// The song's menu, plus what's only in the player: Listen Together and the stream info.
+    @ViewBuilder
+    private func playerMenu(_ t: Track) -> some View {
+        TrackMenuItems(track: t)
+        Divider()
+        let jam = JamSession.shared.state
+        Button { showJam = true } label: {
+            if let jam {
+                Label("Listening together (\(jam.members.count))", systemImage: "person.2.fill")
+            } else {
+                Label("Listen together", systemImage: "person.2")
+            }
+        }
+        if !player.qualityLabel.isEmpty {
+            Button { showStreamInfo = true } label: {
+                Label("Stream info · \(player.qualityLabel)", systemImage: "waveform")
+            }
+        }
+    }
+
+    /// An icon with a small label under it (the bottom row).
+    private func bottomLabel(_ title: String, icon: String) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon).font(.system(size: 18))
+            Text(title).font(.system(size: 10, weight: .bold))
+        }
+        .frame(minWidth: 64, minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -82,6 +115,14 @@ struct NowPlayingView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close player")
+                    if let jam = JamSession.shared.state {
+                        Button { showJam = true } label: {
+                            Label("Listening together · \(jam.members.count)", systemImage: "person.2.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 } else {
                 HStack {
                     Button { dismiss() } label: {
@@ -92,18 +133,31 @@ struct NowPlayingView: View {
                     }
                     .accessibilityLabel("Close player")
                     Spacer()
-                    VStack(spacing: 1) {
-                        Text("PLAYING FROM")
-                            .font(.system(size: 11, weight: .medium))
-                            .tracking(1)
-                            .foregroundStyle(Color(hex: 0xD4D4D8))
-                        Text(player.playingFrom)
+                    // In a Listen Together session: tap to see who's in it.
+                    let jam = JamSession.shared.state
+                    Button { if jam != nil { showJam = true } } label: {
+                        VStack(spacing: 1) {
+                            Text("PLAYING FROM")
+                                .font(.system(size: 11, weight: .medium))
+                                .tracking(1)
+                                .foregroundStyle(Color(hex: 0xD4D4D8))
+                            HStack(spacing: 4) {
+                                if let jam {
+                                    Image(systemName: "person.2.fill").font(.system(size: 11))
+                                    Text("Listening together · \(jam.members.count)")
+                                } else {
+                                    Text(player.playingFrom)
+                                }
+                            }
                             .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(jam != nil ? accent : Theme.text)
                             .lineLimit(1)
+                        }
                     }
+                    .buttonStyle(.plain)
                     Spacer()
                     Menu {
-                        TrackMenuItems(track: t)
+                        playerMenu(t)
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 20, weight: .semibold))
@@ -161,7 +215,7 @@ struct NowPlayingView: View {
                     Spacer()
                     if Theme.isMusic {
                         Menu {
-                            TrackMenuItems(track: t)
+                            playerMenu(t)
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 15, weight: .bold))
@@ -315,119 +369,38 @@ struct NowPlayingView: View {
                 .animation(.easeOut(duration: 0.25), value: player.skipMessage)
                 .animation(.easeOut(duration: 0.25), value: player.errorMessage)
 
-                // Bottom row
-                HStack {
-                    HStack(spacing: 2) {
-                        RoutePicker(tint: player.routeName == "This iPhone" ? UIColor(hex: 0xD4D4D8) : UIColor(hex: AppSettings.shared.accentHex))
-                            .frame(width: 32, height: 44)
-                        Text(player.routeName)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(player.routeName == "This iPhone" ? Color(hex: 0xD4D4D8) : accent)
-                            .lineLimit(1)
-                    }
-                    .padding(.trailing, DriftGlass.isOn ? 12 : 0)
-                    .padding(.leading, DriftGlass.isOn ? 4 : 0)
-                    .frame(height: DriftGlass.isOn ? 38 : 44)
-                    .driftGlass(in: Capsule(), interactive: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Bottom row: where it plays, lyrics (or the episode's video), and the queue.
+                // Listen Together and the stream info are in the ••• menu.
+                HStack(spacing: 0) {
+                    OutputButton()
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if !player.qualityLabel.isEmpty {
-                        Button { showStreamInfo = true } label: {
-                            Text(player.qualityLabel.uppercased())
-                                .font(.system(size: 10, weight: .heavy))
-                                .tracking(0.5)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x71717A))
-                                    .opacity(DriftGlass.isOn ? 0 : 1))
-                                .padding(.horizontal, DriftGlass.isOn ? 4 : 0)
-                                .padding(.vertical, DriftGlass.isOn ? 3 : 0)
-                                .driftGlass(in: Capsule())
-                                .foregroundStyle(Color(hex: 0xE4E4E7))
-                                .fixedSize()
-                                .frame(minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(player.qualityLabel), stream info")
-                        .sheet(isPresented: $showStreamInfo) { StreamInfoSheet() }
-                    }
-
-                    // Listen Together (lit, with how many, while in a session).
-                    let jam = JamSession.shared.state
-                    Button { showJam = true } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: jam != nil ? "person.2.fill" : "person.2")
-                                .font(.system(size: 16))
-                            if let jam {
-                                Text("\(jam.members.count)").font(.system(size: 12, weight: .bold))
+                    Group {
+                        if t.isFeedEpisode {
+                            // Episodes from a show's feed are audio only.
+                            Color.clear.frame(height: 44)
+                        } else if t.isEpisode {
+                            // Where songs have Lyrics: turns the episode's video on or off.
+                            let on = AppSettings.shared.podcastVideo
+                            Button { AppSettings.shared.podcastVideo.toggle() } label: {
+                                bottomLabel("Video", icon: on ? "play.rectangle.fill" : "play.rectangle")
+                                    .foregroundStyle(on ? accent : Theme.text)
                             }
+                            .accessibilityLabel(on ? "Hide video" : "Show video")
+                        } else {
+                            Button { showLyrics = true } label: {
+                                bottomLabel("Lyrics", icon: "quote.bubble")
+                            }
+                            .accessibilityLabel("Show lyrics")
                         }
-                        .foregroundStyle(jam != nil ? accent : Theme.text)
-                        .padding(.horizontal, DriftGlass.isOn ? 12 : 6)
-                        .frame(height: DriftGlass.isOn ? 38 : 44)
-                        .driftGlass(in: Capsule(), interactive: true)
-                        .frame(height: 44)
-                        .fixedSize()
-                        .contentShape(Rectangle())
                     }
-                    .accessibilityLabel(jam != nil ? "Listening together, \(jam!.members.count) people" : "Listen together")
-                    .sheet(isPresented: $showJam) { JamSheet() }
-
-                    if SocialStore.shared.me != nil {
-                        DevicesButton(size: 16)
-                            .padding(.horizontal, DriftGlass.isOn ? 2 : 0)
-                            .driftGlass(in: Capsule(), interactive: true)
-                    }
+                    .frame(maxWidth: .infinity)
 
                     Button { showQueue = true } label: {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 16, weight: .semibold))
-                            .padding(.horizontal, DriftGlass.isOn ? 12 : 6)
-                            .frame(height: DriftGlass.isOn ? 38 : 44)
-                            .driftGlass(in: Capsule(), interactive: true)
-                            .frame(height: 44)
-                            .fixedSize()
-                            .contentShape(Rectangle())
+                        bottomLabel("Queue", icon: "list.bullet")
                     }
                     .accessibilityLabel("Queue")
-                    .sheet(isPresented: $showQueue) { QueueSheet() }
-
-                    if t.isFeedEpisode {
-                        // Episodes from a show's feed are audio only.
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 44)
-                    } else if t.isEpisode {
-                        // Where songs have Lyrics: turns the episode's video on or off.
-                        let on = AppSettings.shared.podcastVideo
-                        Button { AppSettings.shared.podcastVideo.toggle() } label: {
-                            HStack(spacing: 6) {
-                                Text("Video").font(.system(size: 12, weight: .bold))
-                                Image(systemName: on ? "play.rectangle.fill" : "play.rectangle")
-                                    .font(.system(size: 18))
-                            }
-                            .foregroundStyle(on ? accent : Theme.text)
-                            .padding(.horizontal, DriftGlass.isOn ? 14 : 0)
-                            .frame(height: DriftGlass.isOn ? 38 : 44)
-                            .driftGlass(in: Capsule(), interactive: true)
-                            .frame(height: 44)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .accessibilityLabel(on ? "Hide video" : "Show video")
-                    } else {
-                    Button { showLyrics = true } label: {
-                        HStack(spacing: 6) {
-                            Text("Lyrics").font(.system(size: 12, weight: .bold))
-                            Image(systemName: "quote.bubble")
-                                .font(.system(size: 18))
-                        }
-                        .padding(.horizontal, DriftGlass.isOn ? 14 : 0)
-                        .frame(height: DriftGlass.isOn ? 38 : 44)
-                        .driftGlass(in: Capsule(), interactive: true)
-                        .frame(height: 44)
-                    }
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Show lyrics")
-                    }
                 }
                 .buttonStyle(.plain)
             }
