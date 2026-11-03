@@ -1,6 +1,29 @@
 {
-  "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
+  "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
+    {
+      "id": 19,
+      "date": "2026-11-05",
+      "title": "Drift for Android",
+      "notes": [
+        {
+          "text": "The first Android version of Drift: search songs, artists and albums, and play anything from YouTube Music.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Keeps playing with the screen off, with controls on the lock screen, in the notification and on Bluetooth headphones and car stereos.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Queue and shuffle: hold a song for Play next and Add to queue, and tap Queue in the player to move or remove songs.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Playlists and Liked songs in Your Library. Make playlists with +, save albums, and hold a playlist to rename or delete it.",
+          "platforms": ["android"]
+        }
+      ]
+    },
     {
       "id": 18,
       "date": "2026-11-05",

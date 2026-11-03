@@ -1,0 +1,232 @@
+package com.lordxhobo.drift.playback
+
+import android.content.ComponentName
+import android.content.Context
+import android.net.Uri
+import android.os.Bundle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.lordxhobo.drift.data.Library
+import com.lordxhobo.drift.data.Track
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+
+/**
+ * The app's side of playback: what's playing, the queue, and the controls. Talks to PlaybackService
+ * through a Media3 controller; everything here is read by the screens as Compose state.
+ */
+object Playback {
+    enum class Repeat { OFF, ALL, ONE }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var controller: MediaController? = null
+    /** What to do once connected (a song picked while the service was still starting). */
+    private val pending = mutableListOf<(MediaController) -> Unit>()
+
+    var queue by mutableStateOf(listOf<Track>())
+        private set
+    var index by mutableStateOf(0)
+        private set
+    var isPlaying by mutableStateOf(false)
+        private set
+    var isBuffering by mutableStateOf(false)
+        private set
+    var position by mutableLongStateOf(0L)
+        private set
+    var duration by mutableLongStateOf(0L)
+        private set
+    var shuffle by mutableStateOf(false)
+        private set
+    var repeat by mutableStateOf(Repeat.OFF)
+        private set
+    var playingFrom by mutableStateOf("")
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    /** The order before shuffling, to go back to it. */
+    private var original: List<Track> = emptyList()
+
+    val current: Track? get() = queue.getOrNull(index)
+    val upNext: List<Track> get() = if (index + 1 <= queue.size) queue.drop(index + 1) else emptyList()
+
+    fun connect(context: Context) {
+        if (controller != null) return
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        scope.launch {
+            val c = runCatching { MediaController.Builder(context, token).buildAsync().await() }.getOrNull() ?: return@launch
+            controller = c
+            c.addListener(listener)
+            readAll(c)
+            pending.forEach { it(c) }
+            pending.clear()
+            // The position bar moves on its own: read it a few times a second.
+            while (true) {
+                position = c.currentPosition.coerceAtLeast(0)
+                val d = c.duration
+                if (d > 0) duration = d
+                delay(250)
+            }
+        }
+    }
+
+    private fun withController(action: (MediaController) -> Unit) {
+        val c = controller
+        if (c != null) action(c) else pending += action
+    }
+
+    private val listener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = readAll(player)
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            mediaItem?.let { trackOf(it) }?.let { Library.addRecent(it) }
+        }
+    }
+
+    private fun readAll(p: Player) {
+        val list = (0 until p.mediaItemCount).mapNotNull { trackOf(p.getMediaItemAt(it)) }
+        if (list.map { it.id } != queue.map { it.id }) queue = list
+        index = p.currentMediaItemIndex.coerceAtLeast(0)
+        isPlaying = p.isPlaying
+        isBuffering = p.playbackState == Player.STATE_BUFFERING
+        repeat = when (p.repeatMode) {
+            Player.REPEAT_MODE_ONE -> Repeat.ONE
+            Player.REPEAT_MODE_ALL -> Repeat.ALL
+            else -> Repeat.OFF
+        }
+        error = p.playerError?.let { "Couldn't play this song. Check your connection." }
+        val d = p.duration
+        duration = if (d > 0) d else ((current?.duration ?: 0.0) * 1000).toLong()
+    }
+
+    // MARK: Songs ⇄ player items
+
+    private const val TRACK_KEY = "drift.track"
+
+    private fun itemOf(t: Track): MediaItem {
+        val extras = Bundle().apply { putString(TRACK_KEY, Library.json.encodeToString(t)) }
+        val meta = MediaMetadata.Builder()
+            .setTitle(t.title)
+            .setArtist(t.artist)
+            .setAlbumTitle(t.album)
+            .setArtworkUri(Uri.parse(t.artwork(544)))
+            .setExtras(extras)
+            .build()
+        return MediaItem.Builder().setMediaId(t.id).setMediaMetadata(meta).build()
+    }
+
+    private fun trackOf(item: MediaItem): Track? {
+        val s = item.mediaMetadata.extras?.getString(TRACK_KEY) ?: return null
+        return runCatching { Library.json.decodeFromString(Track.serializer(), s) }.getOrNull()
+    }
+
+    // MARK: Controls
+
+    /** Plays a list from one of its songs (or a random one, shuffled). */
+    fun play(tracks: List<Track>, start: Int = 0, from: String, shuffled: Boolean = false) {
+        if (tracks.isEmpty()) return
+        val first = if (shuffled) tracks.indices.random() else start.coerceIn(tracks.indices)
+        original = tracks
+        playingFrom = from
+        val list = if (shuffled) listOf(tracks[first]) + tracks.filterIndexed { i, _ -> i != first }.shuffled() else tracks
+        val at = if (shuffled) 0 else first
+        shuffle = shuffled
+        queue = list
+        index = at
+        withController { c ->
+            c.setMediaItems(list.map { itemOf(it) }, at, 0)
+            c.prepare()
+            c.play()
+        }
+    }
+
+    fun playNext(t: Track) {
+        if (current == null) return play(listOf(t), 0, "Queue")
+        withController { c -> c.addMediaItem(c.currentMediaItemIndex + 1, itemOf(t)) }
+        original = original + t
+    }
+
+    fun addToQueue(t: Track) {
+        if (current == null) return play(listOf(t), 0, "Queue")
+        withController { c -> c.addMediaItem(itemOf(t)) }
+        original = original + t
+    }
+
+    fun toggle() = withController { c ->
+        if (c.isPlaying) c.pause() else {
+            if (c.playbackState == Player.STATE_IDLE) c.prepare()
+            c.play()
+        }
+    }
+
+    fun next() = withController { c -> if (c.hasNextMediaItem()) c.seekToNextMediaItem() }
+
+    /** The previous song, or back to the start of this one after the first few seconds. */
+    fun previous() = withController { c ->
+        if (c.currentPosition > 3000 || !c.hasPreviousMediaItem()) c.seekTo(0) else c.seekToPreviousMediaItem()
+    }
+
+    fun seek(ms: Long) = withController { c ->
+        c.seekTo(ms)
+        position = ms
+    }
+
+    /** Plays a song further down the queue. */
+    fun jump(to: Int) = withController { c ->
+        if (to in 0 until c.mediaItemCount) {
+            c.seekTo(to, 0)
+            c.play()
+        }
+    }
+
+    fun removeFromQueue(at: Int) = withController { c ->
+        if (at != c.currentMediaItemIndex && at in 0 until c.mediaItemCount) c.removeMediaItem(at)
+    }
+
+    /** Moves a song in Up next one place up (-1) or down (+1). */
+    fun move(at: Int, by: Int) = withController { c ->
+        val to = at + by
+        val now = c.currentMediaItemIndex
+        if (at > now && to > now && to < c.mediaItemCount) c.moveMediaItem(at, to)
+    }
+
+    fun clearUpNext() = withController { c ->
+        val from = c.currentMediaItemIndex + 1
+        if (from < c.mediaItemCount) c.removeMediaItems(from, c.mediaItemCount)
+    }
+
+    /** Shuffles what's next (the song playing stays), or goes back to the original order. */
+    fun toggleShuffle() {
+        val cur = current ?: run { shuffle = !shuffle; return }
+        shuffle = !shuffle
+        val rest = if (shuffle) upNext.shuffled() else {
+            val i = original.indexOfFirst { it.id == cur.id }
+            if (i >= 0) original.drop(i + 1) else upNext
+        }
+        withController { c ->
+            val from = c.currentMediaItemIndex + 1
+            if (from < c.mediaItemCount) c.removeMediaItems(from, c.mediaItemCount)
+            c.addMediaItems(rest.map { itemOf(it) })
+        }
+    }
+
+    fun cycleRepeat() = withController { c ->
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+}
