@@ -573,6 +573,7 @@ final class Player {
     /// Fully unloads the previous song: it can't play another note, and its events
     /// (finished, failed, time updates) can no longer affect the song that's loading.
     private func detachItem() {
+        startGeneration += 1
         watchdog?.cancel()
         itemObservers.removeAll()
         itemNotifications.forEach { NotificationCenter.default.removeObserver($0) }
@@ -627,23 +628,39 @@ final class Player {
             }
         })
 
-        av.replaceCurrentItem(with: item)
-        av.defaultRate = effectiveRate
-
-        // Listen for dead air at the end of songs (hidden tracks, long silences), and apply the equalizer.
+        // The audio tap (silence at the end of songs, and the equalizer) goes on before the song starts.
+        // Added while it plays, iOS restarts the sound from the beginning a second in.
         meter = nil
         silentSince = nil
-        if current != nil {
-            Task { [weak self] in
-                guard let audio = try? await item.asset.loadTracks(withMediaType: .audio).first,
-                      let self, item === self.av.currentItem else { return }
+        startGeneration += 1
+        let generation = startGeneration
+        Task { [weak self] in
+            let tracks = Task { try? await item.asset.loadTracks(withMediaType: .audio).first }
+            // Never hold a song back long for it: without the tap it just plays plainly.
+            let timeout = Task {
+                try? await Task.sleep(for: .seconds(4))
+                tracks.cancel()
+            }
+            let audio = await tracks.value
+            timeout.cancel()
+            guard let self, self.startGeneration == generation else { return }
+            if let audio {
                 let m = LevelMeter()
                 if let mix = SilenceDetector.audioMix(for: audio, meter: m) {
                     item.audioMix = mix
                     self.meter = m
                 }
             }
+            self.begin(item, autoplay: autoplay, at: time)
         }
+    }
+
+    /// Counts calls to `start` (and unloads), so a song that's no longer wanted never starts.
+    @ObservationIgnored private var startGeneration = 0
+
+    private func begin(_ item: AVPlayerItem, autoplay: Bool, at time: Double) {
+        av.replaceCurrentItem(with: item)
+        av.defaultRate = effectiveRate
         if time > 0 {
             av.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         }

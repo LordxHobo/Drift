@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 9,
+      "date": "2026-11-03",
+      "title": "Songs start cleanly",
+      "notes": [
+        {
+          "text": "Fixed songs jumping back to the start a second after they began playing.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 8,
       "date": "2026-11-01",
       "title": "Equalizer, and play on your other devices",
