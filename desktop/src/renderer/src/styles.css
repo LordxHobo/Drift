@@ -2223,6 +2223,8 @@ kbd {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   margin: 0 -4px;
   padding: 0 4px;
 }
@@ -4786,4 +4788,14 @@ a.btn.disabled {
 }
 .m-top-lists {
   min-height: 24px;
+}
+
+/* The playlists part of the Apple Music sidebar fills the rest, so right-clicking its empty space works. */
+.m-playlists {
+  flex: 1 0 auto;
+  min-height: 80px;
+  padding-bottom: 12px;
+}
+.m-scroll > * {
+  flex-shrink: 0;
 }

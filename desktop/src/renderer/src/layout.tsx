@@ -121,7 +121,7 @@ export function DriftSidebar(): JSX.Element {
             <IconButton icon="search" label="Search in Your Library" size={16} onClick={() => setFinding(true)} />
           )}
         </div>
-        <div className={`lib-list ${dropOver === 'top' ? 'drop-over' : ''}`} {...(grouped ? folderDropProps(null, (on) => setDropOver(on ? 'top' : null)) : {})}>
+        <div className={`lib-list ${dropOver === 'top' ? 'drop-over' : ''}`} onContextMenu={(e) => openMenu(e, createItems())} {...(grouped ? folderDropProps(null, (on) => setDropOver(on ? 'top' : null)) : {})}>
           {showLiked && (
             <LibRow
               on={route.name === 'liked'}
@@ -567,6 +567,8 @@ export function MusicSidebar(): JSX.Element {
         {item({ name: 'collection', kind: 'songs' }, 'note', 'Songs')}
         {item({ name: 'liked' }, 'heart', 'Liked Songs')}
         {item({ name: 'collection', kind: 'downloaded' }, 'download', 'Downloaded')}
+        {/* Right-click anywhere from here down (not on a playlist): the same as the + button. */}
+        <div className="m-playlists" onContextMenu={(e) => openMenu(e, createItems())}>
         <div className="m-section">
           Playlists
           <IconButton icon="plus" label="New playlist or import" size={14} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
@@ -586,6 +588,7 @@ export function MusicSidebar(): JSX.Element {
         })}
         <div className={`m-top-lists ${dropOver === 'top' ? 'drop-over' : ''}`} {...folderDropProps(null, (on) => setDropOver(on ? 'top' : null))}>
           {playlistsIn(lib, null, lists).map((p) => musicRow(p))}
+        </div>
         </div>
       </div>
       <ImportPill className="m-import" />

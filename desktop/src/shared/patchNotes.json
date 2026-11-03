@@ -13,6 +13,10 @@
         {
           "text": "Drag a playlist onto a folder in the sidebar to put it there, or drag it back onto the list to take it out.",
           "platforms": ["desktop"]
+        },
+        {
+          "text": "Right-click the empty part of the sidebar's playlists to make a new playlist or folder, or import from Spotify (the same as the + button).",
+          "platforms": ["desktop"]
         }
       ]
     },
