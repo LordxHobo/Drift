@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 15,
+      "date": "2026-11-04",
+      "title": "Updates sooner",
+      "notes": [
+        {
+          "text": "Drift now looks for updates every hour instead of every 4 hours. A downloaded update installs by itself once nothing has played for 3 minutes, and Drift opens again on the same song.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 14,
       "date": "2026-11-04",
       "title": "Start minimized",

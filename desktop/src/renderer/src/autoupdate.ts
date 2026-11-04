@@ -1,10 +1,10 @@
 // Installs a downloaded update by itself, but only while nothing is playing: once Drift has been
-// quiet for a minute (and no Spotify import is running), it closes, updates silently and opens
+// quiet for 3 minutes (and no Spotify import is running), it closes, updates silently and opens
 // again on the same song, paused.
 import { drift, importStore, updateStore } from './state'
 import { playerStore } from './player'
 
-const quietFor = 60_000
+const quietFor = 3 * 60_000
 let timer: number | undefined
 
 const busy = (): boolean => {

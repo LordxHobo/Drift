@@ -58,7 +58,7 @@ export function startUpdates(): void {
     })
   }
   setTimeout(() => void checkForUpdates(), 10_000)
-  setInterval(() => void checkForUpdates(), 4 * 3600_000)
+  setInterval(() => void checkForUpdates(), 3600_000)
 }
 
 export async function checkForUpdates(): Promise<void> {

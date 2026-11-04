@@ -300,7 +300,7 @@ function Updates({ version }: { version: string }): JSX.Element {
     u.phase === 'checking' ? 'Checking…'
     : u.phase === 'none' ? 'Drift is up to date.'
     : u.phase === 'downloading' ? `Downloading Drift ${u.version ?? ''}… ${u.percent ?? 0}%`
-    : u.phase === 'ready' ? `Drift ${u.version} is ready. It installs by itself once nothing has played for a minute, or restart now.`
+    : u.phase === 'ready' ? `Drift ${u.version} is ready. It installs by itself once nothing has played for 3 minutes, or restart now.`
     : u.phase === 'available' ? `Drift ${u.version} is out. Download it and replace this version.`
     : u.phase === 'error' ? `Couldn’t check for updates: ${u.message ?? 'unknown error'}`
     : u.phase === 'dev' ? u.message ?? ''
