@@ -2,6 +2,16 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 13,
+      "date": "2026-11-04",
+      "title": "Fewer songs cut short",
+      "notes": [
+        {
+          "text": "Drift no longer mistakes a quiet break or a soft ending for silence, so songs play to the end. Only real dead air (15 seconds or more) is skipped now."
+        }
+      ]
+    },
+    {
       "id": 11,
       "date": "2026-11-03",
       "title": "Drag playlists into folders",

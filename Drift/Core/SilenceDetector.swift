@@ -6,6 +6,9 @@ import MediaToolbox
 final class LevelMeter: @unchecked Sendable {
     /// Starts "loud" so nothing is skipped until real measurements arrive.
     var peak: Float = 1
+    /// Loudest sample since the song-end check last looked (`takeLoudest`), so a short sound between two
+    /// looks still counts. Starts "loud" too.
+    var loudestSinceCheck: Float = 1
     /// When audio last came through (seconds since the phone started; 0 = not yet).
     var lastAudio: Double = 0
     /// The equalizer, applied to the sound as it passes (audio thread only).
@@ -17,6 +20,13 @@ final class LevelMeter: @unchecked Sendable {
     func isQuiet(below level: Float, starved: Bool) -> Bool {
         if peak < level { return true }
         return starved && lastAudio > 0 && ProcessInfo.processInfo.systemUptime - lastAudio > 1.5
+    }
+
+    /// The loudest sample since the last call, then starts over.
+    func takeLoudest() -> Float {
+        let loudest = loudestSinceCheck
+        loudestSinceCheck = 0
+        return loudest
     }
 }
 
@@ -51,6 +61,7 @@ enum SilenceDetector {
                     peak = max(peak, m)
                 }
                 meter.peak = peak
+                meter.loudestSinceCheck = max(meter.loudestSinceCheck, peak)
                 meter.lastAudio = ProcessInfo.processInfo.systemUptime
                 meter.equalizer.process(UnsafeMutableAudioBufferListPointer(bufferList), frames: Int(framesOut.pointee))
             }

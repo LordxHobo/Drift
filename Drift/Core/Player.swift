@@ -920,15 +920,19 @@ final class Player {
         }
     }
 
-    /// 6 s of near-total silence after the first 40% of a song (with more left): the song is over, move on.
+    /// 15 s of dead air after the first 40% of a song (with more left): the song is over, move on.
     /// Always on: some uploads and album tracks end with minutes of dead air (or a hidden track after it).
+    /// Strict on purpose, so a quiet break, a fade or a soft outro is never mistaken for the end: every
+    /// sound since the last check counts (not only the latest moment), and audio not reaching the meter
+    /// mid-song is not taken as silence (the song-end check above handles files iOS misreads as longer).
     private func checkSilence(at t: Double) -> Bool {
-        guard let m = meter, !isEpisode, isPlaying, !isBuffering,
+        let loudest = meter?.takeLoudest() ?? 1
+        guard meter != nil, !isEpisode, isPlaying, !isBuffering,
               duration > 60, t > duration * 0.4, duration - t > 8 else {
             silentSince = nil
             return false
         }
-        guard m.isQuiet(below: 0.002, starved: !av.isExternalPlaybackActive) else {
+        guard loudest < 0.001 else {
             silentSince = nil
             return false
         }
@@ -936,7 +940,7 @@ final class Player {
             silentSince = t
             return false
         }
-        guard t - since >= 6 else { return false }
+        guard t - since >= 15 else { return false }
         silentSince = nil
         meter = nil
         showSkip("Skipped \(formatTime(duration - since)) of silence")

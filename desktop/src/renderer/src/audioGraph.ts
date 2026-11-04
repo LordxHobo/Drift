@@ -26,7 +26,8 @@ export function connectAudio(el: HTMLAudioElement): void {
     const ctx = new AudioContext()
     const source = ctx.createMediaElementSource(el)
     const analyser = ctx.createAnalyser()
-    analyser.fftSize = 2048
+    // The largest window (about 0.7 s), so each silence check hears everything since the last one.
+    analyser.fftSize = 32768
     const pre = ctx.createGain()
     const filters = eqBands.map((hz, i) => {
       const f = ctx.createBiquadFilter()

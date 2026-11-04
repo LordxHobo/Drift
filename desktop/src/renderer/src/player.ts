@@ -498,8 +498,9 @@ function newListen(): void {
   listen.last = 0
 }
 
-// Songs that end in minutes of dead air (or a hidden track after it): 6 s of near-silence after the
-// first 40% of a song, with more left, ends it. Only once the song has been heard (so a sound Drift
+// Songs that end in minutes of dead air (or a hidden track after it): 15 s of dead air after the
+// first 40% of a song, with more left, ends it. Strict on purpose, so a quiet break, a fade or a soft
+// outro is never taken for the end. Only once the song has been heard (so a sound Drift
 // can't measure never counts as silence).
 const silence = { since: 0, heard: false }
 
@@ -517,12 +518,12 @@ function checkSilence(): void {
     return
   }
   if (peak > 0.01) silence.heard = true
-  if (!silence.heard || !Number.isFinite(d) || d <= 60 || now < d * 0.4 || d - now <= 8 || peak >= 0.002) {
+  if (!silence.heard || !Number.isFinite(d) || d <= 60 || now < d * 0.4 || d - now <= 8 || peak >= 0.001) {
     silence.since = 0
     return
   }
   if (!silence.since) silence.since = performance.now()
-  else if (performance.now() - silence.since >= 6000) {
+  else if (performance.now() - silence.since >= 15000) {
     silence.since = 0
     toast(`Skipped ${formatTime(d - now)} of silence`)
     next(true)
