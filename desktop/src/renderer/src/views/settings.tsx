@@ -156,6 +156,14 @@ export function SettingsPage(): JSX.Element {
             <Toggle on={s.openAtLogin} onChange={(v) => setSettings({ openAtLogin: v })} label="Open Drift when you sign in" />
           </Row>
         )}
+        {platform !== 'linux' && s.openAtLogin && (
+          <Row
+            title={platform === 'darwin' ? 'Start minimized in the Dock' : 'Start minimized to the taskbar'}
+            detail="When Drift opens at sign-in, it waits in the taskbar instead of opening its window. Opening it yourself still shows the window."
+          >
+            <Toggle on={s.openMinimized} onChange={(v) => setSettings({ openMinimized: v })} label="Start minimized" />
+          </Row>
+        )}
       </section>
 
       <section className="set-section">

@@ -47,6 +47,7 @@ const defaultSettings: Settings = {
   musicIcon: 'pink',
   volume: 0.8,
   openAtLogin: false,
+  openMinimized: false,
   skipNonMusic: true,
   skipSponsors: true,
   podcastSpeed: 1,
@@ -71,11 +72,25 @@ export function getSettings(): Settings {
 export function setSettings(change: Partial<Settings>): Settings {
   settings = { ...getSettings(), ...change }
   writeJSON('settings.json', settings)
-  if ('openAtLogin' in change && process.platform !== 'linux') {
-    app.setLoginItemSettings({ openAtLogin: settings.openAtLogin })
-  }
+  if ('openAtLogin' in change) syncLoginItem()
   emit('settings', settings)
   return settings
+}
+
+/** Started by the computer at sign-in (not opened by hand), so it can start minimized. */
+export const AT_LOGIN_ARG = '--at-login'
+
+/** Registers (or removes) Drift as a sign-in app. On Windows it's started with --at-login, so it knows. */
+export function syncLoginItem(): void {
+  if (process.platform === 'linux') return
+  const openAtLogin = getSettings().openAtLogin
+  app.setLoginItemSettings(process.platform === 'win32' ? { openAtLogin, args: [AT_LOGIN_ARG] } : { openAtLogin })
+}
+
+/** Whether this start was the computer opening Drift at sign-in. */
+export function openedAtLogin(): boolean {
+  if (process.argv.includes(AT_LOGIN_ARG)) return true
+  return process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin === true
 }
 
 // MARK: Library

@@ -34,6 +34,8 @@ if (!app.requestSingleInstanceLock()) app.quit()
 if (process.platform === 'win32') app.setAppUserModelId('com.lordxhobo.drift.desktop')
 
 let win: BrowserWindow | undefined
+/** Only the first window of a sign-in start opens minimized (set when the app is ready). */
+let startMinimized = false
 
 function createWindow(): void {
   const isMac = process.platform === 'darwin'
@@ -59,7 +61,15 @@ function createWindow(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
-  win.once('ready-to-show', () => win?.show())
+  win.once('ready-to-show', () => {
+    if (startMinimized) {
+      // Straight to the taskbar (the Dock on a Mac), without taking focus.
+      startMinimized = false
+      win?.minimize()
+    } else {
+      win?.show()
+    }
+  })
   // Closing the window keeps Drift playing in the tray (Windows and Linux), unless turned off.
   win.on('close', (e) => {
     if (!quitting && process.platform !== 'darwin' && store.getSettings().closeToTray) {
@@ -269,6 +279,9 @@ app.whenReady().then(() => {
     return new Response('Not found', { status: 404 })
   })
   nativeTheme.on('updated', updateTitleBar)
+  // Re-register the sign-in entry so older installs get the --at-login marker too.
+  if (store.getSettings().openAtLogin) store.syncLoginItem()
+  startMinimized = store.getSettings().openAtLogin && store.getSettings().openMinimized && store.openedAtLogin()
   createWindow()
   createTray(showWindow)
   applyIcon()

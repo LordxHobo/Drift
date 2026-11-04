@@ -168,6 +168,8 @@ export interface Settings {
   volume: number
   /** Start Drift when signing in to the computer (Windows and Mac). */
   openAtLogin: boolean
+  /** When Drift starts at sign-in, start it minimized to the taskbar (the Dock on a Mac). */
+  openMinimized: boolean
   /** Skip intros, outros and talking in music videos (SponsorBlock). */
   skipNonMusic: boolean
   /** Skip sponsor reads and reminders in episodes (SponsorBlock). */

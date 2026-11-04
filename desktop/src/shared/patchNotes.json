@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 14,
+      "date": "2026-11-04",
+      "title": "Start minimized",
+      "notes": [
+        {
+          "text": "New in Settings → Computer: when Drift opens at sign-in, it can start minimized to the taskbar instead of opening its window. Turn on Open Drift when you sign in to see it.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 13,
       "date": "2026-11-04",
       "title": "Fewer songs cut short",
