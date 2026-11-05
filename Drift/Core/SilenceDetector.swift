@@ -22,11 +22,17 @@ final class LevelMeter: @unchecked Sendable {
         return starved && lastAudio > 0 && ProcessInfo.processInfo.systemUptime - lastAudio > 1.5
     }
 
-    /// The loudest sample since the last call, then starts over.
-    func takeLoudest() -> Float {
-        let loudest = loudestSinceCheck
-        loudestSinceCheck = 0
-        return loudest
+    /// Whether any sound came through since the song-end check last looked.
+    var heardSinceCheck = false
+
+    /// The loudest sample since the last call, then starts over. nil when no sound came through at all
+    /// (e.g. while it plays over AirPlay): unknown, never taken as silence.
+    func takeLoudest() -> Float? {
+        defer {
+            loudestSinceCheck = 0
+            heardSinceCheck = false
+        }
+        return heardSinceCheck ? loudestSinceCheck : nil
     }
 }
 
@@ -62,6 +68,7 @@ enum SilenceDetector {
                 }
                 meter.peak = peak
                 meter.loudestSinceCheck = max(meter.loudestSinceCheck, peak)
+                meter.heardSinceCheck = true
                 meter.lastAudio = ProcessInfo.processInfo.systemUptime
                 meter.equalizer.process(UnsafeMutableAudioBufferListPointer(bufferList), frames: Int(framesOut.pointee))
             }

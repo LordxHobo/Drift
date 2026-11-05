@@ -30,3 +30,34 @@ enum SongLengths {
         }
     }
 }
+
+/// Which video a song's downloaded or cached file was actually saved from (often the album version of
+/// a music video). Skip segments (SponsorBlock) belong to that video: a music video's intro and outro
+/// times don't match its album version, and used on it they cut into the middle of the song.
+@MainActor
+enum SongSources {
+    private static let url = AppFiles.data.appending(path: "song-sources.json")
+    private static var sources: [String: String] = {
+        guard let data = try? Data(contentsOf: url),
+              let d = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return d
+    }()
+    private static var saveTask: Task<Void, Never>?
+
+    static func source(_ id: String) -> String? { sources[id] }
+
+    static func remember(_ id: String, _ source: String) {
+        guard !source.isEmpty, sources[id] != source else { return }
+        sources[id] = source
+        guard saveTask == nil else { return }
+        saveTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            saveTask = nil
+            let snapshot = sources
+            let target = url
+            Task.detached(priority: .utility) {
+                if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: target, options: .atomic) }
+            }
+        }
+    }
+}

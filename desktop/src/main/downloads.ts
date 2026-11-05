@@ -14,6 +14,8 @@ interface Entry {
   savedAt: number
   /** Downloaded on its own (not only because it's in a kept playlist). */
   manual?: boolean
+  /** The video the audio was saved from (often the album version of a music video). */
+  source?: string
 }
 
 interface Saved {
@@ -95,11 +97,11 @@ export function downloadedTracks(): Track[] {
     .map((e) => e.track)
 }
 
-function lookup(id: string): { path: string; mime: string; size: number } | undefined {
+function lookup(id: string): { path: string; mime: string; size: number; source?: string } | undefined {
   const e = data().entries[id]
   if (!e) return undefined
   const path = join(folder(), e.file)
-  return existsSync(path) ? { path, mime: e.mime, size: e.size } : undefined
+  return existsSync(path) ? { path, mime: e.mime, size: e.size, source: e.source } : undefined
 }
 
 // MARK: Queue
@@ -169,7 +171,7 @@ async function run(track: Track, manual: boolean): Promise<void> {
     const file = `${id}.${extension(result.mime)}`
     renameSync(base + '.part', join(folder(), file))
     const queued = d.queue.find((q) => q.track.id === id)
-    d.entries[id] = { track, file, mime: result.mime, size: result.size, savedAt: Date.now(), manual: queued?.manual ?? manual }
+    d.entries[id] = { track, file, mime: result.mime, size: result.size, savedAt: Date.now(), manual: queued?.manual ?? manual, source: result.playId }
   } catch (e) {
     if (!cancelled.has(id)) {
       const message = (e instanceof Error ? e.message : String(e)).replace(/^Error: /, '')

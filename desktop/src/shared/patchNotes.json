@@ -2,6 +2,20 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 16,
+      "date": "2026-11-05",
+      "title": "No more skips in the middle of downloaded songs",
+      "notes": [
+        {
+          "text": "Downloaded and cached songs no longer skip parts in the middle. Drift was using the music video's skip times (intros, outros) on the album version it had saved, so they landed in the wrong places."
+        },
+        {
+          "text": "Songs playing over AirPlay are no longer mistaken for silence.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 15,
       "date": "2026-11-04",
       "title": "Updates sooner",

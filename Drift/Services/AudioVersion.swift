@@ -26,6 +26,17 @@ actor AudioVersion {
         notes.removeAll()
     }
 
+    /// The version already chosen for a song, without looking anything up (nil = not known yet).
+    func remembered(_ track: Track) -> String? {
+        if track.chosen == true || track.upload == true { return track.id }
+        let official = AppSettings.shared.preferOfficialAudio
+        let explicit = AppSettings.shared.preferExplicit
+        guard official || explicit, !track.isEpisode else { return track.id }
+        use(mode: (official ? "album" : "") + (explicit ? "explicit" : ""))
+        guard let known = map[track.id] else { return nil }
+        return known.isEmpty ? track.id : known
+    }
+
     /// The ID to actually play for a song (the album and/or explicit version when there is one).
     func preferred(_ track: Track) async -> String {
         let id = track.id

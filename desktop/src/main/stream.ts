@@ -373,6 +373,8 @@ export interface LocalAudio {
   path: string
   mime: string
   size: number
+  /** The video the audio was saved from. */
+  source?: string
 }
 
 /** Set by the downloads module: the file of a downloaded song, if there is one. */
@@ -460,11 +462,22 @@ export async function prefetch(tracks: Track[]): Promise<void> {
   }
 }
 
+/** The version already chosen for a song, without looking anything up (undefined = not known yet). */
+function rememberedId(track: Track): string | undefined {
+  if (track.chosen || track.upload || track.podcast) return track.id
+  const { preferOfficialAudio: official, preferExplicit: explicit } = getSettings()
+  if (!official && !explicit) return track.id
+  const map = loadVersions(`${official ? 'album' : ''}${explicit ? 'explicit' : ''}`)
+  return track.id in map ? map[track.id] || track.id : undefined
+}
+
 export async function prepare(track: Track): Promise<StreamInfo> {
   // Downloaded: plays from the computer, no internet needed.
   const local = localLookup(track.id)
   if (local) {
-    return { playId: track.id, mime: local.mime, bitrate: track.duration ? Math.round((local.size * 8) / track.duration) : 0, size: local.size, duration: track.duration ?? undefined, client: 'Downloaded', note: 'Downloaded on this computer' }
+    // Skip segments only from the video the file was really saved from; not sure = none.
+    const segmentsId = local.source ?? rememberedId(track) ?? ''
+    return { playId: track.id, segmentsId, mime: local.mime, bitrate: track.duration ? Math.round((local.size * 8) / track.duration) : 0, size: local.size, duration: track.duration ?? undefined, client: 'Downloaded', note: 'Downloaded on this computer' }
   }
   // An episode from a show's feed: its audio file, passed through as it is.
   if (track.audioURL) {

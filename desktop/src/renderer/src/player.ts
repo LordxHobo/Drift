@@ -215,7 +215,7 @@ function loadSegments(t: Track, playId: string, token: number): void {
   const st = settingsStore.get()
   segments = []
   skipped.clear()
-  if (t.podcast ? !st.skipSponsors : !st.skipNonMusic) return
+  if (!playId || (t.podcast ? !st.skipSponsors : !st.skipNonMusic)) return
   void drift.skipSegments(playId, !!t.podcast).then((list) => {
     if (token === loadToken) segments = list
   })
@@ -265,7 +265,7 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
     audio.src = `drift://stream/${info.playId}`
     audio.playbackRate = t.podcast ? settingsStore.get().podcastSpeed || 1 : 1
     if (at > 0) audio.currentTime = at
-    loadSegments(t, info.playId, token)
+    loadSegments(t, info.segmentsId ?? info.playId, token)
     patch({ info, duration: info.duration || t.duration || 0 })
     if (autoplay) {
       await audio.play()

@@ -146,6 +146,7 @@ final class DownloadManager {
         }
         do {
             let playID = await AudioVersion.shared.preferred(t)
+            SongSources.remember(t.id, playID)
             if freshLink { await StreamResolver.shared.invalidate(playID) }
             let stream = try await StreamResolver.shared.resolve(playID, dataSaver: false, forDownload: true)
             // A stream-only video (no audio file to save) can play but not be downloaded.

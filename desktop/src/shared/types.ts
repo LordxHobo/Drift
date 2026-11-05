@@ -254,6 +254,8 @@ export type Lyrics =
 export interface StreamInfo {
   /** The video that actually plays (the album version of a music video, when there is one). */
   playId: string
+  /** The video to take skip segments (SponsorBlock) from, when not playId; '' = none. */
+  segmentsId?: string
   mime: string
   bitrate: number
   size?: number

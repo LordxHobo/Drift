@@ -471,16 +471,35 @@ final class Player {
             var cached: URL?
             if !downloaded && !track.isEpisode { cached = await PlayCache.shared.file(for: track.id) }
             var chosen = track.id
-            if !downloaded && cached == nil && !track.isEpisode { chosen = await AudioVersion.shared.preferred(track) }
+            // Skip segments must come from the video the audio is really from (nil = not sure: none).
+            var segmentsID: String? = track.id
+            if track.isEpisode {
+                // as it is
+            } else if downloaded || cached != nil {
+                // Saved earlier, often from the album version of a music video.
+                if let source = SongSources.source(track.id) {
+                    chosen = source
+                } else if let known = await AudioVersion.shared.remembered(track) {
+                    chosen = known
+                } else {
+                    segmentsID = nil
+                }
+                if segmentsID != nil { segmentsID = chosen }
+            } else {
+                chosen = await AudioVersion.shared.preferred(track)
+                segmentsID = chosen
+                SongSources.remember(track.id, chosen)
+            }
             let playID = chosen
             guard !Task.isCancelled, self.current?.id == track.id else { return }
             self.playID = playID
             // Skip segments are looked up while the audio link is being found.
-            let segsTask = Task { () -> [SkipSegment] in
+            let segsTask = Task { [segmentsID] () -> [SkipSegment] in
                 // Feed episodes aren't on YouTube, so SponsorBlock doesn't know them.
                 if track.isFeedEpisode { return [] }
+                guard let segmentsID else { return [] }
                 return await SponsorBlock.segments(
-                    for: playID,
+                    for: segmentsID,
                     categories: track.isEpisode ? SponsorBlock.podcastCategories : SponsorBlock.musicCategories)
             }
             do {
@@ -926,13 +945,13 @@ final class Player {
     /// sound since the last check counts (not only the latest moment), and audio not reaching the meter
     /// mid-song is not taken as silence (the song-end check above handles files iOS misreads as longer).
     private func checkSilence(at t: Double) -> Bool {
-        let loudest = meter?.takeLoudest() ?? 1
+        let loudest = meter?.takeLoudest()
         guard meter != nil, !isEpisode, isPlaying, !isBuffering,
               duration > 60, t > duration * 0.4, duration - t > 8 else {
             silentSince = nil
             return false
         }
-        guard loudest < 0.001 else {
+        guard let loudest, loudest < 0.001 else {
             silentSince = nil
             return false
         }
