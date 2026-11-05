@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
-import { accountStore, connectionsStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, setSettings, settingsStore, updateStore, useStore } from '../state'
+import { accountStore, connectionsStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, readLocal, setSettings, settingsStore, Store, updateStore, useStore, writeLocal } from '../state'
 import { Avatar, Spinner } from '../ui'
 import { accents, musicRed, plural, timeAgo } from '../util'
 import { formatBytes } from '../downloads'
@@ -30,8 +30,31 @@ function Row({ title, detail, children }: { title: string; detail?: string; chil
   )
 }
 
+type SettingsTab = 'playback' | 'podcasts' | 'look' | 'downloads' | 'phone' | 'computer'
+
+const settingsTabs: { id: SettingsTab; title: string }[] = [
+  { id: 'playback', title: 'Playback' },
+  { id: 'podcasts', title: 'Podcasts' },
+  { id: 'look', title: 'Look' },
+  { id: 'downloads', title: 'Downloads' },
+  { id: 'phone', title: 'Phone & connections' },
+  { id: 'computer', title: 'Computer & updates' }
+]
+
+/** The open Settings tab (remembered between visits). */
+const settingsTabStore = new Store<SettingsTab>(readLocal<SettingsTab>('settingsTab', 'playback'))
+settingsTabStore.subscribe(() => writeLocal('settingsTab', settingsTabStore.get()))
+
+/** Opens Settings on one tab (e.g. "Link your phone" buttons). */
+export function openSettings(tab: SettingsTab): void {
+  settingsTabStore.set(tab)
+  go({ name: 'settings' })
+}
+
 export function SettingsPage(): JSX.Element {
   const s = useStore(settingsStore)
+  const stored = useStore(settingsTabStore)
+  const tab = settingsTabs.some((t) => t.id === stored) ? stored : 'playback'
   const platform = useStore(platformStore)
   const [version, setVersion] = useState('')
   useEffect(() => void drift.appInfo().then((i) => setVersion(i.version)), [])
@@ -39,159 +62,189 @@ export function SettingsPage(): JSX.Element {
   return (
     <div className="page settings">
       <h1 className="page-title">Settings</h1>
+      <div className="set-tabs" role="tablist" aria-label="Settings">
+        {settingsTabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`set-tab ${tab === t.id ? 'on' : ''}`}
+            onClick={() => settingsTabStore.set(t.id)}
+          >
+            {t.title}
+          </button>
+        ))}
+      </div>
 
-      <section className="set-section">
-        <h2>Your phone</h2>
-        <LinkPhone />
-      </section>
+      <div role="tabpanel" aria-label={settingsTabs.find((t) => t.id === tab)?.title}>
+        {tab === 'playback' && (
+          <>
+            <section className="set-section">
+              <h2>Songs</h2>
+              <Row title="Prefer album versions" detail="When a song is a music video, play the album version instead (no intros or skits), like on your phone.">
+                <Toggle on={s.preferOfficialAudio} onChange={(v) => setSettings({ preferOfficialAudio: v })} label="Prefer album versions" />
+              </Row>
+              <Row title="Prefer explicit versions" detail="When a song has a clean (censored) and an explicit version, always play the explicit one, the way the artist made it.">
+                <Toggle on={s.preferExplicit} onChange={(v) => setSettings({ preferExplicit: v })} label="Prefer explicit versions" />
+              </Row>
+              <Row title="Skip non-music parts" detail="Jumps past intros, outros and talking in music videos, using parts marked by the SponsorBlock community.">
+                <Toggle on={s.skipNonMusic} onChange={(v) => setSettings({ skipNonMusic: v })} label="Skip non-music parts" />
+              </Row>
+            </section>
+            <section className="set-section">
+              <h2>Equalizer</h2>
+              <Row title="Equalizer" detail="Shape the sound of everything you play on this computer.">
+                <Toggle on={s.eqEnabled} onChange={(v) => setSettings({ eqEnabled: v })} label="Equalizer" />
+              </Row>
+              <EqualizerSettings />
+            </section>
+          </>
+        )}
 
-      <section className="set-section">
-        <h2>Look</h2>
-        <div className="style-cards">
-          {(['drift', 'music'] as const).map((style) => (
-            <button key={style} className={`style-card ${s.style === style ? 'on' : ''}`} onClick={() => setSettings({ style })}>
-              <div className={`style-preview ${style}`}>
-                <i />
-                <b />
-                <em />
-              </div>
-              <div className="style-name">{style === 'drift' ? 'Drift' : 'Apple Music style'}</div>
-            </button>
-          ))}
-        </div>
-        {s.style === 'music' && (
-          <Row title="App icon" detail="The icon on the window, taskbar and tray while Drift runs.">
-            <div className="icon-choices">
-              {(['pink', 'white'] as const).map((k) => (
-                <button key={k} className={`icon-choice ${s.musicIcon === k ? 'on' : ''}`} onClick={() => setSettings({ musicIcon: k })}>
-                  <IconPreview kind={k} />
-                  <span>{k === 'pink' ? 'Pink' : 'White'}</span>
+        {tab === 'podcasts' && (
+          <section className="set-section">
+            <Row title="Show video for podcasts" detail="Episodes play with their video (in the player, or in a small window while you browse). Uses more data. Songs stay audio only.">
+              <Toggle on={s.podcastVideo} onChange={(v) => setSettings({ podcastVideo: v })} label="Show video for podcasts" />
+            </Row>
+            {s.podcastVideo && (
+              <Row title="Video quality" detail="The most to use. You can also change it on the video itself.">
+                <div className="seg">
+                  {[360, 480, 720, 1080, bestQuality].map((q) => {
+                    const v = s.videoQuality || 720
+                    const on = q === bestQuality ? v > 1080 : v === q || (q === 360 && v < 360)
+                    return (
+                      <button key={q} className={on ? 'on' : ''} onClick={() => setSettings({ videoQuality: q })}>
+                        {q === bestQuality ? 'Best' : `${q}p`}
+                      </button>
+                    )
+                  })}
+                </div>
+              </Row>
+            )}
+            <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
+              <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
+            </Row>
+          </section>
+        )}
+
+        {tab === 'look' && (
+          <section className="set-section">
+            <div className="style-cards">
+              {(['drift', 'music'] as const).map((style) => (
+                <button key={style} className={`style-card ${s.style === style ? 'on' : ''}`} onClick={() => setSettings({ style })}>
+                  <div className={`style-preview ${style}`}>
+                    <i />
+                    <b />
+                    <em />
+                  </div>
+                  <div className="style-name">{style === 'drift' ? 'Drift' : 'Apple Music style'}</div>
                 </button>
               ))}
             </div>
-          </Row>
-        )}
-        <Row title="Appearance">
-          <div className="seg">
-            {(['device', 'dark', 'light'] as const).map((a) => (
-              <button key={a} className={s.appearance === a ? 'on' : ''} onClick={() => setSettings({ appearance: a })}>
-                {a === 'device' ? 'Same as computer' : a === 'dark' ? 'Dark' : 'Light'}
-              </button>
-            ))}
-          </div>
-        </Row>
-        {s.style === 'drift' ? (
-          <Row title="Accent color">
-            <div className="swatches">
-              {accents.map((a, i) => (
-                <button
-                  key={a.name}
-                  className={`swatch ${s.accent === i ? 'on' : ''}`}
-                  style={{ background: a.dark }}
-                  aria-label={a.name}
-                  title={a.name}
-                  onClick={() => setSettings({ accent: i })}
-                />
-              ))}
-            </div>
-          </Row>
-        ) : (
-          <Row title="Accent color" detail="The Apple Music style always uses its red.">
-            <span className="swatch on static" style={{ background: musicRed }} />
-          </Row>
-        )}
-      </section>
-
-      <section className="set-section">
-        <h2>Playback</h2>
-        <Row title="Prefer album versions" detail="When a song is a music video, play the album version instead (no intros or skits), like on your phone.">
-          <Toggle on={s.preferOfficialAudio} onChange={(v) => setSettings({ preferOfficialAudio: v })} label="Prefer album versions" />
-        </Row>
-        <Row title="Prefer explicit versions" detail="When a song has a clean (censored) and an explicit version, always play the explicit one, the way the artist made it.">
-          <Toggle on={s.preferExplicit} onChange={(v) => setSettings({ preferExplicit: v })} label="Prefer explicit versions" />
-        </Row>
-        <Row title="Skip non-music parts" detail="Jumps past intros, outros and talking in music videos, using parts marked by the SponsorBlock community.">
-          <Toggle on={s.skipNonMusic} onChange={(v) => setSettings({ skipNonMusic: v })} label="Skip non-music parts" />
-        </Row>
-        <Row title="Show video for podcasts" detail="Episodes play with their video (in the player, or in a small window while you browse). Uses more data. Songs stay audio only.">
-          <Toggle on={s.podcastVideo} onChange={(v) => setSettings({ podcastVideo: v })} label="Show video for podcasts" />
-        </Row>
-        {s.podcastVideo && (
-          <Row title="Video quality" detail="The most to use. You can also change it on the video itself.">
-            <div className="seg">
-              {[360, 480, 720, 1080, bestQuality].map((q) => {
-                const v = s.videoQuality || 720
-                const on = q === bestQuality ? v > 1080 : v === q || (q === 360 && v < 360)
-                return (
-                  <button key={q} className={on ? 'on' : ''} onClick={() => setSettings({ videoQuality: q })}>
-                    {q === bestQuality ? 'Best' : `${q}p`}
+            {s.style === 'music' && (
+              <Row title="App icon" detail="The icon on the window, taskbar and tray while Drift runs.">
+                <div className="icon-choices">
+                  {(['pink', 'white'] as const).map((k) => (
+                    <button key={k} className={`icon-choice ${s.musicIcon === k ? 'on' : ''}`} onClick={() => setSettings({ musicIcon: k })}>
+                      <IconPreview kind={k} />
+                      <span>{k === 'pink' ? 'Pink' : 'White'}</span>
+                    </button>
+                  ))}
+                </div>
+              </Row>
+            )}
+            <Row title="Appearance">
+              <div className="seg">
+                {(['device', 'dark', 'light'] as const).map((a) => (
+                  <button key={a} className={s.appearance === a ? 'on' : ''} onClick={() => setSettings({ appearance: a })}>
+                    {a === 'device' ? 'Same as computer' : a === 'dark' ? 'Dark' : 'Light'}
                   </button>
-                )
-              })}
-            </div>
-          </Row>
+                ))}
+              </div>
+            </Row>
+            {s.style === 'drift' ? (
+              <Row title="Accent color">
+                <div className="swatches">
+                  {accents.map((a, i) => (
+                    <button
+                      key={a.name}
+                      className={`swatch ${s.accent === i ? 'on' : ''}`}
+                      style={{ background: a.dark }}
+                      aria-label={a.name}
+                      title={a.name}
+                      onClick={() => setSettings({ accent: i })}
+                    />
+                  ))}
+                </div>
+              </Row>
+            ) : (
+              <Row title="Accent color" detail="The Apple Music style always uses its red.">
+                <span className="swatch on static" style={{ background: musicRed }} />
+              </Row>
+            )}
+          </section>
         )}
-        <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
-          <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
-        </Row>
-      </section>
 
-      <section className="set-section">
-        <h2>Equalizer</h2>
-        <Row title="Equalizer" detail="Shape the sound of everything you play on this computer.">
-          <Toggle on={s.eqEnabled} onChange={(v) => setSettings({ eqEnabled: v })} label="Equalizer" />
-        </Row>
-        <EqualizerSettings />
-      </section>
-
-      <section className="set-section">
-        <h2>Computer</h2>
-        {platform !== 'darwin' && (
-          <Row title="Keep playing in the tray when closed" detail="Closing the window keeps the music going; Drift stays in the tray (near the clock). Quit from the tray icon.">
-            <Toggle on={s.closeToTray} onChange={(v) => setSettings({ closeToTray: v })} label="Keep playing in the tray when closed" />
-          </Row>
+        {tab === 'downloads' && (
+          <section className="set-section">
+            <DownloadSettings />
+          </section>
         )}
-        {platform !== 'linux' && (
-          <Row title="Open Drift when you sign in">
-            <Toggle on={s.openAtLogin} onChange={(v) => setSettings({ openAtLogin: v })} label="Open Drift when you sign in" />
-          </Row>
+
+        {tab === 'phone' && (
+          <>
+            <section className="set-section">
+              <h2>Your phone</h2>
+              <LinkPhone />
+            </section>
+            <section className="set-section">
+              <h2>Connections</h2>
+              <OrbitSettings />
+              <DiscordSettings />
+            </section>
+          </>
         )}
-        {platform !== 'linux' && s.openAtLogin && (
-          <Row
-            title={platform === 'darwin' ? 'Start minimized in the Dock' : 'Start minimized to the taskbar'}
-            detail="When Drift opens at sign-in, it waits in the taskbar instead of opening its window. Opening it yourself still shows the window."
-          >
-            <Toggle on={s.openMinimized} onChange={(v) => setSettings({ openMinimized: v })} label="Start minimized" />
-          </Row>
+
+        {tab === 'computer' && (
+          <>
+            <section className="set-section">
+              <h2>This computer</h2>
+              {platform !== 'darwin' && (
+                <Row title="Keep playing in the tray when closed" detail="Closing the window keeps the music going; Drift stays in the tray (near the clock). Quit from the tray icon.">
+                  <Toggle on={s.closeToTray} onChange={(v) => setSettings({ closeToTray: v })} label="Keep playing in the tray when closed" />
+                </Row>
+              )}
+              {platform !== 'linux' && (
+                <Row title="Open Drift when you sign in">
+                  <Toggle on={s.openAtLogin} onChange={(v) => setSettings({ openAtLogin: v })} label="Open Drift when you sign in" />
+                </Row>
+              )}
+              {platform !== 'linux' && s.openAtLogin && (
+                <Row
+                  title={platform === 'darwin' ? 'Start minimized in the Dock' : 'Start minimized to the taskbar'}
+                  detail="When Drift opens at sign-in, it waits in the taskbar instead of opening its window. Opening it yourself still shows the window."
+                >
+                  <Toggle on={s.openMinimized} onChange={(v) => setSettings({ openMinimized: v })} label="Start minimized" />
+                </Row>
+              )}
+            </section>
+            <section className="set-section">
+              <h2>Updates</h2>
+              <Updates version={version} />
+            </section>
+            <section className="set-section">
+              <h2>Keyboard</h2>
+              <div className="keys">
+                <span><kbd>Space</kbd> Play or pause</span>
+                <span><kbd>Ctrl</kbd> <kbd>→</kbd> Next song</span>
+                <span><kbd>Ctrl</kbd> <kbd>←</kbd> Previous song</span>
+                <span><kbd>Ctrl</kbd> <kbd>L</kbd> Search</span>
+                <span><kbd>Alt</kbd> <kbd>←</kbd> Back</span>
+              </div>
+            </section>
+          </>
         )}
-      </section>
-
-      <section className="set-section">
-        <h2>Connections</h2>
-        <OrbitSettings />
-        <DiscordSettings />
-      </section>
-
-      <section className="set-section">
-        <h2>Downloads</h2>
-        <DownloadSettings />
-      </section>
-
-      <section className="set-section">
-        <h2>Updates</h2>
-        <Updates version={version} />
-      </section>
-
-      <section className="set-section">
-        <h2>Keyboard</h2>
-        <div className="keys">
-          <span><kbd>Space</kbd> Play or pause</span>
-          <span><kbd>Ctrl</kbd> <kbd>→</kbd> Next song</span>
-          <span><kbd>Ctrl</kbd> <kbd>←</kbd> Previous song</span>
-          <span><kbd>Ctrl</kbd> <kbd>L</kbd> Search</span>
-          <span><kbd>Alt</kbd> <kbd>←</kbd> Back</span>
-        </div>
-      </section>
+      </div>
 
       <div className="about">
         <Logo size={18} />
@@ -260,7 +313,7 @@ function LinkPhone(): JSX.Element {
       <div className="link-card pairing">
         <ol className="link-steps">
           <li>Open Drift on your iPhone.</li>
-          <li>Go to <b>Settings → Link a computer</b>.</li>
+          <li>Go to <b>Settings → Profile &amp; devices → Link a computer</b>.</li>
           <li>Type this code:</li>
         </ol>
         <div className="pair-code" aria-label={`Code ${pairing.code.split('').join(' ')}`}>{pairing.code}</div>
@@ -324,33 +377,33 @@ function DownloadSettings(): JSX.Element {
   const d = useStore(downloadsStore)
   return (
     <>
-      <Row title="Storage used" detail={`${plural(d.done.length, 'song')} on this computer. Downloads aren’t synced; your phone keeps its own.`}>
-        <span className="set-value">{formatBytes(d.bytes)}</span>
-      </Row>
-      <Row title="Folder" detail={d.folder}>
-        <div className="link-buttons tight">
-          <button className="btn" onClick={() => go({ name: 'collection', kind: 'downloaded' })}>Show songs</button>
-          <button className="btn" onClick={() => void drift.openDownloadsFolder()}>Open folder</button>
-        </div>
-      </Row>
-      <Row title="Remove all downloads" detail="Songs keep playing by streaming.">
-        <button
-          className="btn ghost danger-text"
-          disabled={!d.done.length && !d.queued.length && !d.active.length}
-          onClick={() =>
-            dialogStore.set({
-              kind: 'confirm',
-              title: 'Remove all downloads?',
-              message: `${plural(d.done.length, 'song')} (${formatBytes(d.bytes)}) are deleted from this computer, and playlists stop downloading new songs.`,
-              confirm: 'Remove all',
-              danger: true,
-              onDone: () => void drift.removeAllDownloads()
-            })
-          }
-        >
-          Remove all
-        </button>
-      </Row>
+        <Row title="Storage used" detail={`${plural(d.done.length, 'song')} on this computer. Downloads aren’t synced; your phone keeps its own.`}>
+          <span className="set-value">{formatBytes(d.bytes)}</span>
+        </Row>
+        <Row title="Folder" detail={d.folder}>
+          <div className="link-buttons tight">
+            <button className="btn" onClick={() => go({ name: 'collection', kind: 'downloaded' })}>Show songs</button>
+            <button className="btn" onClick={() => void drift.openDownloadsFolder()}>Open folder</button>
+          </div>
+        </Row>
+        <Row title="Remove all downloads" detail="Songs keep playing by streaming.">
+          <button
+            className="btn ghost danger-text"
+            disabled={!d.done.length && !d.queued.length && !d.active.length}
+            onClick={() =>
+              dialogStore.set({
+                kind: 'confirm',
+                title: 'Remove all downloads?',
+                message: `${plural(d.done.length, 'song')} (${formatBytes(d.bytes)}) are deleted from this computer, and playlists stop downloading new songs.`,
+                confirm: 'Remove all',
+                danger: true,
+                onDone: () => void drift.removeAllDownloads()
+              })
+            }
+          >
+            Remove all
+          </button>
+        </Row>
     </>
   )
 }

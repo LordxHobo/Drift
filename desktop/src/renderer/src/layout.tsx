@@ -6,6 +6,7 @@ import {
   accountStore, back, downloadsStore, drift, forward, settingsStore, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal, notificationsStore
 } from './state'
+import { openSettings } from './views/settings'
 import { reportStore } from './views/report'
 import { JamButton } from './views/jam'
 import type { MenuItem, Route } from './state'
@@ -304,7 +305,7 @@ function ProfileButton(): JSX.Element {
                 },
                 { label: '', separator: true }
               ]
-            : [{ label: 'Link your phone…', icon: 'phone', action: () => go({ name: 'settings' }) }]),
+            : [{ label: 'Link your phone…', icon: 'phone', action: () => openSettings('phone') }]),
           { label: 'Listening stats', icon: 'chart', action: () => go({ name: 'stats' }) },
           { label: 'Import from Spotify…', icon: 'plus', action: openImport },
           { label: 'Settings', icon: 'gear', action: () => go({ name: 'settings' }) }

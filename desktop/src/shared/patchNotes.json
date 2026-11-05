@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 18,
+      "date": "2026-11-05",
+      "title": "Tidier settings",
+      "notes": [
+        {
+          "text": "Settings are grouped into Playback, Podcasts, Lyrics, Storage and Look. Tap one to open its page. Your profile and Link a computer are at the top.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Settings are grouped into tabs: Playback, Podcasts, Look, Downloads, Phone & connections, and Computer & updates. Drift remembers the last one you opened.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 17,
       "date": "2026-11-05",
       "title": "Skip silence is a setting again",

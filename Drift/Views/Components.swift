@@ -8,6 +8,7 @@ enum Route: Hashable {
     case stats
     case equalizer
     case settings
+    case settingsCategory(SettingsCategory)
     case channel(PodcastChannel)
     case profile
     case friends
@@ -31,6 +32,7 @@ extension View {
             Group {
             switch route {
             case .settings: SettingsView()
+            case .settingsCategory(let c): SettingsView(category: c)
             case .liked: PlaylistView(kind: .liked)
             case .downloads: PlaylistView(kind: .downloads)
             case .playlist(let id): PlaylistView(kind: .playlist(id))

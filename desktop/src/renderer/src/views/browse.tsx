@@ -4,6 +4,7 @@ import type { JSX } from 'react'
 import type { AlbumPage as Album, AlbumRef, ArtistPage as Artist, ArtistRef, SearchResults, Track } from '@shared/types'
 import { Icon } from '../icons'
 import { drift, go, libraryStore, openMenu, readLocal, Store, toast, useStore, writeLocal } from '../state'
+import { openSettings } from './settings'
 import { playList, usePlayer } from '../player'
 import {
   Art, BigPlay, Card, LikedCover, PlaylistCover, Shelf, TrackArt, TrackList, addToPlaylistItems, playlistMenu, trackMenu
@@ -54,7 +55,7 @@ export function HomePage(): JSX.Element {
           <p>Search for any song, link your phone in Settings to bring your playlists, liked songs and followed artists over, or import a playlist from Spotify.</p>
           <div className="welcome-buttons">
             <button className="btn primary" onClick={() => go({ name: 'search' })}>Search</button>
-            <button className="btn" onClick={() => go({ name: 'settings' })}>Link your phone</button>
+            <button className="btn" onClick={() => openSettings('phone')}>Link your phone</button>
             <button className="btn" onClick={openImport}>Import from Spotify</button>
           </div>
         </div>

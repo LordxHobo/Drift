@@ -1778,6 +1778,39 @@ a,
 .set-section {
   margin-bottom: 30px;
 }
+/* Settings categories: tabs across the top, the chosen one shows underneath. */
+.set-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 26px;
+}
+.set-tab {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.set-tab:hover {
+  background: var(--active);
+  color: var(--text);
+}
+.set-tab.on {
+  background: var(--text);
+  color: var(--panel);
+}
+.app.music .set-tab.on {
+  background: var(--accent);
+  color: #ffffff;
+}
+.set-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .set-section h2 {
   font-size: 13px;
   text-transform: uppercase;

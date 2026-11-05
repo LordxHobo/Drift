@@ -4,6 +4,7 @@ import type { JSX } from 'react'
 import type { Playlist, SharedPlaylist, Track, UserProfile } from '@shared/types'
 import { Icon } from '../icons'
 import { accountStore, drift, go, meStore, openMenu, toast, useStore } from '../state'
+import { openSettings } from './settings'
 import { playList } from '../player'
 import { Card, PlaylistCover, Spinner, TrackArt, TrackList, trackMenu } from '../ui'
 import { formatTotal, plural } from '../util'
@@ -150,7 +151,7 @@ function NotLinked(): JSX.Element {
     <div className="empty">
       Friends need your Drift profile. Link your phone to see what friends are listening to.
       <div>
-        <button className="btn primary" onClick={() => go({ name: 'settings' })}>Link your phone</button>
+        <button className="btn primary" onClick={() => openSettings('phone')}>Link your phone</button>
       </div>
     </div>
   )
