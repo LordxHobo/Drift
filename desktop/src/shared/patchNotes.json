@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both).",
   "entries": [
     {
+      "id": 17,
+      "date": "2026-11-05",
+      "title": "Skip silence is a setting again",
+      "notes": [
+        {
+          "text": "You can turn skipping dead air at the end of songs on or off again, in Settings → Ad-free listening → Skip silence at the end. It's on by default.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 16,
       "date": "2026-11-05",
       "title": "No more skips in the middle of downloaded songs",

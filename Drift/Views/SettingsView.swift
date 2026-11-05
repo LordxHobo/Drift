@@ -50,6 +50,9 @@ struct SettingsView: View {
                     toggle("Skip non-music segments",
                            "Jumps past intros, outros and talking in music videos using community-marked timestamps (SponsorBlock).",
                            $settings.skipNonMusic)
+                    toggle("Skip silence at the end",
+                           "Moves to the next song when a song ends in 15 seconds or more of dead air (hidden tracks, minutes of silence).",
+                           $settings.skipSilence)
                     toggle("Prefer official audio",
                            "Search returns album versions instead of music videos, and a music video plays as its album version when YouTube Music has one (no intros or cut endings).",
                            $settings.preferOfficialAudio)
