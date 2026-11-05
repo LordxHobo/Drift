@@ -57,8 +57,6 @@ final class AppSettings {
     var dataSaver: Bool { didSet { defaults.set(dataSaver, forKey: "dataSaver") } }
     /// Skip intros/outros/talking marked by the SponsorBlock community.
     var skipNonMusic: Bool { didSet { defaults.set(skipNonMusic, forKey: "skipNonMusic") } }
-    /// Move on when a song ends in long dead air (hidden tracks, minutes of silence).
-    var skipSilence: Bool { didSet { defaults.set(skipSilence, forKey: "skipSilence") } }
     /// Search YouTube Music "songs" (album audio) instead of all results incl. music videos.
     var preferOfficialAudio: Bool { didSet { defaults.set(preferOfficialAudio, forKey: "preferOfficialAudio") } }
     /// Play the explicit (uncensored) version of a song when there is one.
@@ -136,7 +134,6 @@ final class AppSettings {
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")
         songCacheMB = d.object(forKey: PlayCache.limitKey) as? Int ?? PlayCache.defaultLimitMB
         lyricsLiveActivity = d.object(forKey: "lyricsLiveActivity") as? Bool ?? true
-        skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
         let eqOn = d.bool(forKey: "eqEnabled")
         let saved = d.array(forKey: "eqGains") as? [Double] ?? []
         let gains = saved.count == Equalizer.bands.count ? saved : [Double](repeating: 0, count: Equalizer.bands.count)
