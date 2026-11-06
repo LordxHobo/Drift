@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 20,
+      "date": "2026-11-06",
+      "title": "Library search fits again",
+      "notes": [
+        {
+          "text": "In a smaller window, the search button in Your Library no longer slides under the main page. When the filters don't all fit, they scroll sideways instead.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 19,
       "date": "2026-11-05",
       "title": "Drift for Android",

@@ -102,12 +102,14 @@ export function DriftSidebar(): JSX.Element {
           <IconButton icon="plus" label="New playlist or import" size={18} onClick={(e) => openMenuAt(e.currentTarget, createItems())} />
         </div>
         <div className="chips">
-          {(['playlists', 'albums', 'artists'] as const).map((f) => (
-            <button key={f} className={`chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f ? 'all' : f)}>
-              {f[0].toUpperCase() + f.slice(1)}
-            </button>
-          ))}
-          <span className="chips-spacer" />
+          {/* Scrolls sideways when the sidebar is narrow, so the search button always stays in view. */}
+          <div className="chips-scroll">
+            {(['playlists', 'albums', 'artists'] as const).map((f) => (
+              <button key={f} className={`chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f ? 'all' : f)}>
+                {f[0].toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
           {finding ? (
             <input
               className="lib-find"

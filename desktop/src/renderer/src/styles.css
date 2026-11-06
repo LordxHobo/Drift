@@ -569,15 +569,32 @@ a,
   align-items: center;
   gap: 6px;
   padding: 0 8px 8px;
+  min-width: 0;
+}
+.chips-scroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Fades out at the right edge when the chips don't all fit. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.chips-scroll::-webkit-scrollbar {
+  display: none;
 }
 .chips .chip {
   height: 28px;
   font-size: 12px;
+  flex-shrink: 0;
 }
-.chips-spacer {
-  flex: 1;
+.chips > .icon-btn {
+  flex-shrink: 0;
 }
 .lib-find {
+  flex: 0 1 150px;
+  min-width: 96px;
   width: 150px;
   height: 28px;
   border-radius: 4px;
