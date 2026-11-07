@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 23,
+      "date": "2026-11-07",
+      "title": "Settings and your profile",
+      "notes": [
+        {
+          "text": "Settings: tap the circle at the top right of Home. From there you can let Drift keep playing in the background, and see What's new again.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Make a Drift profile with a username, a name and a photo, under Settings → Profile & devices. No email or password needed.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Link a computer: type the code Drift shows on your computer to sign it in to your profile. Your library starts syncing in the next update.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 22,
       "date": "2026-11-07",
       "title": "Connects on more networks",

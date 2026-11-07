@@ -1,5 +1,9 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.lordxhobo.drift.social.Social
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,10 +48,22 @@ fun HomeScreen() {
     val shortcuts = Library.playlists.take(5)
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Text(
-                greeting, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-            )
+            Row(
+                Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    greeting, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.weight(1f),
+                )
+                // Your picture opens Settings (profile, linking, and the rest).
+                Box(
+                    Modifier.clip(CircleShape).clickable { Nav.open(Screen.Settings) }.padding(4.dp)
+                        .semantics { contentDescription = "Settings" },
+                ) {
+                    Avatar(Social.me, 34.dp)
+                }
+            }
         }
         // Liked songs and your playlists, two to a row (like Spotify's home).
         item {

@@ -70,6 +70,7 @@ fun DriftRoot() {
         SongSheets()
         // The battery tip waits until What's new is closed.
         if (!WhatsNewOnLaunch()) BatteryTip()
+        if (UiState.showAllNotes) AllNotes { UiState.showAllNotes = false }
     }
 }
 
@@ -83,6 +84,9 @@ private fun Page(screen: Screen) {
         is Screen.PlaylistPage -> PlaylistScreen(screen.id)
         is Screen.ArtistPage -> ArtistScreen(screen.ref)
         is Screen.AlbumPage -> AlbumScreen(screen.ref)
+        Screen.Settings -> SettingsScreen()
+        Screen.Account -> AccountScreen()
+        Screen.LinkComputer -> LinkComputerScreen()
     }
 }
 

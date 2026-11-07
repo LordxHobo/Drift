@@ -61,6 +61,20 @@ fun WhatsNewOnLaunch(): Boolean {
         prefs.edit().putInt("patchNotesSeen", entries.maxOf { it.id }).apply()
         entries = emptyList()
     }
+    NotesDialog(entries, done)
+    return true
+}
+
+/** Every note for Android, newest first (Settings → What's new). */
+@Composable
+fun AllNotes(onDone: () -> Unit) {
+    val context = LocalContext.current
+    val entries = remember { loadNotes(context) }
+    NotesDialog(entries, onDone)
+}
+
+@Composable
+private fun NotesDialog(entries: List<Notes.Entry>, done: () -> Unit) {
     AlertDialog(
         onDismissRequest = done,
         title = { Text("What's new") },
@@ -78,7 +92,6 @@ fun WhatsNewOnLaunch(): Boolean {
         confirmButton = { TextButton(onClick = done) { Text("Got it") } },
         containerColor = DriftColors.surface,
     )
-    return true
 }
 
 /**

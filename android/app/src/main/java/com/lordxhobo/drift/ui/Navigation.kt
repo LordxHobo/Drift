@@ -17,6 +17,9 @@ sealed interface Screen {
     data class PlaylistPage(val id: String) : Screen
     data class ArtistPage(val ref: ArtistRef) : Screen
     data class AlbumPage(val ref: AlbumRef) : Screen
+    data object Settings : Screen
+    data object Account : Screen
+    data object LinkComputer : Screen
 }
 
 enum class Tab { HOME, SEARCH, LIBRARY }
@@ -65,6 +68,8 @@ object UiState {
     var addToPlaylist by mutableStateOf<Track?>(null)
     /** Asking for a new playlist's name (with a song to put in it, or none). */
     var newPlaylist by mutableStateOf<NewPlaylistRequest?>(null)
+    /** Every What's new note (opened from Settings). */
+    var showAllNotes by mutableStateOf(false)
 
     fun openMenu(t: Track, place: Pair<String, Int>? = null) {
         menuPlace = place
