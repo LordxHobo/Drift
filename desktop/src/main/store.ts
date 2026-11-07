@@ -238,6 +238,16 @@ export function setCollabCover(id: string, c: { coverStyle: CoverStyle; coverSym
   save()
 }
 
+/** Empties the synced library (playlists, liked songs, artists, folders) before switching profiles. */
+export function clearSyncedLibrary(): void {
+  const lib = getLibrary()
+  lib.playlists = []
+  lib.liked = []
+  lib.artists = []
+  lib.folders = []
+  save(false)
+}
+
 export function deletePlaylist(id: string, local = true): void {
   const lib = getLibrary()
   const before = lib.playlists.length

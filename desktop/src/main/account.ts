@@ -28,7 +28,13 @@ export function getAccount(): Account {
   return account
 }
 
+/** The profile this computer was last linked to (kept after unlinking, unlike the sync state). */
+function lastProfile(): string | undefined {
+  return store.readJSON<{ uid?: string }>('last-profile.json', {}).uid
+}
+
 function useSession(s: { uid: string; refreshToken: string }): void {
+  store.writeJSON('last-profile.json', { uid: s.uid })
   auth = new Auth(s, saveSession)
   db = new Firestore(auth)
   setAccount({ linked: true, uid: s.uid, error: undefined })
@@ -458,6 +464,10 @@ export async function startPairing(): Promise<void> {
       // Check the sign-in works before keeping it.
       const linked = new Auth({ uid: session.uid, refreshToken: session.refreshToken })
       await linked.token()
+      // Linked to a different profile than before: start from that profile's library, so the old
+      // profile's playlists aren't copied into it.
+      const previous = auth?.uid ?? lastProfile()
+      if (previous && previous !== session.uid) store.clearSyncedLibrary()
       saveSession(linked.session!)
       useSession(linked.session!)
       await tempDB.delete(`pairings/${code}`).catch(() => undefined)

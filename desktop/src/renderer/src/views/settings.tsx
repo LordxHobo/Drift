@@ -342,7 +342,7 @@ function LinkPhone(): JSX.Element {
           {pairing.phase === 'linking' ? 'Linking…' : 'Link your phone'}
         </button>
       </div>
-      <p className="set-detail small">You need a Drift profile on your phone. The link is encrypted end to end between your phone and this computer.</p>
+      <p className="set-detail small">You need a Drift profile on your phone. Linking a different profile than before replaces this computer’s library with that profile’s. The link is encrypted end to end between your phone and this computer.</p>
     </div>
   )
 }

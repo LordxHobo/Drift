@@ -219,6 +219,8 @@ object Social {
 
     suspend fun deleteProfile() = withContext(Dispatchers.IO) {
         val p = me ?: return@withContext
+        // The synced library too, so a new profile starts empty.
+        for (name in Firestore.listNames("users/${p.id}/library")) Firestore.delete("users/${p.id}/library/$name")
         Firestore.delete("users/${p.id}")
         runCatching { Firestore.delete("usernames/${p.username}") }
         FirebaseAuth.forget()

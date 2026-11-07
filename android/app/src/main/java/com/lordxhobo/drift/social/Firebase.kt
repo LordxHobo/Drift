@@ -161,6 +161,25 @@ object Firestore {
         if (status != 200) throw SocialException.of(status, text)
     }
 
+    /** The names of a collection's documents (their last path part). Blocking. */
+    fun listNames(path: String): List<String> {
+        val out = mutableListOf<String>()
+        var page: String? = null
+        do {
+            val q = mutableListOf("pageSize" to "100", "mask.fieldPaths" to "updatedAt")
+            page?.let { q.add("pageToken" to it) }
+            val (status, body) = Net.send("GET", url(path, q), token = FirebaseAuth.token())
+            if (status == 404) return out
+            if (status != 200) throw SocialException.of(status, body)
+            val d = Json.parseToJsonElement(body) as? JsonObject
+            (d?.get("documents") as? JsonArray).orEmpty().forEach { doc ->
+                FV.str((doc as? JsonObject)?.get("name"))?.let { out.add(it.substringAfterLast('/')) }
+            }
+            page = FV.str(d?.get("nextPageToken"))
+        } while (page != null)
+        return out
+    }
+
     fun delete(path: String) {
         val (status, body) = Net.send("DELETE", url(path), token = FirebaseAuth.token())
         if (status != 200 && status != 404) throw SocialException.of(status, body)

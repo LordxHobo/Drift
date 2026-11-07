@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 24,
+      "date": "2026-11-07",
+      "title": "Switching profiles",
+      "notes": [
+        {
+          "text": "Linking this computer to a different profile than before now replaces its library with that profile's, instead of copying the old profile's playlists into it.",
+          "platforms": ["desktop"]
+        },
+        {
+          "text": "Deleting your profile now also removes its synced library, so a new profile starts empty.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 23,
       "date": "2026-11-07",
       "title": "Settings and your profile",
