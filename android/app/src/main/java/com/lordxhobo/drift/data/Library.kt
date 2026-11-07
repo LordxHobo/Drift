@@ -33,6 +33,9 @@ object Library {
 
     private lateinit var file: File
 
+    /** Called after every change made on this phone (library sync listens). */
+    var onLocalChange: (() -> Unit)? = null
+
     fun load(context: Context) {
         file = File(context.filesDir, "library.json")
         val s = runCatching { json.decodeFromString<Stored>(file.readText()) }.getOrNull() ?: return
@@ -41,7 +44,8 @@ object Library {
         recent = s.recent
     }
 
-    private fun save() {
+    private fun save(local: Boolean = true) {
+        if (local) onLocalChange?.invoke()
         val s = Stored(playlists, liked, recent)
         val text = json.encodeToString(s)
         val tmp = File(file.parentFile, "library.json.tmp")
@@ -108,10 +112,31 @@ object Library {
         save()
     }
 
+    // From library sync (changes from other devices: these don't sync back)
+
+    fun replaceLiked(list: List<Track>) {
+        liked = list
+        save(local = false)
+    }
+
+    /** A playlist from another device: replaces this phone's copy, or is added at its position. */
+    fun applyRemotePlaylist(p: Playlist, position: Int) {
+        val rest = playlists.filterNot { it.id == p.id }
+        val at = position.coerceIn(0, rest.size)
+        playlists = rest.take(at) + p + rest.drop(at)
+        save(local = false)
+    }
+
+    fun removeRemotePlaylist(id: String) {
+        if (playlists.none { it.id == id }) return
+        playlists = playlists.filterNot { it.id == id }
+        save(local = false)
+    }
+
     // Recently played
 
     fun addRecent(t: Track) {
         recent = (listOf(t) + recent.filterNot { it.id == t.id }).take(30)
-        save()
+        save(local = false)
     }
 }

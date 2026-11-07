@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 26,
+      "date": "2026-11-07",
+      "title": "Your library, everywhere",
+      "notes": [
+        {
+          "text": "Playlists and liked songs now sync with your profile: make a playlist here and it shows up in Drift on your linked computer, and the other way round. Deleting a playlist removes it everywhere.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Drift syncs when you open it, a few seconds after you change something, and every couple of minutes while it plays. See the status, or sync by hand, in Settings → Profile & devices.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 25,
       "date": "2026-11-07",
       "title": "Unlinking clears the library",

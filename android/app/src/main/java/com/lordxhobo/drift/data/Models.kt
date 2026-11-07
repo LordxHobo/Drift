@@ -44,6 +44,8 @@ data class Playlist(
     val isAlbum: Boolean? = null,
     val albumArtist: String? = null,
     val folder: String? = null,
+    /** A photo cover from another device (JPEG, Base64), kept so syncing doesn't drop it. */
+    val cover64: String? = null,
 )
 
 /** An artist, an album or a playlist found on YouTube Music. */

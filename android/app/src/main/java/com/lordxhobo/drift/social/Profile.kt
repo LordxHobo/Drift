@@ -101,8 +101,10 @@ object Social {
             me = profile
             status = if (profile != null) Status.READY else Status.NO_PROFILE
             cache()
+            if (profile != null) LibrarySync.syncNow()
         } catch (e: SessionLostException) {
             FirebaseAuth.forget()
+            LibrarySync.forget()
             me = null
             status = Status.NO_PROFILE
             cache()
@@ -169,6 +171,7 @@ object Social {
             me = profile
             status = Status.READY
             cache()
+            LibrarySync.syncNow()
         }
     }
 
@@ -220,11 +223,12 @@ object Social {
     suspend fun deleteProfile() = withContext(Dispatchers.IO) {
         val p = me ?: return@withContext
         // The synced library too, so a new profile starts empty.
-        for (name in Firestore.listNames("users/${p.id}/library")) Firestore.delete("users/${p.id}/library/$name")
+        LibrarySync.removeAll(p.id)
         Firestore.delete("users/${p.id}")
         runCatching { Firestore.delete("usernames/${p.username}") }
         FirebaseAuth.forget()
         withContext(Dispatchers.Main) {
+            LibrarySync.forget()
             me = null
             status = Status.NO_PROFILE
             cache()

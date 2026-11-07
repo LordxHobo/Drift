@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -66,12 +67,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lordxhobo.drift.BuildConfig
 import com.lordxhobo.drift.social.ComputerLink
+import com.lordxhobo.drift.social.LibrarySync
 import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.social.UserProfile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // MARK: Shared pieces
+
+/** "just now", "5 min ago", "2 h ago". */
+private fun ago(ms: Long): String {
+    val s = (System.currentTimeMillis() - ms) / 1000
+    return when {
+        s < 60 -> "just now"
+        s < 3600 -> "${s / 60} min ago"
+        else -> "${s / 3600} h ago"
+    }
+}
 
 /** A profile picture, or a circle with the first letter. */
 @Composable
@@ -359,8 +371,20 @@ private fun EditProfile(me: UserProfile) {
                 Nav.open(Screen.LinkComputer)
             }
         }
+        Spacer(Modifier.size(18.dp))
+        Group {
+            val status = when {
+                LibrarySync.syncing -> "Syncing…"
+                LibrarySync.error != null -> LibrarySync.error!!
+                LibrarySync.lastSync != null -> "Up to date · " + ago(LibrarySync.lastSync!!)
+                else -> "Playlists and liked songs, on all your devices"
+            }
+            SettingsRow("Library sync", status, icon = Icons.Filled.Sync, iconColor = Color(0xFF2DD4BF), trailing = "Sync now") {
+                LibrarySync.syncNow()
+            }
+        }
         Text(
-            "Your library starts syncing in the next update. Linking now already signs the computer in to this profile.",
+            "Followed artists and folders sync too once Android has them.",
             color = DriftColors.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
         Spacer(Modifier.size(10.dp))

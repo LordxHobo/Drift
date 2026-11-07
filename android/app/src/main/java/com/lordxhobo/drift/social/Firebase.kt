@@ -162,18 +162,23 @@ object Firestore {
     }
 
     /** The names of a collection's documents (their last path part). Blocking. */
-    fun listNames(path: String): List<String> {
-        val out = mutableListOf<String>()
+    fun listNames(path: String): List<String> = list(path, listOf("updatedAt")).map { it.first }
+
+    /** A collection's documents: name (last path part) and only the asked fields. Blocking. */
+    fun list(path: String, fields: List<String>): List<Pair<String, JsonObject?>> {
+        val out = mutableListOf<Pair<String, JsonObject?>>()
         var page: String? = null
         do {
-            val q = mutableListOf("pageSize" to "100", "mask.fieldPaths" to "updatedAt")
+            val q = mutableListOf("pageSize" to "300")
+            fields.forEach { q.add("mask.fieldPaths" to it) }
             page?.let { q.add("pageToken" to it) }
             val (status, body) = Net.send("GET", url(path, q), token = FirebaseAuth.token())
             if (status == 404) return out
             if (status != 200) throw SocialException.of(status, body)
             val d = Json.parseToJsonElement(body) as? JsonObject
             (d?.get("documents") as? JsonArray).orEmpty().forEach { doc ->
-                FV.str((doc as? JsonObject)?.get("name"))?.let { out.add(it.substringAfterLast('/')) }
+                val o = doc as? JsonObject
+                FV.str(o?.get("name"))?.let { out.add(it.substringAfterLast('/') to FV.fields(o)) }
             }
             page = FV.str(d?.get("nextPageToken"))
         } while (page != null)
