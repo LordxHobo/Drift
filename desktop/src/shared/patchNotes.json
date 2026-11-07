@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 30,
+      "date": "2026-11-07",
+      "title": "Folders and followed artists",
+      "notes": [
+        {
+          "text": "Playlist folders: make one with + in Your Library, and hold a playlist → Move to folder. Folders sync with your other devices.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Follow artists from their page. They show under Artists in Your Library and sync with your other devices.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 29,
       "date": "2026-11-07",
       "title": "Import from Spotify",

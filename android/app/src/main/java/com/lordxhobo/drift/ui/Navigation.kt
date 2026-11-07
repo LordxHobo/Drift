@@ -23,6 +23,7 @@ sealed interface Screen {
     data object Storage : Screen
     /** Spotify import; `link` when one was shared into Drift. */
     data class Import(val link: String? = null) : Screen
+    data class Folder(val id: String) : Screen
 }
 
 enum class Tab { HOME, SEARCH, LIBRARY }

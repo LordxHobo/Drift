@@ -90,6 +90,7 @@ private fun Page(screen: Screen) {
         Screen.LinkComputer -> LinkComputerScreen()
         Screen.Storage -> StorageScreen()
         is Screen.Import -> ImportScreen(screen.link)
+        is Screen.Folder -> FolderScreen(screen.id)
     }
 }
 

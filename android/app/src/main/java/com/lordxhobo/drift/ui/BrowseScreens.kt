@@ -1,5 +1,6 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,20 @@ fun ArtistScreen(ref: ArtistRef) {
                 Artwork(artist.thumbnail, artist.name, 180.dp, CircleShape)
                 Spacer(Modifier.size(14.dp))
                 Text(artist.name, color = DriftColors.text, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                // Follow (synced with the other apps, which show their new releases).
+                if (artist.url.startsWith("UC")) {
+                    val following = Library.isFollowing(artist.url)
+                    Spacer(Modifier.size(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            if (following) Library.unfollow(artist.url)
+                            else Library.follow(artist, page?.albums?.map { it.url } ?: emptyList())
+                        },
+                        border = BorderStroke(1.dp, if (following) DriftColors.accent else DriftColors.muted),
+                    ) {
+                        Text(if (following) "Following" else "Follow", color = if (following) DriftColors.accent else DriftColors.text, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
         val p = page

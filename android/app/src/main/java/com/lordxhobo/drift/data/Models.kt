@@ -50,6 +50,10 @@ data class Playlist(
     val cover64: String? = null,
 )
 
+/** A folder of playlists (playlists point to it with `folder`). */
+@Serializable
+data class PlaylistFolder(val id: String = UUID.randomUUID().toString().uppercase(), val name: String)
+
 /** An artist, an album or a playlist found on YouTube Music. */
 data class ArtistRef(val url: String, val name: String, val thumbnail: String?)
 data class AlbumRef(val url: String, val title: String, val artist: String, val thumbnail: String?)

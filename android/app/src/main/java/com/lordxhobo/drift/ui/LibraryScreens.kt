@@ -1,5 +1,11 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.clickable
 import com.lordxhobo.drift.playback.Downloads
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -54,6 +60,8 @@ private fun LikedTile(size: androidx.compose.ui.unit.Dp) {
 fun LibraryScreen() {
     var renaming by remember { mutableStateOf<Playlist?>(null) }
     var deleting by remember { mutableStateOf<Playlist?>(null) }
+    var moving by remember { mutableStateOf<Playlist?>(null) }
+    var newFolder by remember { mutableStateOf(false) }
     Column {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Your Library", color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
@@ -64,6 +72,7 @@ fun LibraryScreen() {
                 }
                 DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
                     DropdownMenuItem(text = { Text("New playlist") }, onClick = { adding = false; UiState.newPlaylist = NewPlaylistRequest(null) })
+                    DropdownMenuItem(text = { Text("New folder") }, onClick = { adding = false; newFolder = true })
                     DropdownMenuItem(text = { Text("Import from Spotify") }, onClick = { adding = false; Nav.open(Screen.Import()) })
                 }
             }
@@ -72,19 +81,19 @@ fun LibraryScreen() {
             item {
                 LibraryRow("Liked songs", "Playlist · ${Library.liked.size} songs", onClick = { Nav.open(Screen.Liked) }) { LikedTile(64.dp) }
             }
-            items(Library.playlists, key = { it.id }) { p ->
-                var menu by remember { mutableStateOf(false) }
-                Box {
-                    LibraryRow(
-                        p.name,
-                        if (p.isAlbum == true) "Album · ${p.albumArtist ?: ""}" else "Playlist · ${p.tracks.size} songs",
-                        onClick = { Nav.open(Screen.PlaylistPage(p.id)) },
-                        onLongClick = { menu = true },
-                    ) { PlaylistCover(p, 64.dp) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = p })
-                        DropdownMenuItem(text = { Text(if (p.isAlbum == true) "Remove from library" else "Delete playlist") }, onClick = { menu = false; deleting = p })
-                    }
+            items(Library.folders, key = { "folder-" + it.id }) { f ->
+                val inside = Library.playlists.count { it.folder == f.id }
+                LibraryRow(f.name, "Folder · $inside ${if (inside == 1) "playlist" else "playlists"}", onClick = { Nav.open(Screen.Folder(f.id)) }) { FolderTile(64.dp) }
+            }
+            // Playlists in a folder show inside it (and here if their folder is gone).
+            val folderIds = Library.folders.map { it.id }.toSet()
+            items(Library.playlists.filter { it.folder == null || it.folder !in folderIds }, key = { it.id }) { p ->
+                PlaylistRow(p, onRename = { renaming = p }, onDelete = { deleting = p }, onMove = { moving = p })
+            }
+            if (Library.followed.isNotEmpty()) {
+                item { SectionTitle("Artists") }
+                items(Library.followed, key = { "artist-" + it.url }) { a ->
+                    LibraryRow(a.name, "Artist", onClick = { Nav.open(Screen.ArtistPage(a)) }) { Artwork(a.thumbnail, a.name, 64.dp, CircleShape) }
                 }
             }
             if (Library.playlists.isEmpty()) {
@@ -95,6 +104,131 @@ fun LibraryScreen() {
     renaming?.let { p ->
         NameDialog("Rename playlist", p.name, "Rename", onDone = { Library.rename(p.id, it) }, onDismiss = { renaming = null })
     }
+    moving?.let { p -> MoveToFolderDialog(p) { moving = null } }
+    if (newFolder) {
+        NameDialog("New folder", "", "Create", onDone = { Library.createFolder(it) }, onDismiss = { newFolder = false })
+    }
+    deleting?.let { p ->
+        ConfirmDialog(
+            title = if (p.isAlbum == true) "Remove ${p.name}?" else "Delete ${p.name}?",
+            message = "This can't be undone.",
+            confirm = if (p.isAlbum == true) "Remove" else "Delete",
+            onConfirm = { Library.deletePlaylist(p.id) },
+            onDismiss = { deleting = null },
+        )
+    }
+}
+
+/** A playlist in a list, with its menu on a long press. */
+@Composable
+private fun PlaylistRow(p: Playlist, onRename: () -> Unit, onDelete: () -> Unit, onMove: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        LibraryRow(
+            p.name,
+            if (p.isAlbum == true) "Album · ${p.albumArtist ?: ""}" else "Playlist · ${p.tracks.size} songs",
+            onClick = { Nav.open(Screen.PlaylistPage(p.id)) },
+            onLongClick = { menu = true },
+        ) { PlaylistCover(p, 64.dp) }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
+            DropdownMenuItem(text = { Text("Move to folder") }, onClick = { menu = false; onMove() })
+            DropdownMenuItem(text = { Text(if (p.isAlbum == true) "Remove from library" else "Delete playlist") }, onClick = { menu = false; onDelete() })
+        }
+    }
+}
+
+@Composable
+fun FolderTile(size: Dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(4.dp)).background(DriftColors.surface2), contentAlignment = Alignment.Center) {
+        Icon(Icons.Filled.Folder, contentDescription = null, tint = DriftColors.muted, modifier = Modifier.size(size * 0.45f))
+    }
+}
+
+/** Pick a folder for a playlist (or none, or a new one). */
+@Composable
+private fun MoveToFolderDialog(p: Playlist, onDismiss: () -> Unit) {
+    var naming by remember { mutableStateOf(false) }
+    if (naming) {
+        NameDialog("New folder", "", "Create", onDone = { Library.createFolder(it, listOf(p.id)) }, onDismiss = onDismiss)
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Move \"${p.name}\"") },
+        text = {
+            Column {
+                for (f in Library.folders) {
+                    Text(
+                        (if (p.folder == f.id) "✓ " else "") + f.name, color = DriftColors.text, fontSize = 16.sp,
+                        modifier = Modifier.fillMaxWidth().clickable { Library.moveToFolder(p.id, f.id); onDismiss() }.padding(vertical = 12.dp),
+                    )
+                }
+                Text(
+                    "New folder…", color = DriftColors.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().clickable { naming = true }.padding(vertical = 12.dp),
+                )
+                if (p.folder != null) {
+                    Text(
+                        "Take out of its folder", color = DriftColors.text2, fontSize = 16.sp,
+                        modifier = Modifier.fillMaxWidth().clickable { Library.moveToFolder(p.id, null); onDismiss() }.padding(vertical = 12.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        containerColor = DriftColors.surface,
+    )
+}
+
+/** A folder's playlists. */
+@Composable
+fun FolderScreen(id: String) {
+    val f = Library.folders.firstOrNull { it.id == id }
+    if (f == null) {
+        Column { BackBar(); EmptyText("This folder was deleted.") }
+        return
+    }
+    var menu by remember { mutableStateOf(false) }
+    var renamingFolder by remember { mutableStateOf(false) }
+    var deletingFolder by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<Playlist?>(null) }
+    var deleting by remember { mutableStateOf<Playlist?>(null) }
+    var moving by remember { mutableStateOf<Playlist?>(null) }
+    val inside = Library.playlists.filter { it.folder == id }
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { BackBar() }
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Folder options", tint = DriftColors.text) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("Rename folder") }, onClick = { menu = false; renamingFolder = true })
+                        DropdownMenuItem(text = { Text("Delete folder") }, onClick = { menu = false; deletingFolder = true })
+                    }
+                }
+            }
+        }
+        item {
+            Text(f.name, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
+        }
+        items(inside, key = { it.id }) { p ->
+            PlaylistRow(p, onRename = { renaming = p }, onDelete = { deleting = p }, onMove = { moving = p })
+        }
+        if (inside.isEmpty()) item { EmptyText("Move playlists here: hold a playlist in Your Library → Move to folder.") }
+    }
+    if (renamingFolder) NameDialog("Rename folder", f.name, "Rename", onDone = { Library.renameFolder(id, it) }, onDismiss = { renamingFolder = false })
+    if (deletingFolder) {
+        ConfirmDialog(
+            title = "Delete ${f.name}?",
+            message = "The folder goes; its playlists stay in Your Library.",
+            confirm = "Delete",
+            onConfirm = { Library.deleteFolder(id); Nav.back() },
+            onDismiss = { deletingFolder = false },
+        )
+    }
+    renaming?.let { p -> NameDialog("Rename playlist", p.name, "Rename", onDone = { Library.rename(p.id, it) }, onDismiss = { renaming = null }) }
+    moving?.let { p -> MoveToFolderDialog(p) { moving = null } }
     deleting?.let { p ->
         ConfirmDialog(
             title = if (p.isAlbum == true) "Remove ${p.name}?" else "Delete ${p.name}?",

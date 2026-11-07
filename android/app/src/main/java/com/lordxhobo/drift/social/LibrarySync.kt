@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.data.Playlist
+import com.lordxhobo.drift.data.PlaylistFolder
 import com.lordxhobo.drift.data.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -31,8 +33,7 @@ import java.io.File
  * iPhone and the computer: one document per item in users/{uid}/library (liked, pl-<id>), each with an
  * updatedAt time (ms). Pull what's newer, push what changed here, mark deleted playlists.
  *
- * Followed artists and folders are synced by the other apps; Android doesn't have them yet, so it leaves
- * those documents alone (playlists keep their folder, so nothing is lost).
+ * Also folders and followed artists (kept whole, so the new-release details the other apps keep survive).
  */
 object LibrarySync {
     @Serializable
@@ -168,8 +169,13 @@ object LibrarySync {
         ).joinToString("|") + "|" + p.tracks.joinToString(",") { it.id },
     )
 
+    private fun foldersFingerprint() = hash(Library.folders.joinToString(",") { "${it.id}:${it.name}" })
+    private fun artistsFingerprint() = hash(Library.followed.joinToString(",") { it.url })
+
     private fun currentFingerprint(name: String): String? {
         if (name == "liked") return hash(Library.liked.joinToString(",") { it.id })
+        if (name == "folders") return foldersFingerprint()
+        if (name == "artists") return artistsFingerprint()
         val i = Library.playlists.indexOfFirst { "pl-${it.id}" == name }
         return if (i >= 0) playlistFingerprint(Library.playlists[i], i) else null
     }
@@ -213,9 +219,8 @@ object LibrarySync {
     private suspend fun pullChanges(uid: String) {
         val docs = Firestore.list("users/$uid/library", listOf("updatedAt", "deleted"))
         for ((name, f) in docs) {
-            // Only liked songs and playlists: listening history, devices, remote control, followed
-            // artists and folders are for the other apps.
-            if (name != "liked" && !name.startsWith("pl-")) continue
+            // Listening history, devices and remote control are for the other apps.
+            if (name != "liked" && name != "folders" && name != "artists" && !name.startsWith("pl-")) continue
             val updatedAt = FV.long(f, "updatedAt") ?: 0
             val known = synced[name]
             if (known != null && known.updatedAt >= updatedAt) continue
@@ -246,6 +251,29 @@ object LibrarySync {
             }
             return hash(remote.joinToString(",") { it.id })
         }
+        if (name == "folders") {
+            val remote = runCatching {
+                Library.json.decodeFromString(ListSerializer(PlaylistFolder.serializer()), FV.string(f, "folders") ?: "")
+            }.getOrNull() ?: return null
+            if (synced["folders"] == null) {
+                val ids = remote.map { it.id }.toSet()
+                Library.replaceFolders(remote + Library.folders.filterNot { it.id in ids })
+            } else {
+                Library.replaceFolders(remote)
+            }
+            return hash(remote.joinToString(",") { "${it.id}:${it.name}" })
+        }
+        if (name == "artists") {
+            val remote = runCatching { Json.parseToJsonElement(FV.string(f, "artists") ?: "") as JsonArray }.getOrNull()
+                ?.mapNotNull { it as? JsonObject }?.filter { Library.artistRef(it) != null } ?: return null
+            val ids = remote.mapNotNull { Library.artistRef(it)?.url }
+            if (synced["artists"] == null) {
+                Library.replaceArtists(remote + Library.artists.filterNot { Library.artistRef(it)?.url in ids })
+            } else {
+                Library.replaceArtists(remote)
+            }
+            return hash(ids.joinToString(","))
+        }
         val title = FV.string(f, "name") ?: return null
         val tracks = decodeTracks(FV.string(f, "tracks")) ?: return null
         val style = FV.string(f, "style")
@@ -274,6 +302,14 @@ object LibrarySync {
             f["tracks"] = FV.s(tracksJSON(Library.liked))
             return f
         }
+        if (name == "folders") {
+            f["folders"] = FV.s(Library.json.encodeToString(ListSerializer(PlaylistFolder.serializer()), Library.folders))
+            return f
+        }
+        if (name == "artists") {
+            f["artists"] = FV.s(JsonArray(Library.artists).toString())
+            return f
+        }
         val all = Library.playlists
         val i = all.indexOfFirst { "pl-${it.id}" == name }
         if (i < 0) return null
@@ -297,7 +333,11 @@ object LibrarySync {
 
     private fun pushChanges(uid: String) {
         val now = System.currentTimeMillis()
-        val items = mutableListOf("liked" to hash(Library.liked.joinToString(",") { it.id }))
+        val items = mutableListOf(
+            "liked" to hash(Library.liked.joinToString(",") { it.id }),
+            "folders" to foldersFingerprint(),
+            "artists" to artistsFingerprint(),
+        )
         Library.playlists.forEachIndexed { i, p -> items.add("pl-${p.id}" to playlistFingerprint(p, i)) }
 
         for ((name, fp) in items) {

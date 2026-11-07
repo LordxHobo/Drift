@@ -7,6 +7,13 @@ import androidx.compose.runtime.setValue
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import java.io.File
 
 /** Playlists, liked songs and recently played, saved as JSON on this phone. */
@@ -16,6 +23,9 @@ object Library {
         val playlists: List<Playlist> = emptyList(),
         val liked: List<Track> = emptyList(),
         val recent: List<Track> = emptyList(),
+        val folders: List<PlaylistFolder> = emptyList(),
+        /** Followed artists, as the other apps store them ({artist, followedAt, known, newReleases}). */
+        val artists: List<JsonObject> = emptyList(),
     )
 
     val json = Json {
@@ -29,6 +39,11 @@ object Library {
     var liked by mutableStateOf(listOf<Track>())
         private set
     var recent by mutableStateOf(listOf<Track>())
+        private set
+    var folders by mutableStateOf(listOf<PlaylistFolder>())
+        private set
+    /** Followed artists, kept whole so details only the other apps use (new releases) survive syncing. */
+    var artists by mutableStateOf(listOf<JsonObject>())
         private set
 
     private lateinit var file: File
@@ -45,12 +60,14 @@ object Library {
         playlists = s.playlists
         liked = s.liked
         recent = s.recent
+        folders = s.folders
+        artists = s.artists
     }
 
     private fun save(local: Boolean = true) {
         if (local) onLocalChange?.invoke()
         onAnyChange.forEach { it() }
-        val s = Stored(playlists, liked, recent)
+        val s = Stored(playlists, liked, recent, folders, artists)
         val text = json.encodeToString(s)
         val tmp = File(file.parentFile, "library.json.tmp")
         runCatching {
@@ -124,7 +141,77 @@ object Library {
         save()
     }
 
+    // Folders
+
+    fun createFolder(name: String, playlistIds: List<String> = emptyList()): PlaylistFolder {
+        val f = PlaylistFolder(name = name.trim().ifEmpty { "New folder" })
+        folders = folders + f
+        playlists = playlists.map { if (it.id in playlistIds) it.copy(folder = f.id) else it }
+        save()
+        return f
+    }
+
+    fun renameFolder(id: String, name: String) {
+        if (name.isBlank()) return
+        folders = folders.map { if (it.id == id) it.copy(name = name.trim()) else it }
+        save()
+    }
+
+    /** The folder goes; its playlists stay, outside any folder. */
+    fun deleteFolder(id: String) {
+        folders = folders.filterNot { it.id == id }
+        playlists = playlists.map { if (it.folder == id) it.copy(folder = null) else it }
+        save()
+    }
+
+    fun moveToFolder(playlistId: String, folderId: String?) = update(playlistId) { it.copy(folder = folderId) }
+
+    // Followed artists
+
+    fun artistRef(o: JsonObject): ArtistRef? {
+        val a = o["artist"] as? JsonObject ?: return null
+        val id = (a["id"] as? JsonPrimitive)?.contentOrNull ?: return null
+        val name = (a["name"] as? JsonPrimitive)?.contentOrNull ?: return null
+        return ArtistRef(id, name, (a["thumbnail"] as? JsonPrimitive)?.contentOrNull)
+    }
+
+    val followed: List<ArtistRef> get() = artists.mapNotNull { artistRef(it) }
+
+    fun isFollowing(id: String): Boolean = artists.any { artistRef(it)?.url == id }
+
+    /** `albums`: the artist's releases now, so only later ones count as new on the other apps. */
+    fun follow(a: ArtistRef, albums: List<String>) {
+        if (isFollowing(a.url)) return
+        val entry = buildJsonObject {
+            put("artist", buildJsonObject {
+                put("id", a.url)
+                put("name", a.name)
+                put("thumbnail", a.thumbnail?.let { JsonPrimitive(it) } ?: JsonNull)
+            })
+            put("followedAt", nowApple())
+            put("known", JsonArray(albums.map { JsonPrimitive(it) }))
+            put("newReleases", JsonArray(emptyList()))
+        }
+        artists = listOf(entry) + artists
+        save()
+    }
+
+    fun unfollow(id: String) {
+        artists = artists.filterNot { artistRef(it)?.url == id }
+        save()
+    }
+
     // From library sync (changes from other devices: these don't sync back)
+
+    fun replaceFolders(list: List<PlaylistFolder>) {
+        folders = list
+        save(local = false)
+    }
+
+    fun replaceArtists(list: List<JsonObject>) {
+        artists = list
+        save(local = false)
+    }
 
     fun replaceLiked(list: List<Track>) {
         liked = list
