@@ -496,6 +496,8 @@ function deviceName(): string {
 }
 
 export function unlink(): void {
+  // The playlists, liked songs and artists belong to the profile: they leave with it.
+  store.clearSyncedLibrary()
   deleteSession()
   auth = undefined
   db = undefined

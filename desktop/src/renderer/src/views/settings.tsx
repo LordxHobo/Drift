@@ -293,7 +293,7 @@ function LinkPhone(): JSX.Element {
               dialogStore.set({
                 kind: 'confirm',
                 title: 'Unlink your phone?',
-                message: 'Your library stays on this computer, but changes stop syncing. You can link again any time.',
+                message: 'Your playlists, liked songs and followed artists leave this computer with the profile. They stay safe in your profile and come back when you link it again.',
                 confirm: 'Unlink',
                 danger: true,
                 onDone: () => void drift.unlink()
