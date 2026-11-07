@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -165,8 +166,15 @@ fun NowPlayingScreen() {
                 Text(it, color = DriftColors.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
             }
 
-            // Bottom row (the queue; Lyrics and Devices come in later builds).
-            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.End) {
+            // Bottom row: Lyrics and the queue.
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showLyrics = true }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(Icons.Filled.Lyrics, contentDescription = null, tint = DriftColors.text)
+                    Text("Lyrics", color = DriftColors.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
                 Column(
                     Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showQueue = true }.padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -176,6 +184,7 @@ fun NowPlayingScreen() {
                 }
             }
         }
+        if (UiState.showLyrics) LyricsView(t)
     }
 }
 

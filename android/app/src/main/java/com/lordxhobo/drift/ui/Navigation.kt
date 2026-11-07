@@ -71,6 +71,8 @@ object UiState {
     var newPlaylist by mutableStateOf<NewPlaylistRequest?>(null)
     /** Every What's new note (opened from Settings). */
     var showAllNotes by mutableStateOf(false)
+    /** Lyrics over the player. */
+    var showLyrics by mutableStateOf(false)
 
     fun openMenu(t: Track, place: Pair<String, Int>? = null) {
         menuPlace = place

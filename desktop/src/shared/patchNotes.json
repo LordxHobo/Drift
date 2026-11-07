@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 28,
+      "date": "2026-11-07",
+      "title": "Lyrics",
+      "notes": [
+        {
+          "text": "Lyrics in the player: tap Lyrics at the bottom left. Synced lyrics follow the song, and tapping a line jumps there. Songs without synced lyrics show the plain text from Genius.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 27,
       "date": "2026-11-07",
       "title": "Downloads and song cache",

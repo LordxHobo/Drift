@@ -47,6 +47,7 @@ import com.lordxhobo.drift.playback.Playback
 fun DriftRoot() {
     BackHandler(enabled = UiState.showPlayer || Nav.stack.size > 1 || Nav.tab != Tab.HOME) {
         when {
+            UiState.showPlayer && UiState.showLyrics -> UiState.showLyrics = false
             UiState.showPlayer -> UiState.showPlayer = false
             !Nav.back() -> Nav.tab = Tab.HOME
         }
