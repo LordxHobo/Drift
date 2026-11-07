@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 31,
+      "date": "2026-11-08",
+      "title": "Pictures load straight away",
+      "notes": [
+        {
+          "text": "Album covers and playlist pictures no longer take minutes to appear on some networks: they now use the same quick connection as search and playback.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 30,
       "date": "2026-11-07",
       "title": "Folders and followed artists",
