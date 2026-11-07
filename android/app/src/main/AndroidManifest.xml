@@ -27,6 +27,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Spotify links shared to Drift (Spotify's Share menu) open the import. -->
+            <intent-filter android:label="Import to Drift">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Playback: keeps playing in the background, with the lock screen and Bluetooth controls. -->

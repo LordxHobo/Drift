@@ -64,6 +64,12 @@ object YouTube {
         }
     }
 
+    /** Songs only (blocking; for Spotify import). */
+    fun searchSongsBlocking(query: String): List<Track> = tube.songs(query)
+
+    /** Videos and uploads (blocking; for Spotify import). */
+    fun searchVideosBlocking(query: String): List<Track> = tube.videos(query)
+
     /** An artist: their top songs, albums and singles. */
     suspend fun artist(ref: ArtistRef): ArtistPage = limited {
         // Saved before artists were stored by ID: find them by name.

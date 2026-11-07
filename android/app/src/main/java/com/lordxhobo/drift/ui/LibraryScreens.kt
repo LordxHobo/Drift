@@ -57,8 +57,15 @@ fun LibraryScreen() {
     Column {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Your Library", color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-            IconButton(onClick = { UiState.newPlaylist = NewPlaylistRequest(null) }) {
-                Icon(Icons.Filled.Add, contentDescription = "New playlist", tint = DriftColors.text)
+            var adding by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { adding = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = "New playlist or import", tint = DriftColors.text)
+                }
+                DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
+                    DropdownMenuItem(text = { Text("New playlist") }, onClick = { adding = false; UiState.newPlaylist = NewPlaylistRequest(null) })
+                    DropdownMenuItem(text = { Text("Import from Spotify") }, onClick = { adding = false; Nav.open(Screen.Import()) })
+                }
             }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {

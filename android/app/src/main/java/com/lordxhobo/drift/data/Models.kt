@@ -19,6 +19,8 @@ data class Track(
     val explicit: Boolean? = null,
     /** When it was added to its playlist or Liked songs (seconds since 2001-01-01). */
     val added: Double? = null,
+    /** A regular YouTube upload, not a YouTube Music song (keeps other devices from swapping its version). */
+    val upload: Boolean? = null,
 ) {
     /** Artwork at roughly the asked size (YouTube Music pictures can be asked for any size). */
     fun artwork(size: Int): String {

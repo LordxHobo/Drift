@@ -99,6 +99,14 @@ object Library {
         update(to) { p -> if (p.tracks.any { it.id == t.id }) p else p.copy(tracks = p.tracks + t.copy(added = nowApple())) }
     }
 
+    /** Several songs at once (imports keep their own added dates); songs already there are skipped. */
+    fun addAll(tracks: List<Track>, to: String) {
+        update(to) { p ->
+            val have = p.tracks.map { it.id }.toMutableSet()
+            p.copy(tracks = p.tracks + tracks.filter { have.add(it.id) }.map { if (it.added == null) it.copy(added = nowApple()) else it })
+        }
+    }
+
     fun remove(index: Int, from: String) {
         update(from) { p -> p.copy(tracks = p.tracks.filterIndexed { i, _ -> i != index }) }
     }

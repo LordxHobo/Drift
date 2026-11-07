@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 29,
+      "date": "2026-11-07",
+      "title": "Import from Spotify",
+      "notes": [
+        {
+          "text": "Bring a Spotify playlist or album into Drift: in Your Library, tap + → Import from Spotify and paste its link. Or share the link from Spotify straight to Drift.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Whole playlists of any length are read, songs you already have are reused, and anything not found is listed, to look for again or copy.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 28,
       "date": "2026-11-07",
       "title": "Lyrics",

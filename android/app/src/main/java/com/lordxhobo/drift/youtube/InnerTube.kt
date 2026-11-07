@@ -61,6 +61,14 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
         return out
     }
 
+    /** Music videos and uploads (for songs that aren't on YouTube Music as songs). Channel in `artist`. */
+    fun videos(query: String): List<Track> {
+        val json = music("search", mapOf("query" to query, "params" to VIDEOS))
+        val out = mutableListOf<Track>()
+        collect(json) { r -> parseTrack(r, requireDuration = false)?.let { t -> if (out.none { it.id == t.id }) out.add(t.copy(album = null)) } }
+        return out
+    }
+
     fun artists(query: String): List<ArtistRef> {
         val json = music("search", mapOf("query" to query, "params" to ARTISTS))
         val out = mutableListOf<ArtistRef>()
@@ -342,5 +350,6 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
         private const val SONGS = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
         private const val ARTISTS = "EgWKAQIgAWoMEA4QChADEAQQCRAF"
         private const val ALBUMS = "EgWKAQIYAWoMEA4QChADEAQQCRAF"
+        private const val VIDEOS = "EgWKAQIQAWoMEA4QChADEAQQCRAF"
     }
 }
