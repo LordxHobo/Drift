@@ -75,7 +75,8 @@ fun SearchScreen() {
         } catch (e: Throwable) {
             // The reason, too, so a screenshot says what went wrong.
             SearchState.error = "Search failed. Check your connection and try again.\n\n" +
-                (e.message ?: e::class.java.simpleName)
+                e::class.java.simpleName + (e.message?.let { ": $it" } ?: "") +
+                (e.cause?.let { c -> "\n" + c::class.java.simpleName + (c.message?.let { ": $it" } ?: "") } ?: "")
         } finally {
             SearchState.searching = false
         }

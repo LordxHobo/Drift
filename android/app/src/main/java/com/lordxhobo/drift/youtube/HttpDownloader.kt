@@ -1,5 +1,6 @@
 package com.lordxhobo.drift.youtube
 
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request.Builder
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -7,6 +8,8 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
+import java.net.Inet4Address
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 /** How NewPipeExtractor reaches YouTube: plain HTTP requests through OkHttp. */
@@ -35,10 +38,21 @@ class HttpDownloader private constructor(val client: OkHttpClient) : Downloader(
         val shared: HttpDownloader by lazy {
             HttpDownloader(
                 OkHttpClient.Builder()
-                    .connectTimeout(20, TimeUnit.SECONDS)
+                    .dns(Ipv4First)
+                    // Short, so a dead route (often IPv6) is dropped quickly and the next one is tried.
+                    .connectTimeout(6, TimeUnit.SECONDS)
                     .readTimeout(30, TimeUnit.SECONDS)
                     .build()
             )
         }
+    }
+
+    /**
+     * IPv4 addresses first. Many home and mobile networks hand out IPv6 that doesn't actually work;
+     * browsers try both at once, but OkHttp waits on the first one until the connection times out.
+     */
+    private object Ipv4First : Dns {
+        override fun lookup(hostname: String): List<InetAddress> =
+            Dns.SYSTEM.lookup(hostname).sortedBy { if (it is Inet4Address) 0 else 1 }
     }
 }

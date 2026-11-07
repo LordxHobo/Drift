@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 22,
+      "date": "2026-11-07",
+      "title": "Connects on more networks",
+      "notes": [
+        {
+          "text": "Fixed searches timing out on networks where the newer kind of internet address (IPv6) doesn't work. Drift now uses the address that works, as browsers do.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 21,
       "date": "2026-11-07",
       "title": "Search works",
