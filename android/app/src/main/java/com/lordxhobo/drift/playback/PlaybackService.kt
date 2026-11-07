@@ -55,8 +55,10 @@ class PlaybackService : MediaSessionService() {
                 spec.withUri(Uri.parse(url))
             } else spec
         }
+        // Downloads first, then the song cache, then YouTube.
+        val sources = SongDataSource.Factory(SongDataSource.cacheFactory(resolving), resolving)
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(resolving))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(sources))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 true
@@ -98,6 +100,8 @@ class PlaybackService : MediaSessionService() {
         val id = item.mediaId
         if (retried.add(id)) {
             YouTube.forget(id)
+            // A broken saved part (or a link for a different file): start that song afresh.
+            SongCache.forget(id)
             val position = player.currentPosition
             player.prepare()
             player.seekTo(player.currentMediaItemIndex, position)

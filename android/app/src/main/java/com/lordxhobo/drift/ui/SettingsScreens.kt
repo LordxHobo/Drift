@@ -1,5 +1,10 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import com.lordxhobo.drift.playback.Downloads
+import com.lordxhobo.drift.playback.SongCache
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -202,10 +207,21 @@ fun SettingsScreen() {
         item {
             Group {
                 SettingsRow(
+                    "Storage",
+                    "Downloads ${Downloads.songs.size} songs · Song cache " + megabytes(SongCache.usedBytes),
+                    icon = Icons.Filled.ArrowCircleDown,
+                    iconColor = Color(0xFF2DD4BF),
+                ) { Nav.open(Screen.Storage) }
+            }
+        }
+        item { Spacer(Modifier.size(18.dp)) }
+        item {
+            Group {
+                SettingsRow(
                     "Keep playing in the background",
                     if (allowed) "Drift may run with the screen off" else "Your phone may stop Drift to save battery",
                     icon = Icons.Filled.BatteryChargingFull,
-                    iconColor = Color(0xFF2DD4BF),
+                    iconColor = Color(0xFF8E8E93),
                     trailing = if (allowed) "On" else "Off",
                 ) {
                     val intent = if (allowed) Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
@@ -224,6 +240,129 @@ fun SettingsScreen() {
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp).clickable { UiState.showAllNotes = true }.padding(8.dp),
             )
         }
+    }
+}
+
+// MARK: Storage
+
+private fun megabytes(bytes: Long): String = when {
+    bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
+    else -> "${bytes / 1_000_000} MB"
+}
+
+private fun sizeLabel(mb: Int): String = when {
+    mb == 0 -> "Off"
+    mb >= 1000 -> "${mb / 1000} GB"
+    else -> "$mb MB"
+}
+
+@Composable
+fun StorageScreen() {
+    var confirmRemove by remember { mutableStateOf(false) }
+    var used by remember { mutableStateOf(SongCache.usedBytes) }
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { BackBar() }
+        item { PageTitle("Storage") }
+        item { SectionLabel("Downloads") }
+        item {
+            Group {
+                val current = Downloads.current
+                val status = when {
+                    current != null -> "Downloading ${current.title} · ${(Downloads.progress * 100).toInt()}%"
+                    Downloads.waiting != null -> Downloads.waiting!!
+                    else -> "${Downloads.songs.size} songs · ${megabytes(Downloads.totalBytes)}"
+                }
+                InfoRow("Downloaded songs", status)
+                ToggleRow(
+                    "Download over mobile data",
+                    "Off: downloads wait for Wi-Fi.",
+                    Downloads.overMobileData,
+                ) { Downloads.setOverMobileData(it) }
+                if (Downloads.songs.isNotEmpty() || Downloads.kept.isNotEmpty()) {
+                    SettingsRow("Remove all downloads", titleColor = DriftColors.error) { confirmRemove = true }
+                }
+            }
+        }
+        item {
+            Text(
+                "Download a playlist with the arrow next to its play button, or a single song from its menu. Downloaded songs play without internet.",
+                color = DriftColors.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
+        item { SectionLabel("Song cache") }
+        item {
+            Group {
+                InfoRow("In use", megabytes(used))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (mb in SongCache.SIZES) {
+                        val on = SongCache.sizeMB == mb
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                .background(if (on) DriftColors.accent else DriftColors.surface2)
+                                .clickable { SongCache.setSize(mb) }.padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(sizeLabel(mb), color = if (on) DriftColors.onAccent else DriftColors.text2, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                SettingsRow("Clear song cache") {
+                    SongCache.clear()
+                    used = 0
+                }
+            }
+        }
+        item {
+            Text(
+                "Recently played songs stay on the phone up to this size, so they start at once, use no data again, and play offline. The oldest go first.",
+                color = DriftColors.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
+    }
+    if (confirmRemove) {
+        AlertDialog(
+            onDismissRequest = { confirmRemove = false },
+            title = { Text("Remove all downloads?") },
+            text = { Text("Every downloaded song is removed from this phone, and playlists stop downloading. Your playlists stay.") },
+            confirmButton = {
+                TextButton(onClick = { Downloads.removeAll(); confirmRemove = false }) { Text("Remove", color = DriftColors.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } },
+            containerColor = DriftColors.surface,
+        )
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(), color = DriftColors.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+        modifier = Modifier.padding(start = 30.dp, top = 6.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun InfoRow(title: String, value: String) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = DriftColors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text(value, color = DriftColors.muted, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.padding(start = 12.dp).weight(1.4f, fill = false))
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!on) }.padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = DriftColors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = DriftColors.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+        Switch(
+            checked = on, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = DriftColors.onAccent, checkedTrackColor = DriftColors.accent),
+        )
     }
 }
 

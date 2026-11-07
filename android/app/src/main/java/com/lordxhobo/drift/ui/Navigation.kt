@@ -20,6 +20,7 @@ sealed interface Screen {
     data object Settings : Screen
     data object Account : Screen
     data object LinkComputer : Screen
+    data object Storage : Screen
 }
 
 enum class Tab { HOME, SEARCH, LIBRARY }

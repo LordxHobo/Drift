@@ -1,5 +1,8 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.outlined.ArrowCircleDown
+import com.lordxhobo.drift.playback.Downloads
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -106,7 +109,14 @@ fun TrackRow(t: Track, onClick: () -> Unit, onMenu: () -> Unit, number: Int? = n
                 t.title, color = if (isCurrent) DriftColors.accent else DriftColors.text, fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text(t.artist, color = DriftColors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Saved on the phone (plays offline).
+                if (Downloads.isDownloaded(t.id)) {
+                    Icon(Icons.Filled.ArrowCircleDown, contentDescription = "Downloaded", tint = DriftColors.accent, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(t.artist, color = DriftColors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         Text(t.durationText, color = DriftColors.muted, fontSize = 12.sp)
         LikeButton(t)
@@ -159,8 +169,21 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 
 /** The round green play button (and the outlined shuffle one) on playlist, album and artist pages. */
 @Composable
-fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit) {
+fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, downloadId: String? = null) {
     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Keep this playlist downloaded (songs added later download too).
+        if (downloadId != null) {
+            val on = Downloads.isKept(downloadId)
+            IconButton(onClick = { Downloads.keep(downloadId, !on) }, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    if (on) Icons.Filled.ArrowCircleDown else Icons.Outlined.ArrowCircleDown,
+                    contentDescription = if (on) "Remove download" else "Download",
+                    tint = if (on) DriftColors.accent else DriftColors.muted,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+        }
         IconButton(
             onClick = onShuffle,
             modifier = Modifier.size(48.dp).clip(CircleShape).background(DriftColors.surface2),

@@ -87,6 +87,7 @@ private fun Page(screen: Screen) {
         Screen.Settings -> SettingsScreen()
         Screen.Account -> AccountScreen()
         Screen.LinkComputer -> LinkComputerScreen()
+        Screen.Storage -> StorageScreen()
     }
 }
 

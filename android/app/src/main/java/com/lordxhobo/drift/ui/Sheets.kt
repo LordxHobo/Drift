@@ -1,5 +1,8 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.outlined.ArrowCircleDown
+import com.lordxhobo.drift.playback.Downloads
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -102,6 +105,13 @@ private fun SongMenu(t: Track) {
         MenuItem("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd) { close(); UiState.addToPlaylist = t }
         UiState.menuPlace?.let { (playlistId, index) ->
             MenuItem("Remove from this playlist", Icons.Filled.Delete) { Library.remove(index, playlistId); close() }
+        }
+        // Single songs; songs in a downloaded playlist come and go with it.
+        when {
+            !Downloads.isDownloaded(t.id) && !Downloads.isManual(t.id) ->
+                MenuItem("Download", Icons.Outlined.ArrowCircleDown) { Downloads.downloadSong(t); close() }
+            Downloads.isManual(t.id) ->
+                MenuItem("Remove download", Icons.Filled.ArrowCircleDown) { Downloads.remove(t.id); close() }
         }
         if (t.artist.isNotBlank()) {
             MenuItem("Go to artist", Icons.Filled.Person) {

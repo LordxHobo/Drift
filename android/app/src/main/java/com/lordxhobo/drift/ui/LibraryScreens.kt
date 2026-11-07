@@ -1,5 +1,6 @@
 package com.lordxhobo.drift.ui
 
+import com.lordxhobo.drift.playback.Downloads
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,6 +139,14 @@ fun PlaylistScreen(id: String?) {
                     if (p?.isAlbum == true) "${p.albumArtist ?: "Album"} · ${tracks.size} songs" else "${tracks.size} songs · ${formatTotal(tracks)}",
                     color = DriftColors.muted, fontSize = 13.sp,
                 )
+                // While its songs download: how many are on the phone.
+                if (Downloads.isKept(p?.id ?: Downloads.LIKED)) {
+                    val have = tracks.count { Downloads.isDownloaded(it.id) }
+                    Text(
+                        if (have >= tracks.size) "Downloaded" else "Downloading · $have of ${tracks.size}" + (Downloads.waiting?.let { " · $it" } ?: ""),
+                        color = DriftColors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
         if (tracks.isNotEmpty()) {
@@ -145,6 +154,7 @@ fun PlaylistScreen(id: String?) {
                 PlayButtons(
                     onPlay = { Playback.play(tracks, 0, name) },
                     onShuffle = { Playback.play(tracks, 0, name, shuffled = true) },
+                    downloadId = p?.id ?: Downloads.LIKED,
                 )
             }
         }

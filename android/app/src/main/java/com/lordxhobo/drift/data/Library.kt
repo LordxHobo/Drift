@@ -36,6 +36,9 @@ object Library {
     /** Called after every change made on this phone (library sync listens). */
     var onLocalChange: (() -> Unit)? = null
 
+    /** Called after every change, from here or another device (downloads listen). */
+    val onAnyChange = mutableListOf<() -> Unit>()
+
     fun load(context: Context) {
         file = File(context.filesDir, "library.json")
         val s = runCatching { json.decodeFromString<Stored>(file.readText()) }.getOrNull() ?: return
@@ -46,6 +49,7 @@ object Library {
 
     private fun save(local: Boolean = true) {
         if (local) onLocalChange?.invoke()
+        onAnyChange.forEach { it() }
         val s = Stored(playlists, liked, recent)
         val text = json.encodeToString(s)
         val tmp = File(file.parentFile, "library.json.tmp")

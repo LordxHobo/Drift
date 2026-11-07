@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 27,
+      "date": "2026-11-07",
+      "title": "Downloads and song cache",
+      "notes": [
+        {
+          "text": "Download playlists and Liked songs with the arrow next to the play button, or a single song from its menu. Downloaded songs play without internet, and songs added to a downloaded playlist download too.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Recently played songs are kept on the phone (500 MB by default), so they start at once and play offline. Change the size in Settings → Storage.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Downloads wait for Wi-Fi unless you allow mobile data in Settings → Storage.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 26,
       "date": "2026-11-07",
       "title": "Your library, everywhere",
