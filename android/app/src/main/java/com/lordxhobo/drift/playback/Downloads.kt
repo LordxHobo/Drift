@@ -136,7 +136,7 @@ object Downloads {
         save()
     }
 
-    fun setOverMobileData(on: Boolean) {
+    fun allowMobileData(on: Boolean) {
         overMobileData = on
         prefs.edit().putBoolean("downloadOverMobile", on).apply()
         update()

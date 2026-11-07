@@ -277,7 +277,7 @@ fun StorageScreen() {
                     "Download over mobile data",
                     "Off: downloads wait for Wi-Fi.",
                     Downloads.overMobileData,
-                ) { Downloads.setOverMobileData(it) }
+                ) { Downloads.allowMobileData(it) }
                 if (Downloads.songs.isNotEmpty() || Downloads.kept.isNotEmpty()) {
                     SettingsRow("Remove all downloads", titleColor = DriftColors.error) { confirmRemove = true }
                 }
