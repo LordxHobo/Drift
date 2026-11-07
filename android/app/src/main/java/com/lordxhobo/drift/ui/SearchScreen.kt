@@ -72,8 +72,10 @@ fun SearchScreen() {
             SearchState.lastSearched = q
         } catch (e: CancellationException) {
             throw e   // typed more: the next search takes over
-        } catch (e: Exception) {
-            SearchState.error = "Search failed. Check your connection and try again."
+        } catch (e: Throwable) {
+            // The reason, too, so a screenshot says what went wrong.
+            SearchState.error = "Search failed. Check your connection and try again.\n\n" +
+                (e.message ?: e::class.java.simpleName)
         } finally {
             SearchState.searching = false
         }

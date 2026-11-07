@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 21,
+      "date": "2026-11-07",
+      "title": "Search works",
+      "notes": [
+        {
+          "text": "Search no longer loads forever: it now asks YouTube Music directly, the same way Drift on iPhone and computer does. Artist and album pages too.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Songs start faster, with the same quick audio links as on iPhone.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "If a search does fail, Drift now says why instead of loading without end.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 20,
       "date": "2026-11-06",
       "title": "Library search fits again",
