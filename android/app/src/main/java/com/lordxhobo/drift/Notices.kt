@@ -25,6 +25,7 @@ import androidx.work.WorkerParameters
 import com.lordxhobo.drift.data.AlbumRef
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.data.nowApple
+import com.lordxhobo.drift.social.InboxItem
 import com.lordxhobo.drift.social.JamInvite
 import com.lordxhobo.drift.youtube.YouTube
 import kotlinx.coroutines.Dispatchers
@@ -77,11 +78,14 @@ object Notices {
         private set
     var invitesOn by mutableStateOf(true)
         private set
+    var songsOn by mutableStateOf(true)
+        private set
 
     val unread: Int get() = list.count { !it.read }
 
     private const val RELEASES = "releases"
     private const val INVITES = "invites"
+    private const val SONGS = "songs"
     const val OPEN = "drift.open"
 
     private lateinit var app: Context
@@ -94,6 +98,7 @@ object Notices {
         prefs = app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE)
         releasesOn = prefs.getBoolean("notifyReleases", true)
         invitesOn = prefs.getBoolean("notifyInvites", true)
+        songsOn = prefs.getBoolean("notifySongs", true)
         file = File(app.filesDir, "notifications.json")
         list = runCatching { json.decodeFromString(ListSerializer(Notice.serializer()), file.readText()) }.getOrDefault(emptyList())
         if (Build.VERSION.SDK_INT >= 26) {
@@ -103,6 +108,9 @@ object Notices {
             })
             m.createNotificationChannel(NotificationChannel(INVITES, "Listen Together invites", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Friends inviting you to listen together"
+            })
+            m.createNotificationChannel(NotificationChannel(SONGS, "Songs from friends", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Friends sending you a song"
             })
         }
     }
@@ -141,6 +149,11 @@ object Notices {
     fun turnInvites(on: Boolean) {
         invitesOn = on
         prefs.edit().putBoolean("notifyInvites", on).apply()
+    }
+
+    fun turnSongs(on: Boolean) {
+        songsOn = on
+        prefs.edit().putBoolean("notifySongs", on).apply()
     }
 
     /** Android lets Drift show notifications (asked once on Android 13 and later). */
@@ -184,6 +197,26 @@ object Notices {
 
     fun clearInvite(i: JamInvite) {
         if (::app.isInitialized) NotificationManagerCompat.from(app).cancel(INVITES, i.from.hashCode())
+    }
+
+    @Suppress("MissingPermission") // checked by allowed()
+    fun showSong(i: InboxItem) {
+        if (!::app.isInitialized || !songsOn || !allowed()) return
+        val text = "“${i.track.title}” by ${i.track.artist}" + if (i.note.isNotEmpty()) " · ${i.note}" else ""
+        val note = NotificationCompat.Builder(app, SONGS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("${i.fromName} sent you a song")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(open("inbox", 3))
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(app).notify(SONGS, i.id.hashCode(), note)
+    }
+
+    fun clearSong(id: String) {
+        if (::app.isInitialized) NotificationManagerCompat.from(app).cancel(SONGS, id.hashCode())
     }
 
     /** Checks for new releases every 6 hours, also while Drift is closed (when there's internet). */

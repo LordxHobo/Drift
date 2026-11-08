@@ -4849,3 +4849,113 @@ a.btn.disabled {
 .m-scroll > * {
   flex-shrink: 0;
 }
+
+/* Songs from friends: the inbox tab in the side panel, and the note when sending one. */
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #0e0e10;
+  font-size: 11px;
+  font-weight: 700;
+}
+.icon-btn.has-dot {
+  position: relative;
+}
+.icon-btn.has-dot::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.inbox-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 8px 12px;
+}
+.inbox-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.inbox-item.new {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.inbox-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inbox-from {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text2);
+}
+.inbox-from b {
+  color: var(--text);
+}
+.inbox-note {
+  margin: 0 0 0 32px;
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 4px 12px 12px 12px;
+  background: var(--surface2);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.inbox-song {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 32px;
+}
+.inbox-text {
+  flex: 1;
+  min-width: 0;
+}
+.inbox-title {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inbox-artist {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inbox-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0e0e10;
+  cursor: pointer;
+}
+.send-note {
+  margin-top: 12px;
+}

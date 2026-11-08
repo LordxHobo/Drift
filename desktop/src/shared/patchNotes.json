@@ -2,6 +2,60 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 50,
+      "date": "2026-11-08",
+      "title": "Watch episodes",
+      "notes": [
+        {
+          "text": "Episodes from YouTube can show their video: tap Video in the player. The sound keeps coming from the normal player, so speed, skipping and the notification still work, and the video only loads while it's on screen. Tap the quality to change it, or go full screen.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "date": "2026-11-08",
+      "title": "Podcasts on all your devices",
+      "notes": [
+        {
+          "text": "The shows you follow and where you are in each episode now sync between your iPhone, Android phone and computer. Pause on one and pick up on another."
+        },
+        {
+          "text": "The shows you follow and where you are in each episode now sync with your iPhone and computer. Pause on one and pick up on another.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "date": "2026-11-08",
+      "title": "Send songs to friends",
+      "notes": [
+        {
+          "text": "Send a song to a friend from its menu (Send to a friend), with a note if you like. It shows up in their inbox on every device."
+        },
+        {
+          "text": "Songs friends send you are in the Inbox, beside Friends, with a dot when there's something new. Play them or save them to Liked songs, and clear the ones you're done with. Don't want any? Turn off Songs from friends in Settings."
+        },
+        {
+          "text": "Send a song to a friend from its menu (Send to a friend), with a note if you like. It shows up in their inbox on every device.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "text": "Songs friends send you are under Friends → Inbox, with a notification and a dot on the Friends button when one arrives. Turn this off in Settings → Profile & devices → Songs from friends.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
+    {
       "id": 47,
       "date": "2026-11-08",
       "title": "All of YouTube, and shared links",

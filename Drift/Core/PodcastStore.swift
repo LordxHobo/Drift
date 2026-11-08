@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// Followed shows (YouTube channels, or shows with their own feed), their latest episodes and where each episode was left off.
-/// Saved separately from the music library in podcasts.json.
+/// Saved separately from the music library in podcasts.json. The shows you follow and where you are in each
+/// episode sync with your other devices (PodcastSync).
 @Observable @MainActor
 final class PodcastStore {
     static let shared = PodcastStore()
@@ -14,6 +15,10 @@ final class PodcastStore {
     private(set) var loadingChannels: Set<String> = []
 
     @ObservationIgnored private var feedsUpdated: Date?
+    /// When the shows you follow last changed (here or synced from another device), ms since 1970.
+    @ObservationIgnored private(set) var showsChanged: Int = 0
+    /// The profile these were last synced with.
+    @ObservationIgnored private(set) var syncedUid: String?
     @ObservationIgnored private var lastSave = Date.distantPast
     @ObservationIgnored private var dirty = false
     @ObservationIgnored private let fileURL = AppFiles.data.appending(path: "podcasts.json")
@@ -23,6 +28,8 @@ final class PodcastStore {
         var progress: [String: EpisodeProgress]?
         var feeds: [String: [Track]]?
         var feedsUpdated: Date?
+        var showsChanged: Int?
+        var syncedUid: String?
     }
 
     private init() {
@@ -32,11 +39,14 @@ final class PodcastStore {
             progress = s.progress ?? [:]
             feeds = s.feeds ?? [:]
             feedsUpdated = s.feedsUpdated
+            showsChanged = s.showsChanged ?? 0
+            syncedUid = s.syncedUid
         }
     }
 
     private func save() {
-        let s = Stored(subscriptions: subscriptions, progress: progress, feeds: feeds, feedsUpdated: feedsUpdated)
+        let s = Stored(subscriptions: subscriptions, progress: progress, feeds: feeds, feedsUpdated: feedsUpdated,
+                       showsChanged: showsChanged, syncedUid: syncedUid)
         guard let data = try? JSONEncoder().encode(s) else { return }
         try? data.write(to: fileURL, options: .atomic)
         lastSave = Date()
@@ -58,7 +68,9 @@ final class PodcastStore {
     func follow(_ c: PodcastChannel) {
         guard !isFollowing(c.id) else { return }
         subscriptions.append(c)
+        showsChanged = Self.nowMs
         save()
+        PodcastSync.shared.changed(soon: true)
         Task { await loadChannel(c) }
     }
 
@@ -70,7 +82,9 @@ final class PodcastStore {
 
     func unfollow(_ channelID: String) {
         subscriptions.removeAll { $0.id == channelID }
+        showsChanged = Self.nowMs
         save()
+        PodcastSync.shared.changed(soon: true)
     }
 
     func toggleFollow(_ c: PodcastChannel) {
@@ -171,16 +185,47 @@ final class PodcastStore {
                                          updated: Date(), finished: finished)
         dirty = true
         if force || Date().timeIntervalSince(lastSave) > 15 { save() }
+        PodcastSync.shared.changed(soon: force)
     }
 
     func markFinished(_ t: Track) {
         let d = progress[t.id]?.duration ?? t.duration ?? 0
         progress[t.id] = EpisodeProgress(track: t, position: d, duration: d, updated: Date(), finished: true)
         save()
+        PodcastSync.shared.changed(soon: true)
     }
 
     func markUnplayed(_ id: String) {
-        progress[id] = nil
+        // Kept as "not started" (rather than removed) so other devices hear about it too.
+        guard let p = progress[id] else { return }
+        progress[id] = EpisodeProgress(track: p.track, position: 0, duration: p.duration, updated: Date(), finished: false)
+        save()
+        PodcastSync.shared.changed(soon: true)
+    }
+
+    // MARK: Syncing (PodcastSync)
+
+    static var nowMs: Int { Int(Date().timeIntervalSince1970 * 1000) }
+
+    /// The shows you follow, as another device changed them.
+    func adoptShows(_ list: [PodcastChannel], changedAt: Int) {
+        let known = Set(subscriptions.map(\.id))
+        subscriptions = list
+        showsChanged = changedAt
+        save()
+        for c in list where !known.contains(c.id) { Task { await loadChannel(c) } }
+    }
+
+    /// Where episodes were left on other devices (each newer than what's here).
+    func adoptProgress(_ entries: [String: EpisodeProgress]) {
+        guard !entries.isEmpty else { return }
+        progress.merge(entries) { _, new in new }
+        save()
+    }
+
+    func markSynced(_ uid: String) {
+        guard syncedUid != uid else { return }
+        syncedUid = uid
         save()
     }
 }

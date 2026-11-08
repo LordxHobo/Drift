@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -111,6 +112,7 @@ private fun SongMenu(t: Track) {
         MenuItem("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd) { close(); UiState.addToPlaylist = t }
         MenuItem("Share", Icons.Filled.Share) { close(); UiState.sharing = t }
         if (Social.me != null) MenuItem("Invite to listen together", Icons.Filled.Groups) { close(); UiState.inviteTrack = t }
+        if (Social.me != null) MenuItem("Send to a friend", Icons.AutoMirrored.Filled.Send) { close(); com.lordxhobo.drift.social.Inbox.sending = t }
         UiState.menuPlace?.let { (playlistId, index) ->
             MenuItem("Replace with another version", Icons.Filled.SwapHoriz) { close(); UiState.replacing = Triple(t, playlistId, index) }
             if (playlistId != Library.LIKED) MenuItem("Remove from this playlist", Icons.Filled.Delete) { Library.remove(index, playlistId); close() }

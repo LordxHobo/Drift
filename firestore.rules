@@ -39,6 +39,24 @@ service cloud.firestore {
           && uid in get(/databases/$(database)/documents/users/$(sender)).data.get('following', [])
           && get(/databases/$(database)/documents/users/$(uid)).data.get('allowInvites', true) != false;
       }
+
+      // Songs friends sent you, one document each (named after who sent it and when). Only friends who
+      // follow each other can send, and only when you allow it. You read, mark seen and clear yours.
+      match /inbox/{item} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow update: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seen']);
+        allow create: if request.auth != null
+          && request.auth.uid != uid
+          && item.matches('^' + request.auth.uid + '_[0-9]+$')
+          && request.resource.data['from'] == request.auth.uid
+          && request.resource.data.keys().hasOnly(['from', 'fromName', 'track', 'note', 'at', 'seen'])
+          && request.resource.data.track is string && request.resource.data.track.size() < 8000
+          && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 300))
+          && request.auth.uid in get(/databases/$(database)/documents/users/$(uid)).data.get('following', [])
+          && uid in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('following', [])
+          && get(/databases/$(database)/documents/users/$(uid)).data.get('allowSongs', true) != false;
+      }
     }
 
     // Linking a computer: the computer posts a one-time code with its public key, your phone answers

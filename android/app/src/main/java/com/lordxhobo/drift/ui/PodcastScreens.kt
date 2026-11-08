@@ -160,6 +160,7 @@ fun EpisodeMenu(t: Track, open: Boolean, onClose: () -> Unit) {
             if ((Nav.top as? Screen.Show)?.channel?.id != c.id) DropdownMenuItem(text = { Text("Go to show") }, onClick = { onClose(); Nav.open(Screen.Show(c)) })
         }
         DropdownMenuItem(text = { Text("Share") }, onClick = { onClose(); UiState.sharing = t })
+        if (com.lordxhobo.drift.social.Social.me != null) DropdownMenuItem(text = { Text("Send to a friend") }, onClick = { onClose(); com.lordxhobo.drift.social.Inbox.sending = t })
     }
 }
 

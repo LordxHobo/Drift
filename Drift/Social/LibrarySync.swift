@@ -107,8 +107,8 @@ final class LibrarySync {
             let f = doc["fields"] as? [String: Any]
             let updatedAt = FV.int(f, "updatedAt") ?? 0
             // Listening history is read by the stats page, not synced into the library.
-            // Nor are devices and their remote control (RemoteControl).
-            if name.hasPrefix("plays-") || name == "devices" || name.hasPrefix("remote-") { continue }
+            // Nor are devices and their remote control (RemoteControl), or podcasts (PodcastSync).
+            if name.hasPrefix("plays-") || name == "devices" || name.hasPrefix("remote-") || name == "podcasts" { continue }
             if let known = synced[name], known.updatedAt >= updatedAt { continue }
             if FV.bool(f, "deleted") == true {
                 applyDeletion(name)

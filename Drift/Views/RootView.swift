@@ -95,6 +95,12 @@ struct RootView: View {
         } message: { u in
             Text("Drift \(u.version) is ready. SideStore installs it with one tap, and your library stays.")
         }
+        .onChange(of: ui.openInbox) { _, open in
+            // A notification about a song from a friend was tapped.
+            guard open else { return }
+            ui.openInbox = false
+            openFromDrawer(.friends)
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 settings.applyAppearance()
@@ -103,11 +109,14 @@ struct RootView: View {
                 LibrarySync.shared.refresh()
                 LyricsActivity.shared.appBecameActive()
                 JamInvites.shared.appBecameActive()
+                Task { await SongInbox.shared.check() }
+                PodcastSync.shared.syncNow()
                 CollabSync.shared.schedule(after: 0)
             }
             if phase == .background {
                 player.savePosition()
                 PodcastStore.shared.flush()
+                PodcastSync.shared.syncNow()
                 PlayHistory.shared.flush()
                 LyricsActivity.shared.appWentToBackground(playing: player.isPlaying)
             }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.lordxhobo.drift.data.Track
+import com.lordxhobo.drift.social.PodcastSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,8 +46,8 @@ data class EpisodeProgress(
 )
 
 /**
- * Followed shows, their latest episodes and where each episode was left off. Kept on this phone (like the
- * iPhone's and the computer's, podcasts aren't synced between devices).
+ * Followed shows, their latest episodes and where each episode was left off. Kept on this phone, and the
+ * shows you follow and where you are in each episode sync with your other devices (PodcastSync).
  */
 object PodcastStore {
     @Serializable
@@ -55,6 +56,10 @@ object PodcastStore {
         val progress: Map<String, EpisodeProgress> = emptyMap(),
         val feeds: Map<String, List<Track>> = emptyMap(),
         val feedsUpdated: Long? = null,
+        /** When the shows you follow last changed (here or synced from another device), ms. */
+        val showsChanged: Long = 0,
+        /** The profile these were last synced with. */
+        val syncedUid: String? = null,
     )
 
     var subscriptions by mutableStateOf(listOf<PodcastChannel>())
@@ -69,6 +74,10 @@ object PodcastStore {
         private set
 
     private var feedsUpdated: Long? = null
+    var showsChanged = 0L
+        private set
+    var syncedUid: String? = null
+        private set
     private var lastSave = 0L
     private var dirty = false
     private lateinit var file: File
@@ -82,11 +91,13 @@ object PodcastStore {
             progress = it.progress
             feeds = it.feeds
             feedsUpdated = it.feedsUpdated
+            showsChanged = it.showsChanged
+            syncedUid = it.syncedUid
         }
     }
 
     private fun save() {
-        val text = json.encodeToString(Stored.serializer(), Stored(subscriptions, progress, feeds, feedsUpdated))
+        val text = json.encodeToString(Stored.serializer(), Stored(subscriptions, progress, feeds, feedsUpdated, showsChanged, syncedUid))
         lastSave = System.currentTimeMillis()
         dirty = false
         scope.launch(Dispatchers.IO) {
@@ -110,13 +121,17 @@ object PodcastStore {
     fun follow(c: PodcastChannel) {
         if (isFollowing(c.id)) return
         subscriptions = subscriptions + c
+        showsChanged = System.currentTimeMillis()
         save()
+        PodcastSync.changed(soon = true)
         scope.launch { loadChannel(c) }
     }
 
     fun unfollow(id: String) {
         subscriptions = subscriptions.filterNot { it.id == id }
+        showsChanged = System.currentTimeMillis()
         save()
+        PodcastSync.changed(soon = true)
     }
 
     fun toggleFollow(c: PodcastChannel) = if (isFollowing(c.id)) unfollow(c.id) else follow(c)
@@ -234,6 +249,7 @@ object PodcastStore {
         progress = next
         dirty = true
         if (force || System.currentTimeMillis() - lastSave > 15_000) save()
+        PodcastSync.changed(soon = force)
     }
 
     fun markPlayed(t: Track, played: Boolean) {
@@ -241,7 +257,38 @@ object PodcastStore {
         progress = if (played) {
             val d = progress[t.id]?.duration ?: t.duration ?: 0.0
             progress + (t.id to EpisodeProgress(t, d, d, System.currentTimeMillis(), true))
-        } else progress - t.id
+        } else {
+            // Kept as "not started" (rather than removed) so other devices hear about it too.
+            progress + (t.id to EpisodeProgress(t, 0.0, progress[t.id]?.duration ?: t.duration ?: 0.0, System.currentTimeMillis(), false))
+        }
+        save()
+        PodcastSync.changed(soon = true)
+    }
+
+    // MARK: Syncing (PodcastSync)
+
+    /** The shows you follow, as another device changed them. */
+    internal fun adoptShows(list: List<PodcastChannel>, changedAt: Long) {
+        val known = subscriptions.map { it.id }.toSet()
+        subscriptions = list
+        showsChanged = changedAt
+        save()
+        for (c in list) if (c.id !in known) scope.launch { runCatching { loadChannel(c) } }
+    }
+
+    /** Where episodes were left on other devices (each newer than what's here). */
+    internal fun adoptProgress(entries: Map<String, EpisodeProgress>) {
+        if (entries.isEmpty()) return
+        // Marked as played here while it plays: kept that way.
+        var next = progress + entries.filterKeys { it != heldDone }
+        if (next.size > 500) next = next.entries.sortedByDescending { it.value.updated }.take(500).associate { it.key to it.value }
+        progress = next
+        save()
+    }
+
+    internal fun markSynced(uid: String) {
+        if (syncedUid == uid) return
+        syncedUid = uid
         save()
     }
 }

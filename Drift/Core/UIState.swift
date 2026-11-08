@@ -9,6 +9,10 @@ final class UIState {
     var addToPlaylist: Track?
     /// Song to invite friends to listen to together.
     var inviteTrack: Track?
+    /// Song being sent to friends (their inbox).
+    var sendTrack: Track?
+    /// A notification about a song from a friend was tapped: open Friends on the inbox.
+    var openInbox = false
     /// Song being shared (link or picture).
     var shareTrack: Track?
     /// Song being swapped for another YouTube version (from a playlist or Liked songs).

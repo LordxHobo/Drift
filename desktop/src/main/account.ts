@@ -215,6 +215,8 @@ async function pull(uid: string): Promise<void> {
     if (name.startsWith('plays-')) continue
     // Nor are devices and their remote control (remote.ts).
     if (name === 'devices' || name.startsWith('remote-')) continue
+    // Nor podcasts (podcastSync.ts).
+    if (name === 'podcasts') continue
     const known = synced[name]
     if (known && known.updatedAt >= updatedAt) continue
     if (FV.bool(doc.fields, 'deleted') === true) {

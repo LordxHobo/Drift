@@ -16,6 +16,8 @@ struct UserProfile: Codable, Hashable, Identifiable {
     var jam: String? = nil
     /// Friends may invite them to listen together (nil = yes, the default).
     var allowInvites: Bool? = nil
+    /// Friends may send them songs (nil = yes, the default).
+    var allowSongs: Bool? = nil
     /// The name shown everywhere (capitals, spaces, emoji welcome); the @username stays unique.
     var displayName: String? = nil
 
@@ -26,6 +28,7 @@ struct UserProfile: Codable, Hashable, Identifiable {
     }
 
     var acceptsInvites: Bool { allowInvites ?? true }
+    var acceptsSongs: Bool { allowSongs ?? true }
 
     init(id: String, username: String, avatar: Data?, following: [String] = [], shareActivity: Bool = true,
          nowPlaying: Track? = nil, playing: Bool = false, updatedAt: Date? = nil) {
@@ -50,6 +53,7 @@ struct UserProfile: Codable, Hashable, Identifiable {
         playing = FV.bool(f, "playing") ?? false
         jam = FV.string(f, "jam")
         allowInvites = FV.bool(f, "allowInvites")
+        allowSongs = FV.bool(f, "allowSongs")
         displayName = FV.string(f, "displayName")
         updatedAt = FV.int(f, "updatedAt").map { Date(timeIntervalSince1970: TimeInterval($0)) }
         if let np = FV.mapFields(f, "nowPlaying"), let tid = FV.string(np, "id"), let title = FV.string(np, "title") {
@@ -254,6 +258,15 @@ final class SocialStore {
         me = profile
         cache()
         try? await Firestore.patch("users/\(profile.id)", fields: ["allowInvites": FV.b(on)], mask: ["allowInvites"])
+    }
+
+    /// Whether friends can send you songs (the server checks it too).
+    func setAllowSongs(_ on: Bool) async {
+        guard var profile = me else { return }
+        profile.allowSongs = on
+        me = profile
+        cache()
+        try? await Firestore.patch("users/\(profile.id)", fields: ["allowSongs": FV.b(on)], mask: ["allowSongs"])
     }
 
     // MARK: Display name

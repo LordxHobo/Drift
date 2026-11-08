@@ -42,6 +42,8 @@ data class UserProfile(
     val jam: String? = null,
     /** Whether friends can invite them to listen together (null = yes). */
     val allowInvites: Boolean? = null,
+    /** Whether friends can send them songs (null = yes). */
+    val allowSongs: Boolean? = null,
 ) {
     /** Playing right now (a recent update while playing), not just the last thing played. */
     val listeningNow: Boolean
@@ -81,6 +83,7 @@ data class UserProfile(
                 updatedAt = FV.long(f, "updatedAt"),
                 jam = FV.string(f, "jam")?.takeIf { it.isNotEmpty() },
                 allowInvites = FV.bool(f, "allowInvites"),
+                allowSongs = FV.bool(f, "allowSongs"),
             )
         }
     }

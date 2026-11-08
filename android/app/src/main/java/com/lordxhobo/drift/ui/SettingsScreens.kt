@@ -244,7 +244,7 @@ fun SettingsScreen() {
                 ) { Nav.open(Screen.PlaybackSettings) }
                 SettingsRow(
                     "Notifications",
-                    listOfNotNull(if (com.lordxhobo.drift.Notices.releasesOn) "New releases" else null, if (com.lordxhobo.drift.Notices.invitesOn) "Listen Together invites" else null)
+                    listOfNotNull(if (com.lordxhobo.drift.Notices.releasesOn) "New releases" else null, if (com.lordxhobo.drift.Notices.invitesOn) "Listen Together invites" else null, if (com.lordxhobo.drift.Notices.songsOn) "Songs from friends" else null)
                         .joinToString(" · ").ifEmpty { "Off" },
                     icon = Icons.Filled.Notifications,
                     iconColor = Color(0xFFEF4444),
@@ -707,6 +707,11 @@ private fun EditProfile(me: UserProfile) {
                 "Friends you follow back can invite you to listen together.",
                 me.allowInvites != false,
             ) { on -> scope.launch { error = runCatching { Friends.setAllowInvites(on) }.exceptionOrNull()?.message } }
+            ToggleRow(
+                "Songs from friends",
+                "Friends you follow back can send you songs (Friends → Inbox).",
+                me.allowSongs != false,
+            ) { on -> scope.launch { error = runCatching { com.lordxhobo.drift.social.Inbox.setAllowSongs(on) }.exceptionOrNull()?.message } }
         }
         Spacer(Modifier.size(18.dp))
         Group {

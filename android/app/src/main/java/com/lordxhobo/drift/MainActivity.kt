@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.lordxhobo.drift.podcasts.YouTubePodcasts
+import com.lordxhobo.drift.social.Inbox
 import com.lordxhobo.drift.social.Jam
 import com.lordxhobo.drift.ui.UiState
 import android.os.Bundle
@@ -61,6 +62,12 @@ class MainActivity : ComponentActivity() {
                 if (Nav.top != Screen.Notifications) Nav.open(Screen.Notifications)
             }
             "invite" -> UiState.showPlayer = false
+            "inbox" -> {
+                UiState.showPlayer = false
+                Inbox.openInbox = true
+                Nav.tab = Tab.HOME
+                if (Nav.top != Screen.Friends) Nav.open(Screen.Friends)
+            }
             else -> return
         }
         intent.removeExtra(Notices.OPEN)
@@ -105,14 +112,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        Inbox.onScreen = false
         // Where each episode was left, saved before Android may close Drift.
         PodcastStore.flush()
+        // …and sent to your other devices.
+        com.lordxhobo.drift.social.PodcastSync.syncNow()
     }
 
     override fun onResume() {
         super.onResume()
+        Inbox.onScreen = true
+        lifecycleScope.launch { runCatching { Inbox.check() } }
         // Back in Drift: pick up changes made on other devices.
         if (Social.me != null) LibrarySync.syncNow()
+        com.lordxhobo.drift.social.PodcastSync.syncNow()
         // New releases, at most every few hours.
         lifecycleScope.launch { runCatching { Releases.check() } }
     }

@@ -48,6 +48,7 @@ import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.data.Track
 import com.lordxhobo.drift.playback.Playback
 import com.lordxhobo.drift.social.Friends
+import com.lordxhobo.drift.social.Inbox
 import com.lordxhobo.drift.social.Jam
 import androidx.compose.material.icons.filled.Groups
 import com.lordxhobo.drift.social.SharedPlaylist
@@ -100,6 +101,21 @@ private fun PersonRow(u: UserProfile, onClick: () -> Unit) {
 fun FriendsScreen() {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<UserProfile>?>(null) }
+    // Listening now, or the inbox (songs friends sent you): the inbox first when it has new ones.
+    var showInbox by remember { mutableStateOf(Inbox.openInbox || Inbox.unseen > 0) }
+    LaunchedEffect(Inbox.openInbox) {
+        if (Inbox.openInbox) {
+            showInbox = true
+            Inbox.openInbox = false
+        }
+    }
+    LaunchedEffect(showInbox) { if (showInbox) runCatching { Inbox.check() } }
+    LaunchedEffect(showInbox, Inbox.items) {
+        // Looked at: seen (on every device), a moment after it shows.
+        if (!showInbox) return@LaunchedEffect
+        delay(1500)
+        Inbox.markSeen(Inbox.items.map { it.id })
+    }
     LaunchedEffect(Unit) {
         // Refreshed while the page is open (activity changes as people play).
         while (true) {
@@ -145,6 +161,17 @@ fun FriendsScreen() {
         if (r != null) {
             if (r.isEmpty()) item { EmptyText("No one found.") }
             items(r, key = { "search-" + it.id }) { u -> PersonRow(u) { Nav.open(Screen.User(u.id)) } }
+            return@LazyColumn
+        }
+        item {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TabChip("Listening now", !showInbox, 0) { showInbox = false }
+                TabChip("Inbox", showInbox, Inbox.unseen) { showInbox = true }
+            }
+        }
+        if (showInbox) {
+            if (Inbox.items.isEmpty()) item { EmptyText("Songs friends send you show up here. Send one from any song's menu: Send to a friend.") }
+            items(Inbox.items, key = { "inbox-" + it.id }) { InboxRow(it) }
             return@LazyColumn
         }
         if (Friends.friends.isEmpty()) {
@@ -323,11 +350,30 @@ fun SharedListScreen(ownerId: String, id: String, name: String, ownerName: Strin
     }
 }
 
-/** The people button on Home: friends listening now show as a green dot. */
+/** A tab at the top of Friends, with a count of new ones. */
+@Composable
+private fun TabChip(label: String, selected: Boolean, count: Int, onClick: () -> Unit) {
+    Row(
+        Modifier.heightIn(min = 34.dp).clip(RoundedCornerShape(17.dp)).background(if (selected) DriftColors.accent else DriftColors.surface2)
+            .clickable(onClick = onClick).padding(start = 16.dp, end = if (count > 0) 10.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = if (selected) DriftColors.onAccent else DriftColors.text, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold)
+        if (count > 0) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.heightIn(min = 20.dp).clip(RoundedCornerShape(10.dp)).background(if (selected) DriftColors.onAccent else DriftColors.accent).padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("$count", color = if (selected) DriftColors.accent else DriftColors.onAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+/** The people button on Home: friends listening now, or songs friends sent, show as a green dot. */
 @Composable
 fun FriendsButton() {
     LaunchedEffect(Social.me?.id) { if (Social.me != null) Friends.refresh() }
-    val listening = Friends.friends.count { it.listeningNow }
+    val listening = Friends.friends.count { it.listeningNow } + Inbox.unseen
     Box(
         Modifier.clip(CircleShape).clickable { Nav.open(Screen.Friends) }.padding(8.dp),
         contentAlignment = Alignment.Center,

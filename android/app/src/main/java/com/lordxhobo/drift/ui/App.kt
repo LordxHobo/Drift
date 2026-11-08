@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lordxhobo.drift.playback.Playback
+import androidx.compose.runtime.LaunchedEffect
 import com.lordxhobo.drift.social.Remote
 
 /** The whole app: the current tab's page, the mini player, the tab bar, and what opens over them. */
@@ -75,6 +76,12 @@ fun DriftRoot() {
         if (UiState.showDevices) DevicesSheet()
         if (UiState.showJam) JamSheet()
         InviteSheet()
+        SendSongSheet()
+        if (videoFullScreen) {
+            val ep = Playback.current?.takeIf { com.lordxhobo.drift.playback.EpisodeVideo.on && com.lordxhobo.drift.playback.EpisodeVideo.canShow(it) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            if (ep != null) EpisodeVideoFullScreen(ep) else LaunchedEffect(Unit) { closeVideoFullScreen(context) }
+        }
         IncomingInvite()
         NoticeBar()
         // The battery tip waits until What's new is closed.

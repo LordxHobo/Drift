@@ -88,7 +88,15 @@ struct ProfileDrawer: View {
                 }
                 item("Friends", icon: "person.2", route: .friends) {
                     let listening = social.following.filter(\.isListeningNow).count
-                    if listening > 0 {
+                    let unseen = SongInbox.shared.unseenCount
+                    if unseen > 0 {
+                        Text(unseen > 99 ? "99+" : "\(unseen)")
+                            .font(.system(size: 12, weight: .heavy))
+                            .foregroundStyle(Theme.onAccent)
+                            .padding(.horizontal, 7)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(accent, in: Capsule())
+                    } else if listening > 0 {
                         Text("\(listening) listening")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(accent)

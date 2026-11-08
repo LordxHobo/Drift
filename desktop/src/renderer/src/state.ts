@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AppNotice, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState } from '@shared/types'
+import type { Account, AppNotice, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState, InboxItem } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -45,6 +45,8 @@ export const notificationsStore = new Store<AppNotice[]>([])
 export const openNoticeStore = new Store<string | null>(null)
 /** Your Drift profile (when linked with the phone). */
 export const meStore = new Store<UserProfile | null>(null)
+/** Songs friends sent you, newest first. */
+export const inboxStore = new Store<InboxItem[]>([])
 /** Hide what you listen to until Drift closes. */
 export const privateSessionStore = new Store(false)
 /** The Spotify import window. */
@@ -61,6 +63,9 @@ export async function loadAll(): Promise<void> {
   notificationsStore.set(await drift.notifications())
   drift.on('notifications', (v) => notificationsStore.set(v))
   drift.on('openNotice', (v) => openNoticeStore.set(v))
+  inboxStore.set(await drift.inbox())
+  drift.on('inbox', (v) => inboxStore.set(v))
+  drift.on('openInbox', () => panelStore.set('inbox'))
   podcastsStore.set(await drift.podcasts())
   drift.on('podcasts', (v) => podcastsStore.set(v))
   downloadsStore.set(await drift.downloads())
@@ -148,7 +153,7 @@ export function forward(): void {
 
 // MARK: Side panel (lyrics, queue, details)
 
-export type Panel = 'none' | 'lyrics' | 'queue' | 'friends'
+export type Panel = 'none' | 'lyrics' | 'queue' | 'friends' | 'inbox'
 export const panelStore = new Store<Panel>(readLocal<Panel>('panel', 'none'))
 panelStore.subscribe(() => writeLocal('panel', panelStore.get()))
 

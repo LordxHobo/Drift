@@ -35,6 +35,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -108,9 +110,14 @@ fun NowPlayingScreen() {
 
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (t.isEpisode) {
-                    // An episode's picture is a video still (16:9).
+                    // An episode's picture is a video still (16:9), or its video.
                     val w = minOf(maxWidth, maxHeight * 16f / 9f)
-                    Picture(t.artwork(800), t.id, w, w * 9f / 16f, RoundedCornerShape(10.dp))
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    if (com.lordxhobo.drift.playback.EpisodeVideo.on && com.lordxhobo.drift.playback.EpisodeVideo.canShow(t)) {
+                        EpisodeVideoView(t, w) { openVideoFullScreen(context) }
+                    } else {
+                        Picture(t.artwork(800), t.id, w, w * 9f / 16f, RoundedCornerShape(10.dp))
+                    }
                 } else {
                     val side = minOf(maxWidth, maxHeight)
                     Artwork(t.artwork(800), t.id, side, RoundedCornerShape(8.dp))
@@ -306,6 +313,12 @@ private fun EpisodeBottomRow(t: com.lordxhobo.drift.data.Track) {
             },
         ) {
             if (downloaded || asked) com.lordxhobo.drift.playback.Downloads.remove(t.id) else com.lordxhobo.drift.playback.Downloads.downloadSong(t)
+        }
+        if (com.lordxhobo.drift.playback.EpisodeVideo.canShow(t)) {
+            val video = com.lordxhobo.drift.playback.EpisodeVideo.on
+            BottomItem(if (video) Icons.Filled.Videocam else Icons.Filled.VideocamOff, "Video") {
+                com.lordxhobo.drift.playback.EpisodeVideo.turn(!video)
+            }
         }
         BottomItem(Icons.Filled.Devices, "Devices") { UiState.showDevices = true }
         val played = PodcastStore.isFinished(t.id)

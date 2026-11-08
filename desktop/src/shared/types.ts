@@ -348,6 +348,8 @@ export interface UserProfile {
   jam?: string | null
   /** Friends may invite them to listen together (null = yes, the default). */
   allowInvites?: boolean | null
+  /** Friends may send them songs (null = yes, the default). */
+  allowSongs?: boolean | null
   /** The name shown everywhere (capitals, spaces, emoji welcome); the username stays unique. */
   displayName?: string | null
 }
@@ -374,6 +376,20 @@ export interface JamInvite {
   artist: string
   /** Milliseconds since 1970. */
   at: number
+}
+
+/** A song a friend sent you (users/{you}/inbox/{them}_{ms}). */
+export interface InboxItem {
+  id: string
+  from: string
+  fromName: string
+  track: Track
+  /** What they wrote with it ('' for none). */
+  note: string
+  /** Milliseconds since 1970. */
+  at: number
+  /** Opened on one of your devices. */
+  seen: boolean
 }
 
 /** Listen Together: what everyone in the session hears. */
@@ -576,6 +592,14 @@ export interface DriftApi {
   jamInvite(friendIds: string[], code: string, track: Track): Promise<string[]>
   /** Clears an invite once answered. */
   jamInviteAnswered(invite: JamInvite): Promise<void>
+  /** Sends a song to friends (profile ids) with an optional note; returns the ids it couldn't send to. */
+  sendSong(friendIds: string[], track: Track, note: string): Promise<string[]>
+  /** Songs friends sent you, newest first. */
+  inbox(): Promise<InboxItem[]>
+  refreshInbox(): Promise<void>
+  inboxSeen(ids: string[]): Promise<void>
+  inboxClear(id: string): Promise<void>
+  setAllowSongs(on: boolean): Promise<void>
   usernameAvailable(name: string): Promise<boolean | null>
   updateProfile(change: { username?: string; displayName?: string; avatar?: string | null }): Promise<UserProfile | null>
   setPrivateSession(on: boolean): Promise<void>
@@ -603,7 +627,7 @@ export interface DriftApi {
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite' | 'remoteCommand'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite' | 'remoteCommand' | 'inbox' | 'openInbox'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -615,7 +639,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'downloads', 'downloadedTracks', 'download', 'removeDownloads', 'keepDownloaded', 'removeAllDownloads',
   'openDownloadsFolder', 'retryFailedDownloads',
   'me', 'friends', 'users', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
-  'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
+  'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'sendSong', 'inbox', 'refreshInbox', 'inboxSeen', 'inboxClear', 'setAllowSongs', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments'
 ]

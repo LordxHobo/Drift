@@ -45,6 +45,7 @@ function profile(doc: any): UserProfile | null {
     playing: FV.bool(f, 'playing') ?? false,
     jam: FV.string(f, 'jam') ?? null,
     allowInvites: FV.bool(f, 'allowInvites') ?? null,
+    allowSongs: FV.bool(f, 'allowSongs') ?? null,
     displayName: FV.string(f, 'displayName') || null,
     updatedAt: FV.int(f, 'updatedAt')
   }

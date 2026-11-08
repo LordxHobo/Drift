@@ -19,6 +19,7 @@ import { ReportDialog } from './views/report'
 import { CollabDialog } from './views/collab'
 import { JamDialog } from './views/jam'
 import { IncomingInvite, InviteDialog } from './views/invite'
+import { SendDialog } from './views/inbox'
 import { ShareDialog } from './views/share'
 import { StatsPage } from './views/stats'
 import { RemoteBar } from './views/remote'
@@ -168,6 +169,7 @@ export function App(): JSX.Element {
         <CollabDialog />
         <JamDialog />
         <InviteDialog />
+        <SendDialog />
         <ShareDialog />
         <IncomingInvite />
         <PatchNotes />
@@ -201,6 +203,7 @@ export function App(): JSX.Element {
       <CollabDialog />
       <JamDialog />
       <InviteDialog />
+      <SendDialog />
       <ShareDialog />
       <IncomingInvite />
       <PatchNotes />

@@ -15,6 +15,8 @@ import { applyIcon, iconPath } from './appicon'
 import * as collab from './collab'
 import * as jam from './jam'
 import * as invites from './invites'
+import * as inbox from './inbox'
+import * as podcastSync from './podcastSync'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -230,6 +232,12 @@ const api: DriftApi = {
   setAllowInvites: (on) => social.setAllowInvites(on),
   jamInvite: (ids, code, track) => invites.sendInvites(ids, code, track),
   jamInviteAnswered: (i) => invites.answerInvite(i),
+  sendSong: (ids, track, note) => inbox.sendSong(ids, track, note),
+  inbox: async () => inbox.inbox(),
+  refreshInbox: () => inbox.refreshInbox(),
+  inboxSeen: (ids) => inbox.markSeen(ids),
+  inboxClear: (id) => inbox.clear(id),
+  setAllowSongs: (on) => inbox.setAllowSongs(on),
   usernameAvailable: (name) => social.usernameAvailable(name),
   updateProfile: (change) => social.updateProfile(change),
   setPrivateSession: async (on) => presence.setPrivateSession(on),
@@ -288,10 +296,12 @@ app.whenReady().then(() => {
   account.start()
   collab.startCollab()
   invites.startInvites()
+  inbox.startInbox()
   remote.start()
   startUpdates()
   downloads.startDownloads()
   podcasts.startPodcasts()
+  podcastSync.startPodcastSync()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -306,6 +316,7 @@ app.on('before-quit', () => {
   plays.flush()
   downloads.flushDownloads()
   podcasts.flushPodcasts()
+  void podcastSync.syncPodcasts()
 })
 app.on('window-all-closed', () => {
   store.flush()

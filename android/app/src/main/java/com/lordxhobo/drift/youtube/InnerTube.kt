@@ -157,7 +157,10 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
     // MARK: Audio links
 
     /** A direct audio link from YouTube's visionOS client: one request, no signature decoding. */
-    data class Quick(val url: String, val kbps: Int, val visitorData: String?)
+    /** One picture-only version of a video (H.264), for episode video. */
+    data class VideoFormat(val height: Int, val url: String, val rate: Int)
+
+    data class Quick(val url: String, val kbps: Int, val visitorData: String?, val videos: List<VideoFormat> = emptyList())
 
     fun quickAudio(videoId: String, visitorData: String?): Quick {
         val body = buildJsonObject {
@@ -200,7 +203,15 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
         }
         fun rate(f: JsonObject): Int = (str(f["averageBitrate"]) ?: str(f["bitrate"]))?.toIntOrNull() ?: 0
         val pick = audio.maxByOrNull { rate(it) } ?: throw IllegalStateException("No audio for this song")
-        return Quick(str(pick["url"])!!, rate(pick) / 1000, str(dig(json, "responseContext", "visitorData")) ?: visitorData)
+        // Picture-only H.264 versions, for episode video.
+        val videos = formats.mapNotNull { f ->
+            val mime = str(f["mimeType"]) ?: return@mapNotNull null
+            val url = str(f["url"]) ?: return@mapNotNull null
+            val height = str(f["height"])?.toIntOrNull() ?: return@mapNotNull null
+            if (!mime.startsWith("video/mp4") || !mime.contains("avc1") || height <= 0) return@mapNotNull null
+            VideoFormat(height, url, rate(f))
+        }
+        return Quick(str(pick["url"])!!, rate(pick) / 1000, str(dig(json, "responseContext", "visitorData")) ?: visitorData, videos)
     }
 
     // MARK: JSON helpers

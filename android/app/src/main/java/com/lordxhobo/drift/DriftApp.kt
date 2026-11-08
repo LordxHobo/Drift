@@ -11,6 +11,7 @@ import com.lordxhobo.drift.playback.Skipping
 import com.lordxhobo.drift.playback.SongCache
 import com.lordxhobo.drift.social.CollabSync
 import com.lordxhobo.drift.social.Friends
+import com.lordxhobo.drift.social.Inbox
 import com.lordxhobo.drift.social.Jam
 import com.lordxhobo.drift.social.Remote
 import com.lordxhobo.drift.social.ThisDevice
@@ -34,6 +35,7 @@ class DriftApp : Application(), ImageLoaderFactory {
         SongCache.init(this)
         Downloads.init(this)
         Skipping.init(this)
+        com.lordxhobo.drift.playback.EpisodeVideo.init(this)
         Equalizer.init(this)
         LibrarySync.init(this)
         PlaylistSharing.init()
@@ -44,6 +46,8 @@ class DriftApp : Application(), ImageLoaderFactory {
         PlayHistory.init(this)
         Remote.init()
         Jam.init()
+        Inbox.init()
+        com.lordxhobo.drift.social.PodcastSync.init()
     }
 
     /**

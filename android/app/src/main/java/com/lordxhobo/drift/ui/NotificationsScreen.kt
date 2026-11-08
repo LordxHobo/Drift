@@ -171,6 +171,7 @@ fun NotificationSettingsScreen() {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(DriftColors.surface)) {
                 NotifyToggle("New releases", "New songs and albums from artists you follow (checked every few hours).", Notices.releasesOn) { Notices.turnReleases(it) }
                 NotifyToggle("Listen Together invites", "When a friend invites you to listen together.", Notices.invitesOn) { Notices.turnInvites(it) }
+                NotifyToggle("Songs from friends", "When a friend sends you a song.", Notices.songsOn) { Notices.turnSongs(it) }
             }
         }
     }

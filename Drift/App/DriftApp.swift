@@ -24,6 +24,10 @@ struct DriftApp: App {
                     CollabSync.shared.start()
                     // Listen Together invites from friends (every 20 s while open).
                     JamInvites.shared.start()
+                    // Songs friends send you (every 20 s while open).
+                    SongInbox.shared.start()
+                    // Followed shows and where you are in episodes, with your other devices.
+                    PodcastSync.shared.start()
                 }
         }
         // iOS wakes Drift up when background downloads finish.

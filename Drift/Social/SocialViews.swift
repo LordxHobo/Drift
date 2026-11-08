@@ -360,6 +360,10 @@ struct ProfileView: View {
                                              set: { on in Task { await social.setAllowInvites(on) } })) {
                             label("Listen Together invites", "Friends who follow you back can invite you to listen together.")
                         }
+                        Toggle(isOn: Binding(get: { me.acceptsSongs },
+                                             set: { on in Task { await social.setAllowSongs(on) } })) {
+                            label("Songs from friends", "Friends who follow you back can send you songs (they show up in your inbox).")
+                        }
                     }
                     .tint(accent)
 
@@ -508,6 +512,9 @@ struct FriendsView: View {
     @State private var query = ""
     @State private var results: [UserProfile] = []
     @State private var searching = false
+    /// Following (what friends play) or the inbox (songs they sent you); the inbox first when it has new ones.
+    @State private var showInbox = SongInbox.shared.unseenCount > 0
+    private var inbox: SongInbox { .shared }
     private var social: SocialStore { .shared }
     private var player: Player { .shared }
 
@@ -554,6 +561,33 @@ struct FriendsView: View {
                     }
                 }
             } else {
+                Picker("Show", selection: $showInbox) {
+                    Text("Following").tag(false)
+                    Text(inbox.unseenCount > 0 ? "Inbox (\(inbox.unseenCount))" : "Inbox").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Theme.bg)
+                .listRowSeparator(.hidden)
+
+                if showInbox {
+                    if inbox.items.isEmpty {
+                        Text("Songs friends send you show up here. Send one from any song's menu: Send to a friend.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                            .listRowBackground(Theme.bg)
+                    }
+                    ForEach(inbox.items) { item in
+                        InboxRow(item: item)
+                            .listRowBackground(Theme.bg)
+                            .swipeActions {
+                                Button(role: .destructive) { inbox.clear(item) } label: {
+                                    Label("Clear", systemImage: "xmark")
+                                }
+                            }
+                    }
+                } else {
                 if social.following.isEmpty {
                     Text(social.loadingFriends ? "Loading…" : "Search for friends by username to follow them.")
                         .font(.system(size: 14))
@@ -583,6 +617,7 @@ struct FriendsView: View {
                         }
                     }
                 }
+                }
             }
         }
         .listStyle(.plain)
@@ -609,6 +644,74 @@ struct FriendsView: View {
                 try? await Task.sleep(for: .seconds(20))
             }
         }
+        .task(id: showInbox) {
+            guard showInbox else { return }
+            await inbox.check()
+            // Looked at: seen (on every device), a moment after opening.
+            try? await Task.sleep(for: .seconds(1.5))
+            inbox.markSeen(inbox.items.map(\.id))
+        }
+    }
+}
+
+/// A song a friend sent: who, when, their note, and the song (play, like).
+struct InboxRow: View {
+    let item: InboxItem
+    private var player: Player { .shared }
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        let t = item.track
+        let playing = player.current?.id == t.id && player.isPlaying
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                UserAvatar(data: SocialStore.shared.following.first(where: { $0.id == item.from })?.avatar, name: item.fromName, size: 26)
+                (Text(item.fromName).bold().foregroundColor(Theme.text) + Text(" sent you a song · \(Self.ago(item.at))"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if !item.seen { Circle().fill(accent).frame(width: 8, height: 8) }
+            }
+            if !item.note.isEmpty {
+                Text(item.note)
+                    .font(.system(size: 14))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Theme.surface2, in: UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 14))
+                    .padding(.leading, 34)
+            }
+            HStack(spacing: 12) {
+                ArtworkView(url: t.artwork(size: 120), size: 48, corner: 6, seed: t.id)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                    Text(t.artist).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if !t.isEpisode { LikeButton(track: t, size: 19) }
+                Button {
+                    if player.current?.id == t.id { player.togglePlay() } else { player.play([t], from: "From \(item.fromName)") }
+                } label: {
+                    Image(systemName: playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.bg)
+                        .frame(width: 38, height: 38)
+                        .background(Theme.text, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(playing ? "Pause" : "Play \(t.title)")
+            }
+            .padding(.leading, 34)
+        }
+        .padding(.vertical, 6)
+    }
+
+    static func ago(_ d: Date) -> String {
+        let s = Date().timeIntervalSince(d)
+        if s < 60 { return "just now" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: d, relativeTo: Date())
     }
 }
 

@@ -3,7 +3,7 @@ import type { JSX } from 'react'
 import type { Playlist } from '@shared/types'
 import { Icon, Logo } from './icons'
 import {
-  accountStore, back, downloadsStore, drift, forward, settingsStore, meStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
+  accountStore, back, downloadsStore, drift, forward, settingsStore, meStore, inboxStore, privateSessionStore, toast, fullPlayerStore, go, libraryStore, navStore, openMenu, openMenuAt, panelStore,
   readLocal, togglePanel, useRoute, useStore, writeLocal, notificationsStore
 } from './state'
 import { openSettings } from './views/settings'
@@ -18,6 +18,7 @@ import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, Track
 import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
 import { FriendActivityPanel } from './views/social'
+import { InboxPanel } from './views/inbox'
 import { SpeedButton } from './views/podcasts'
 import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
@@ -272,9 +273,21 @@ export function NoticesBell(): JSX.Element {
 
 function FriendsButton(): JSX.Element {
   const panel = useStore(panelStore)
+  const unseen = useStore(inboxStore).some((i) => !i.seen)
   return (
-    <button className={`icon-btn round ${panel === 'friends' ? 'active-round' : ''}`} title="Friend activity" aria-label="Friend activity" aria-pressed={panel === 'friends'} onClick={() => togglePanel('friends')}>
+    <button className={`icon-btn round ${panel === 'friends' || panel === 'inbox' ? 'active-round' : ''} ${unseen ? 'has-dot' : ''}`} title={unseen ? 'Friend activity · new songs in your inbox' : 'Friend activity'} aria-label={unseen ? 'Friend activity, new songs in your inbox' : 'Friend activity'} aria-pressed={panel === 'friends' || panel === 'inbox'} onClick={() => togglePanel(unseen ? 'inbox' : 'friends')}>
       <Icon name="person" size={18} />
+    </button>
+  )
+}
+
+/** The Inbox tab, with how many new songs are in it. */
+function InboxTab(): JSX.Element {
+  const panel = useStore(panelStore)
+  const unseen = useStore(inboxStore).filter((i) => !i.seen).length
+  return (
+    <button className={panel === 'inbox' ? 'on' : ''} onClick={() => panelStore.set('inbox')}>
+      Inbox{unseen > 0 && <span className="tab-count">{unseen}</span>}
     </button>
   )
 }
@@ -386,10 +399,11 @@ export function SidePanel(): JSX.Element | null {
           <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>{podcast ? 'Chapters' : 'Lyrics'}</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up next</button>
           <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
+          <InboxTab />
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? (podcast ? <ChaptersPanel /> : <LyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? (podcast ? <ChaptersPanel /> : <LyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : panel === 'inbox' ? <InboxPanel /> : <QueuePanel />}
     </aside>
   )
 }
@@ -714,10 +728,11 @@ export function MusicSidePanel(): JSX.Element | null {
           <button className={panel === 'lyrics' ? 'on' : ''} onClick={() => panelStore.set('lyrics')}>{podcast ? 'Chapters' : 'Lyrics'}</button>
           <button className={panel === 'queue' ? 'on' : ''} onClick={() => panelStore.set('queue')}>Up Next</button>
           <button className={panel === 'friends' ? 'on' : ''} onClick={() => panelStore.set('friends')}>Friends</button>
+          <InboxTab />
         </div>
         <IconButton icon="close" label="Close" size={16} onClick={() => panelStore.set('none')} />
       </div>
-      {panel === 'lyrics' ? (podcast ? <div className="m-lyrics"><ChapterList track={current} size="small" /></div> : <MusicLyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : <QueuePanel />}
+      {panel === 'lyrics' ? (podcast ? <div className="m-lyrics"><ChapterList track={current} size="small" /></div> : <MusicLyricsPanel />) : panel === 'friends' ? <FriendActivityPanel /> : panel === 'inbox' ? <InboxPanel /> : <QueuePanel />}
     </aside>
   )
 }

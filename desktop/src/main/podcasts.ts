@@ -1,4 +1,5 @@
-// Followed channels, their latest episodes and where each episode was left off (on this computer).
+// Followed channels, their latest episodes and where each episode was left off. The shows you follow and
+// where you are in each episode sync with your other devices (podcastSync.ts).
 import { app, net } from 'electron'
 import type { EpisodeProgress, PodcastChannel, PodcastsState, SkipSegment, Track } from '@shared/types'
 import { emit, writeJSON } from './store'
@@ -6,12 +7,17 @@ import { channelEpisodes as youtubeEpisodes } from './youtube'
 import { feedEpisodes, searchShows as directory, showFromLink } from './feeds'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
+import { podcastsChanged } from './podcastSync'
 
 interface Saved {
   subscriptions: PodcastChannel[]
   progress: Record<string, EpisodeProgress>
   feeds: Record<string, Track[]>
   feedsUpdated?: number
+  /** When the shows you follow last changed (here or synced from another device), ms. */
+  showsChanged?: number
+  /** The profile these were last synced with. */
+  syncedUid?: string
 }
 
 const file = 'podcasts.json'
@@ -52,7 +58,9 @@ export function followChannel(c: PodcastChannel, follow: boolean): void {
     d.subscriptions.push({ id: c.id, name: c.name, avatarURL: c.avatarURL ?? null, subtitle: c.subtitle ?? null, feedURL: c.feedURL ?? null })
     void loadChannel(c)
   }
+  d.showsChanged = Date.now()
   changed(true)
+  podcastsChanged(true)
 }
 
 /** A show's episodes: from its feed, or the YouTube channel's uploads. */
@@ -119,6 +127,7 @@ export function updateProgress(t: Track, position: number, duration: number): vo
     for (const [id] of entries.slice(0, entries.length - 500)) delete data().progress[id]
   }
   changed()
+  podcastsChanged(false)
 }
 
 export function markPlayed(t: Track, played: boolean): void {
@@ -127,8 +136,41 @@ export function markPlayed(t: Track, played: boolean): void {
     const dur = d.progress[t.id]?.duration ?? t.duration ?? 0
     d.progress[t.id] = { track: t, position: dur, duration: dur, updated: Date.now(), finished: true }
   } else {
-    delete d.progress[t.id]
+    // Kept as "not started" (rather than removed) so other devices hear about it too.
+    d.progress[t.id] = { track: t, position: 0, duration: d.progress[t.id]?.duration ?? t.duration ?? 0, updated: Date.now(), finished: false }
   }
+  changed(true)
+  podcastsChanged(true)
+}
+
+// MARK: Syncing (podcastSync.ts)
+
+export const syncState = (): { subscriptions: PodcastChannel[]; progress: Record<string, EpisodeProgress>; showsChanged: number; syncedUid?: string } => {
+  const d = data()
+  return { subscriptions: d.subscriptions, progress: d.progress, showsChanged: d.showsChanged ?? 0, syncedUid: d.syncedUid }
+}
+
+/** The shows you follow, as another device changed them. */
+export function adoptShows(list: PodcastChannel[], changedAt: number): void {
+  const d = data()
+  const known = new Set(d.subscriptions.map((c) => c.id))
+  d.subscriptions = list
+  d.showsChanged = changedAt
+  for (const c of list) if (!known.has(c.id)) void loadChannel(c)
+  changed(true)
+}
+
+/** Where episodes were left on other devices (each newer than what's here). */
+export function adoptProgress(entries: Record<string, EpisodeProgress>): void {
+  const ids = Object.keys(entries)
+  if (!ids.length) return
+  Object.assign(data().progress, entries)
+  changed(true)
+}
+
+export function markSynced(uid: string): void {
+  if (data().syncedUid === uid) return
+  data().syncedUid = uid
   changed(true)
 }
 

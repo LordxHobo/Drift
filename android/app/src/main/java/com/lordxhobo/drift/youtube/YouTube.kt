@@ -130,6 +130,27 @@ object YouTube {
         return a
     }
 
+    // Video (episodes)
+
+    /** An episode's picture (no sound): the version picked, and every height it comes in. */
+    data class Video(val url: String, val height: Int, val heights: List<Int>)
+
+    private val videoCache = ConcurrentHashMap<String, Pair<List<InnerTube.VideoFormat>, Long>>()
+
+    /** The sharpest H.264 picture up to `maxHeight` (blocking). Null when YouTube gave none. */
+    fun video(id: String, maxHeight: Int): Video? {
+        val cached = videoCache[id]?.takeIf { it.second > System.currentTimeMillis() }?.first
+        val list = cached ?: runCatching { tube.quickAudio(id, visitorData) }.getOrNull()?.let { q ->
+            q.visitorData?.let { visitorData = it }
+            videoCache[id] = q.videos to System.currentTimeMillis() + 3 * 3600_000L
+            q.videos
+        } ?: return null
+        val lowest = list.minByOrNull { it.height } ?: return null
+        val pool = list.filter { it.height <= maxHeight }.ifEmpty { listOf(lowest) }
+        val pick = pool.maxWithOrNull(compareBy({ it.height }, { it.rate })) ?: lowest
+        return Video(pick.url, pick.height, list.map { it.height }.distinct().sorted())
+    }
+
     private val JSON = "application/json".toMediaType()
 
     /** For API calls only: each one gives up after 20 s (audio downloads use the main client, without a limit). */

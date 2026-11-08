@@ -146,7 +146,7 @@ function useFriends(): { friends?: UserProfile[]; error?: string; reload: () => 
   return { ...state, reload: () => setN((x) => x + 1) }
 }
 
-function NotLinked(): JSX.Element {
+export function NotLinked(): JSX.Element {
   return (
     <div className="empty">
       Friends need your Drift profile. Link your phone to see what friends are listening to.

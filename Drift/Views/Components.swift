@@ -358,6 +358,9 @@ struct TrackMenuItems: View {
 
         if SocialStore.shared.me != nil {
             Button {
+                UIState.shared.sendTrack = track
+            } label: { Label("Send to a friend", systemImage: "paperplane") }
+            Button {
                 UIState.shared.inviteTrack = track
             } label: { Label("Invite to listen together", systemImage: "person.2") }
         }
