@@ -1,5 +1,8 @@
 package com.lordxhobo.drift.ui
 
+import com.lordxhobo.drift.AppUpdates
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -232,7 +235,27 @@ fun SettingsScreen() {
                 }
             }
         }
-        // More categories (Storage, Lyrics…) arrive with the features they hold.
+        item { Spacer(Modifier.size(18.dp)) }
+        item {
+            Group {
+                val latest = AppUpdates.available
+                SettingsRow(
+                    if (latest != null) "Update to ${latest.versionName}" else "Check for updates",
+                    when {
+                        AppUpdates.checking -> "Checking…"
+                        AppUpdates.downloading -> "Downloading · ${(AppUpdates.progress * 100).toInt()}%"
+                        AppUpdates.error != null -> AppUpdates.error
+                        latest != null -> latest.title.ifEmpty { "A new version of Drift is ready" }
+                        AppUpdates.lastCheck != null -> "Drift is up to date"
+                        else -> "Drift ${BuildConfig.VERSION_NAME}"
+                    },
+                    icon = Icons.Filled.SystemUpdate,
+                    iconColor = DriftColors.accent,
+                ) {
+                    if (latest != null) AppUpdates.install(context) else AppUpdates.check(context, manual = true)
+                }
+            }
+        }
         item {
             Text(
                 "Drift ${BuildConfig.VERSION_NAME} for Android\nWhat's new",
@@ -731,4 +754,41 @@ fun LinkComputerScreen() {
             }
         }
     }
+}
+
+/** "Update available", on launch: what's new in it, and one tap to install. */
+@Composable
+fun UpdateDialog() {
+    val context = LocalContext.current
+    val latest = AppUpdates.available ?: return
+    AlertDialog(
+        onDismissRequest = { if (!AppUpdates.downloading) AppUpdates.later(context) },
+        title = { Text("Update available") },
+        text = {
+            Column {
+                Text("Drift ${latest.versionName} is ready. Your library stays.", color = DriftColors.text2, fontSize = 14.sp)
+                if (latest.notes.isNotBlank()) {
+                    Text(latest.title, color = DriftColors.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+                    Text(latest.notes, color = DriftColors.text2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                if (AppUpdates.downloading) {
+                    LinearProgressIndicator(
+                        progress = { AppUpdates.progress },
+                        color = DriftColors.accent, trackColor = DriftColors.surface2,
+                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                    )
+                }
+                AppUpdates.error?.let { ErrorText(it) }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !AppUpdates.downloading, onClick = { AppUpdates.install(context) }) {
+                Text(if (AppUpdates.downloading) "Downloading…" else "Update")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !AppUpdates.downloading, onClick = { AppUpdates.later(context) }) { Text("Later") }
+        },
+        containerColor = DriftColors.surface,
+    )
 }

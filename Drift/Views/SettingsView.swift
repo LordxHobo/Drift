@@ -112,6 +112,36 @@ struct SettingsView: View {
         group([.playback, .podcasts, .lyrics])
         group([.storage, .look])
 
+        // Updates arrive through SideStore (Drift's source there).
+        let updates = UpdateChecker.shared
+        Button {
+            if updates.available != nil { updates.openSideStore() }
+            else { Task { await updates.check(manual: true) } }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.app.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(settings.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(updates.available.map { "Update to \($0.version)" } ?? "Check for updates")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                    Text(updates.checking ? "Checking…"
+                         : updates.available != nil ? "Opens SideStore"
+                         : updates.lastCheck != nil ? "Drift is up to date" : "Through SideStore")
+                        .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                if updates.checking { ProgressView() }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 58)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
         // Tap for what's new.
         Button {
             patchNotes = PatchNotes.everything()

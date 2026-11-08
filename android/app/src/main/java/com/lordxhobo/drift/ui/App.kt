@@ -1,5 +1,6 @@
 package com.lordxhobo.drift.ui
 
+import com.lordxhobo.drift.AppUpdates
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -72,6 +73,7 @@ fun DriftRoot() {
         // The battery tip waits until What's new is closed.
         if (!WhatsNewOnLaunch()) BatteryTip()
         if (UiState.showAllNotes) AllNotes { UiState.showAllNotes = false }
+        if (AppUpdates.prompt) UpdateDialog()
     }
 }
 

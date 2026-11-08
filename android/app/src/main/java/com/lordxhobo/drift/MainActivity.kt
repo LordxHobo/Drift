@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
             DriftTheme { DriftRoot() }
         }
         handleShare(intent)
+        AppUpdates.check(this)
     }
 
     override fun onNewIntent(intent: Intent) {

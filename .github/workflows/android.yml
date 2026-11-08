@@ -14,6 +14,9 @@ jobs:
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # Publishing the update needs to write releases.
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: android
@@ -35,6 +38,7 @@ jobs:
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/drift.jks"
             echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/drift.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=true" >> "$GITHUB_ENV"
           else
             echo "::warning::No ANDROID_KEYSTORE_B64 secret, so this build is signed with a throwaway key and won't update an installed Drift."
           fi
@@ -58,3 +62,34 @@ jobs:
         with:
           name: drift-android
           path: drift-${{ github.run_number }}.apk
+
+      # Drift on phones checks android-latest/latest.json and offers the new version (AppUpdates.kt).
+      # Only builds signed with the real key: others couldn't update an installed Drift.
+      - name: Publish the update
+        if: env.SIGNED == 'true' && github.ref == 'refs/heads/main'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.run_number }}
+        run: |
+          cp "drift-$N.apk" "Drift-$N.apk"
+          python3 - <<'PY'
+          import json, os
+          n = int(os.environ["N"])
+          repo = os.environ["GITHUB_REPOSITORY"]
+          entries = json.load(open("desktop/src/shared/patchNotes.json"))["entries"]
+          mine = lambda e: [x["text"] for x in e["notes"] if "android" in (x.get("platforms") or [])]
+          newest = next((e for e in entries if mine(e)), None)
+          json.dump({
+              "versionCode": n,
+              "versionName": f"1.0.{n}",
+              "url": f"https://github.com/{repo}/releases/download/android-{n}/Drift-{n}.apk",
+              "title": newest["title"] if newest else "",
+              "notes": "\n".join(mine(newest)) if newest else "",
+          }, open("latest.json", "w"))
+          PY
+          gh release create "android-$N" "Drift-$N.apk" --title "Drift for Android 1.0.$N" \
+            --notes "Drift for Android, build $N. Drift offers it by itself; to install by hand, open the APK on the phone." --latest=false
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "Drift for Android: newest version" \
+            --notes "Where Drift on Android looks for updates. Don't delete." --latest=false
+          gh release upload android-latest latest.json --clobber

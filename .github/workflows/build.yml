@@ -18,6 +18,9 @@ jobs:
   ios:
     runs-on: macos-15
     timeout-minutes: 40
+    # Publishing the build for SideStore needs to write releases.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +52,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            MARKETING_VERSION=1.0.${{ github.run_number }} \
             build > build.log 2>&1 || status=$?
           grep -E "\*\* BUILD" build.log || true
           # Fail (red) on any compile error, and never package a half-built app.
@@ -73,3 +77,60 @@ jobs:
         with:
           name: drift-ios
           path: drift-unsigned.ipa
+
+      # SideStore source: add the source once in SideStore and it offers every new Drift (and Drift itself
+      # points there when an update is out; UpdateChecker.swift). The IPA is in its own release; the
+      # source file lives in the "sidestore" release so its address never changes.
+      - name: Publish for SideStore
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.run_number }}
+        run: |
+          cp drift-unsigned.ipa "Drift-$N.ipa"
+          python3 - <<'PY'
+          import json, os, plistlib, datetime
+          n = os.environ["N"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          info = plistlib.load(open("build/Build/Products/Release-iphoneos/Drift.app/Info.plist", "rb"))
+          privacy = {k: v for k, v in info.items() if k.endswith("UsageDescription")}
+          entries = json.load(open("desktop/src/shared/patchNotes.json"))["entries"]
+          mine = lambda e: [x["text"] for x in e["notes"] if not x.get("platforms") or "ios" in x["platforms"]]
+          newest = next((e for e in entries if mine(e)), None)
+          notes = (newest["title"] + "\n\n" + "\n".join(mine(newest))) if newest else ""
+          icon = f"https://raw.githubusercontent.com/{repo}/main/Drift/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
+          source = {
+              "name": "Drift",
+              "identifier": "com.lordxhobo.drift.source",
+              "subtitle": "Drift, the music app",
+              "iconURL": icon,
+              "tintColor": "1ED760",
+              "apps": [{
+                  "name": "Drift",
+                  "bundleIdentifier": info.get("CFBundleIdentifier", "com.lordxhobo.drift"),
+                  "developerName": "LordxHobo",
+                  "subtitle": "Music from YouTube, without the ads.",
+                  "localizedDescription": "Drift plays music from YouTube Music with CarPlay, lyrics, downloads and your library synced with the computer.",
+                  "iconURL": icon,
+                  "tintColor": "1ED760",
+                  "category": "entertainment",
+                  "versions": [{
+                      "version": info["CFBundleShortVersionString"],
+                      "buildVersion": info["CFBundleVersion"],
+                      "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      "localizedDescription": notes,
+                      "downloadURL": f"https://github.com/{repo}/releases/download/ios-{n}/Drift-{n}.ipa",
+                      "size": os.path.getsize(f"Drift-{n}.ipa"),
+                      "minOSVersion": "17.0",
+                  }],
+                  "appPermissions": {"entitlements": [], "privacy": privacy},
+              }],
+              "news": [],
+          }
+          json.dump(source, open("source.json", "w"), indent=2)
+          PY
+          gh release create "ios-$N" "Drift-$N.ipa" --title "Drift for iPhone 1.0.$N" \
+            --notes "Drift for iPhone, build $N. Install through SideStore (the Drift source offers it)." --latest=false
+          gh release view sidestore >/dev/null 2>&1 || gh release create sidestore --title "Drift for SideStore" \
+            --notes "SideStore source: https://github.com/$GITHUB_REPOSITORY/releases/download/sidestore/source.json — add it once in SideStore (Sources → +). Don't delete." --latest=false
+          gh release upload sidestore source.json --clobber

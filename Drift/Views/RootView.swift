@@ -15,6 +15,7 @@ struct RootView: View {
     /// What's new since the last update (shown once).
     @State private var patchNotes = PatchNotes.unseen()
     @State private var social = SocialStore.shared
+    @State private var updates = UpdateChecker.shared
     @Environment(\.scenePhase) private var scenePhase
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
@@ -81,9 +82,23 @@ struct RootView: View {
         .onAppear { settings.applyAppearance() }
         .task { await ArtistStore.shared.check() }
         .task { RemoteControl.shared.start() }
+        .task { await UpdateChecker.shared.check() }
+        // A new build is out: install it through SideStore.
+        .alert(
+            "Update available",
+            isPresented: Binding(get: { updates.prompt && patchNotes.isEmpty && !social.showOnboarding },
+                                 set: { if !$0 { updates.prompt = false } }),
+            presenting: updates.available
+        ) { _ in
+            Button("Open SideStore") { updates.openSideStore() }
+            Button("Later", role: .cancel) { updates.later() }
+        } message: { u in
+            Text("Drift \(u.version) is ready. SideStore installs it with one tap, and your library stays.")
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 settings.applyAppearance()
+                Task { await UpdateChecker.shared.check() }
                 Task { await ArtistStore.shared.check() }
                 LibrarySync.shared.refresh()
                 LyricsActivity.shared.appBecameActive()

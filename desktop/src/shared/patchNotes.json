@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 32,
+      "date": "2026-11-08",
+      "title": "Updates from inside Drift",
+      "notes": [
+        {
+          "text": "When a new version is out, Drift says so and installs it with one tap. Your library stays. You can also check in Settings.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "When a new version is out, Drift says so and opens SideStore, which installs it with one tap. The first time, SideStore adds Drift's source; after that it also shows updates by itself. Check any time in Settings.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 31,
       "date": "2026-11-08",
       "title": "Pictures load straight away",
