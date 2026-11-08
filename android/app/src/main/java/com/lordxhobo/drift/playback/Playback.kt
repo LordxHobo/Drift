@@ -231,6 +231,49 @@ object Playback {
         }
     }
 
+    fun pause() = withController { c -> c.pause() }
+
+    fun resume() = withController { c ->
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        c.play()
+    }
+
+    /** "off", "all" or "one". */
+    fun repeatTo(mode: String) = withController { c ->
+        c.repeatMode = when (mode) {
+            "all" -> Player.REPEAT_MODE_ALL
+            "one" -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
+    fun shuffleTo(on: Boolean) {
+        if (shuffle != on) toggleShuffle()
+    }
+
+    /** The player's own volume, 0–1 (the phone's volume buttons work on top of it). */
+    var volume by mutableStateOf(1f)
+        private set
+
+    fun changeVolume(v: Float) = withController { c ->
+        c.volume = v.coerceIn(0f, 1f)
+        volume = c.volume
+    }
+
+    /** Playback moved here from another device: the song where it was, then its queue. */
+    fun transferIn(track: Track, queue: List<Track>, positionSeconds: Double, playing: Boolean, source: String) {
+        original = listOf(track) + queue
+        playingFrom = source.ifEmpty { "Another device" }
+        shuffle = false
+        this.queue = original
+        index = 0
+        withController { c ->
+            c.setMediaItems(original.map { itemOf(it) }, 0, (positionSeconds * 1000).toLong().coerceAtLeast(0))
+            c.prepare()
+            if (playing) c.play() else c.pause()
+        }
+    }
+
     fun cycleRepeat() = withController { c ->
         c.repeatMode = when (c.repeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL

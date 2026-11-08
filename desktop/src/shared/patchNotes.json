@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 35,
+      "date": "2026-11-08",
+      "title": "Play on your other devices",
+      "notes": [
+        {
+          "text": "Control your computer from the phone: in the player, tap Devices and pick it. What's playing moves over, and the phone becomes a remote with play, skip, seek and volume.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Your computer and iPhone can control this phone too. Tap Devices → This phone to bring the music back.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 34,
       "date": "2026-11-08",
       "title": "Shared playlists",

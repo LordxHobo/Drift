@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lordxhobo.drift.playback.Playback
+import com.lordxhobo.drift.social.Remote
 
 /** The whole app: the current tab's page, the mini player, the tab bar, and what opens over them. */
 @Composable
@@ -59,7 +60,7 @@ fun DriftRoot() {
                 val screen = Nav.top
                 key(Nav.tab, Nav.stack.size, screen) { Page(screen) }
             }
-            if (Playback.current != null) MiniPlayer()
+            if (Remote.target != null) RemoteMiniBar() else if (Playback.current != null) MiniPlayer()
             TabBar()
         }
         AnimatedVisibility(
@@ -67,9 +68,10 @@ fun DriftRoot() {
             enter = slideInVertically { it },
             exit = slideOutVertically { it },
         ) {
-            NowPlayingScreen()
+            if (Remote.target != null) RemotePlayerScreen() else NowPlayingScreen()
         }
         SongSheets()
+        if (UiState.showDevices) DevicesSheet()
         // The battery tip waits until What's new is closed.
         if (!WhatsNewOnLaunch()) BatteryTip()
         if (UiState.showAllNotes) AllNotes { UiState.showAllNotes = false }

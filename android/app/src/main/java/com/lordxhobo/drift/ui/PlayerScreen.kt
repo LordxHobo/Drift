@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -166,7 +167,7 @@ fun NowPlayingScreen() {
                 Text(it, color = DriftColors.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
             }
 
-            // Bottom row: Lyrics and the queue.
+            // Bottom row: Lyrics, devices and the queue.
             Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(
                     Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showLyrics = true }.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -174,6 +175,13 @@ fun NowPlayingScreen() {
                 ) {
                     Icon(Icons.Filled.Lyrics, contentDescription = null, tint = DriftColors.text)
                     Text("Lyrics", color = DriftColors.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showDevices = true }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(Icons.Filled.Devices, contentDescription = null, tint = DriftColors.text)
+                    Text("Devices", color = DriftColors.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Column(
                     Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showQueue = true }.padding(horizontal = 12.dp, vertical = 6.dp),

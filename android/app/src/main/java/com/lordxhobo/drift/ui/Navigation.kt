@@ -79,6 +79,8 @@ object UiState {
     var showAllNotes by mutableStateOf(false)
     /** Lyrics over the player. */
     var showLyrics by mutableStateOf(false)
+    /** "Play on": this phone or another device. */
+    var showDevices by mutableStateOf(false)
 
     fun openMenu(t: Track, place: Pair<String, Int>? = null) {
         menuPlace = place
