@@ -213,9 +213,18 @@ object PodcastStore {
         return maxOf(p.position - 3, 0.0)
     }
 
+    /** Marked as played while it plays: its place isn't saved over that (until it's played again). */
+    private var heldDone: String? = null
+
+    /** Played from the start or where it was: its place is saved again. */
+    fun started(id: String) {
+        if (heldDone == id) heldDone = null
+    }
+
     /** Called while an episode plays (saved every 15 s, or now with `force`). */
     fun update(t: Track, position: Double, duration: Double, force: Boolean = false) {
         if (!position.isFinite() || !duration.isFinite() || duration <= 0) return
+        if (t.id == heldDone) return
         var next = progress + (t.id to EpisodeProgress(t, position, duration, System.currentTimeMillis(), duration - position < 30))
         // Keep the list from growing forever.
         if (next.size > 500) next = next.entries.sortedByDescending { it.value.updated }.take(500).associate { it.key to it.value }
@@ -225,6 +234,7 @@ object PodcastStore {
     }
 
     fun markPlayed(t: Track, played: Boolean) {
+        heldDone = if (played) t.id else null
         progress = if (played) {
             val d = progress[t.id]?.duration ?: t.duration ?: 0.0
             progress + (t.id to EpisodeProgress(t, d, d, System.currentTimeMillis(), true))

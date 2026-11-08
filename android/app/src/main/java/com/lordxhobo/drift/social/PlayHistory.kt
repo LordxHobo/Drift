@@ -100,7 +100,8 @@ object PlayHistory {
             recorded = null
         }
         lastPosition = pos
-        if (t == null || !Playback.isPlaying || elapsed <= 0 || elapsed >= 2) return
+        // Songs only (episodes aren't counted, like on the iPhone and the computer).
+        if (t == null || t.isEpisode || !Playback.isPlaying || elapsed <= 0 || elapsed >= 2) return
         listened += elapsed
         if (listened < MINIMUM) return
         val i = recorded

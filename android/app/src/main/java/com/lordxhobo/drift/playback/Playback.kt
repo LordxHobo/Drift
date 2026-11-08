@@ -275,8 +275,21 @@ object Playback {
     }
 
     /** Playback moved here from another device: the song where it was, then its queue. */
+    /** Back or forward a few seconds (episodes: 15 back, 30 forward). */
+    fun skipBy(seconds: Int) = withController { c ->
+        seeks++
+        val target = (c.currentPosition + seconds * 1000L).coerceAtLeast(0)
+        val end = c.duration
+        c.seekTo(if (end > 0) minOf(target, end - 1000) else target)
+        position = c.currentPosition
+    }
+
     /** An episode, from where it was left off. */
-    fun playEpisode(t: Track) = transferIn(t, emptyList(), com.lordxhobo.drift.podcasts.PodcastStore.resumePosition(t.id), true, t.artist)
+    fun playEpisode(t: Track) {
+        val store = com.lordxhobo.drift.podcasts.PodcastStore
+        store.started(t.id)
+        transferIn(t, emptyList(), store.resumePosition(t.id), true, t.artist)
+    }
 
     fun transferIn(track: Track, queue: List<Track>, positionSeconds: Double, playing: Boolean, source: String) {
         original = listOf(track) + queue

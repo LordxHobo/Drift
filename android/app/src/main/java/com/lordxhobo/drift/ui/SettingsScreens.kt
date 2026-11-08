@@ -238,7 +238,7 @@ fun SettingsScreen() {
             Group {
                 SettingsRow(
                     "Playback",
-                    "Equalizer ${if (Equalizer.enabled) Equalizer.presetName() else "off"} · Skip non-music parts and silence",
+                    "Equalizer ${if (Equalizer.enabled) Equalizer.presetName() else "off"} · Skipping parts of songs and episodes",
                     icon = Icons.Filled.GraphicEq,
                     iconColor = Color(0xFFEC4899),
                 ) { Nav.open(Screen.PlaybackSettings) }
@@ -336,6 +336,21 @@ fun PlaybackSettingsScreen() {
                     "Moves to the next song when a song ends in 15 seconds or more of dead air (hidden tracks, minutes of silence).",
                     Skipping.silence,
                 ) { Skipping.changeSilence(it) }
+            }
+        }
+        item {
+            Text(
+                "PODCASTS", color = DriftColors.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 32.dp, top = 22.dp, bottom = 6.dp),
+            )
+        }
+        item {
+            Group {
+                ToggleRow(
+                    "Skip sponsors",
+                    "Skips sponsor reads, self-promotion and \u201Clike and subscribe\u201D reminders in YouTube episodes that the SponsorBlock community has marked.",
+                    Skipping.sponsors,
+                ) { Skipping.changeSponsors(it) }
             }
         }
     }

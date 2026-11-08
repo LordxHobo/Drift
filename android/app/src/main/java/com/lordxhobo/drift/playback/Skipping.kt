@@ -34,8 +34,8 @@ object Notice {
     var text by mutableStateOf<String?>(null)
 }
 
-/** A part of a video the SponsorBlock community marked as not music (seconds). */
-data class SkipSegment(val start: Double, val end: Double)
+/** A part of a video the SponsorBlock community marked as skippable (seconds). */
+data class SkipSegment(val start: Double, val end: Double, val category: String = "")
 
 /**
  * Ad-free listening: skips the parts of music videos that aren't music (intros, outros, talking; marked by
@@ -47,12 +47,31 @@ object Skipping {
         private set
     var silence by mutableStateOf(true)
         private set
+    /** Episodes: skip sponsor reads, self-promotion and "like and subscribe" reminders. */
+    var sponsors by mutableStateOf(true)
+        private set
+    /** How fast episodes play (music always plays at its own speed). */
+    var podcastSpeed by mutableStateOf(1f)
+        private set
+    val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
     private lateinit var prefs: SharedPreferences
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("drift.settings", Context.MODE_PRIVATE)
         nonMusic = prefs.getBoolean("skipNonMusic", true)
         silence = prefs.getBoolean("skipSilence", true)
+        sponsors = prefs.getBoolean("skipSponsors", true)
+        podcastSpeed = prefs.getFloat("podcastSpeed", 1f)
+    }
+
+    fun changeSponsors(on: Boolean) {
+        sponsors = on
+        prefs.edit().putBoolean("skipSponsors", on).apply()
+    }
+
+    fun changeSpeed(v: Float) {
+        podcastSpeed = v
+        prefs.edit().putFloat("podcastSpeed", v).apply()
     }
 
     fun changeNonMusic(on: Boolean) {
@@ -65,12 +84,11 @@ object Skipping {
         prefs.edit().putBoolean("skipSilence", on).apply()
     }
 
-    /** The non-music parts of a video (none when SponsorBlock has nothing, or can't be reached). */
-    fun segments(videoId: String): List<SkipSegment> = runCatching {
-        val url = "https://sponsor.ajay.app/api/skipSegments".toHttpUrl().newBuilder()
-            .addQueryParameter("videoID", videoId)
-            .addQueryParameter("category", "music_offtopic")
-            .build()
+    /** A video's skippable parts: not music in a song, sponsors and the like in an episode (none when SponsorBlock has nothing, or can't be reached). */
+    fun segments(videoId: String, podcast: Boolean = false): List<SkipSegment> = runCatching {
+        val b = "https://sponsor.ajay.app/api/skipSegments".toHttpUrl().newBuilder().addQueryParameter("videoID", videoId)
+        for (c in if (podcast) listOf("sponsor", "selfpromo", "interaction") else listOf("music_offtopic")) b.addQueryParameter("category", c)
+        val url = b.build()
         HttpDownloader.shared.client.newCall(Request.Builder().url(url).build()).execute().use { res ->
             if (res.code != 200) return@use emptyList()
             val list = Json.parseToJsonElement(res.body?.string() ?: "[]") as? JsonArray ?: return@use emptyList()
@@ -79,13 +97,17 @@ object Skipping {
                 if (seg.size != 2) return@mapNotNull null
                 val start = seg[0].jsonPrimitive.doubleOrNull ?: return@mapNotNull null
                 val end = seg[1].jsonPrimitive.doubleOrNull ?: return@mapNotNull null
-                if (end - start >= 1) SkipSegment(start, end) else null
+                val category = (e["category"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
+                if (end - start >= 1) SkipSegment(start, end, category) else null
             }.sortedBy { it.start }
         }
     }.getOrDefault(emptyList())
 
-    /** "non-music intro", "non-music outro" or "non-music part". */
+    /** "sponsor", "non-music intro", "non-music outro"… */
     fun label(s: SkipSegment, duration: Double): String = when {
+        s.category == "sponsor" -> "sponsor"
+        s.category == "selfpromo" -> "self-promotion"
+        s.category == "interaction" -> "subscribe reminder"
         s.start < 1 -> "non-music intro"
         duration > 0 && s.end > duration - 2 -> "non-music outro"
         else -> "non-music part"
@@ -142,6 +164,12 @@ class SkipMonitor(private val player: Player) {
     private var silentSince = 0L
     private var heard = false
     private var running = true
+    // The episode playing, to save where it was left.
+    private var episode: Track? = null
+    private var episodePos = 0.0
+    private var episodeDur = 0.0
+    private var wasPlaying = false
+    private var lastProgress = 0L
 
     private val loop = object : Runnable {
         override fun run() {
@@ -173,32 +201,56 @@ class SkipMonitor(private val player: Player) {
     private fun check() {
         val id = player.currentMediaItem?.mediaId
         if (id != songId) {
+            // The episode that was playing: where it was left (or finished).
+            saveEpisode(force = true)
             songId = id
             segments = emptyList()
             skipped.clear()
             silentSince = 0
             heard = false
             Level.take()
-            if (id != null && Skipping.nonMusic) {
+            val t = track()
+            episode = t?.takeIf { it.isEpisode }
+            episodePos = 0.0
+            episodeDur = 0.0
+            wasPlaying = false
+            // Episodes at their own speed; music at its own.
+            val speed = if (episode != null) Skipping.podcastSpeed else 1f
+            if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
+            val podcast = episode != null
+            // SponsorBlock knows YouTube videos (not a show's own audio files).
+            if (id != null && !id.startsWith("rss-") && (if (podcast) Skipping.sponsors else Skipping.nonMusic)) {
                 thread(isDaemon = true) {
-                    val list = Skipping.segments(id)
+                    val list = Skipping.segments(id, podcast)
                     main.post { if (songId == id) segments = list }
                 }
             }
+        }
+        val t = track()
+        val d = duration(t)
+        val now = player.currentPosition / 1000.0
+        if (episode != null) {
+            episodePos = now
+            if (d > 0) episodeDur = d
+            val playing = player.isPlaying
+            // Every few seconds while it plays, and right away when it's paused.
+            if (playing && SystemClock.elapsedRealtime() - lastProgress > 5_000) saveEpisode(force = false)
+            else if (!playing && wasPlaying) saveEpisode(force = true)
+            wasPlaying = playing
+            val speed = Skipping.podcastSpeed
+            if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
         }
         if (id == null || !player.isPlaying) {
             silentSince = 0
             return
         }
-        val t = track()
-        val d = duration(t)
-        val now = player.currentPosition / 1000.0
         // Played again from the start (repeat): its parts can be skipped again.
         if (now < 1 && skipped.isNotEmpty()) skipped.clear()
 
         // Non-music parts.
-        if (Skipping.nonMusic && segments.isNotEmpty()) {
-            val seg = segments.firstOrNull { now >= it.start && now < it.end - 0.5 && it.start !in skipped }
+        if (segments.isNotEmpty()) {
+            val on = if (episode != null) Skipping.sponsors else Skipping.nonMusic
+            val seg = if (!on) null else segments.firstOrNull { now >= it.start && now < it.end - 0.5 && it.start !in skipped }
             if (seg != null) {
                 skipped += seg.start
                 if (d > 0 && seg.end >= d - 1) {
@@ -218,7 +270,8 @@ class SkipMonitor(private val player: Player) {
         // 40% of a song, with more than 8 s left, ends it. Strict on purpose, so a quiet break, a fade or a
         // soft outro is never taken for the end; and only once the song has been heard.
         val loudest = Level.take()
-        if (!Skipping.silence || loudest == null) {
+        // Not for episodes: talk has its pauses.
+        if (!Skipping.silence || loudest == null || episode != null) {
             silentSince = 0
             return
         }
@@ -234,6 +287,13 @@ class SkipMonitor(private val player: Player) {
             Notice.text = "Skipped ${formatTime(d - now)} of silence"
             nextSong()
         }
+    }
+
+    private fun saveEpisode(force: Boolean) {
+        val e = episode ?: return
+        if (episodeDur <= 0 || episodePos <= 0) return
+        lastProgress = SystemClock.elapsedRealtime()
+        com.lordxhobo.drift.podcasts.PodcastStore.update(e, episodePos, episodeDur, force)
     }
 
     private fun nextSong() {

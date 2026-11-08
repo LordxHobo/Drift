@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 45,
+      "date": "2026-11-08",
+      "title": "Listening to episodes",
+      "notes": [
+        {
+          "text": "Episodes pick up where you left off, with Continue listening on the Podcasts tab. A bar shows how far you got, and you can mark them played or unplayed.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "The player for an episode has back 15 s, forward 30 s and a speed button (0.75× to 2×).",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Sponsor reads and \u201Clike and subscribe\u201D reminders in YouTube episodes are skipped, using SponsorBlock (Settings → Playback → Skip sponsors).",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 44,
       "date": "2026-11-08",
       "title": "Podcasts",
