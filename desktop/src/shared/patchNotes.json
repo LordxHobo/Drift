@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 43,
+      "date": "2026-11-08",
+      "title": "Notifications",
+      "notes": [
+        {
+          "text": "New songs and albums from artists you follow: Drift checks every few hours, even when it's closed, and lets you know. They're also listed under the bell on Home.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Listen Together invites now arrive as notifications too. Choose which you get in Settings → Notifications.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 42,
       "date": "2026-11-08",
       "title": "Share songs",

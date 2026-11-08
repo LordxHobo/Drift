@@ -30,6 +30,8 @@ sealed interface Screen {
     data class EditSongs(val id: String) : Screen
     data object Friends : Screen
     data object Stats : Screen
+    data object Notifications : Screen
+    data object NotificationSettings : Screen
     data class User(val id: String) : Screen
     data class SharedList(val ownerId: String, val id: String, val name: String, val ownerName: String) : Screen
 }

@@ -251,9 +251,26 @@ object Library {
         save(local = false)
     }
 
+    /** Followed artists from other devices. Keeps what this phone already knew about each (seen and new releases). */
     fun replaceArtists(list: List<JsonObject>) {
-        artists = list
+        artists = list.map { remote ->
+            val id = artistRef(remote)?.url
+            val mine = artists.firstOrNull { artistRef(it)?.url == id } ?: return@map remote
+            val known = ((remote["known"] as? JsonArray).orEmpty() + (mine["known"] as? JsonArray).orEmpty()).distinct()
+            val theirs = (remote["newReleases"] as? JsonArray).orEmpty()
+            fun releaseId(e: kotlinx.serialization.json.JsonElement) =
+                (((e as? JsonObject)?.get("album") as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull
+            val ids = theirs.mapNotNull { releaseId(it) }.toSet()
+            val news = theirs + (mine["newReleases"] as? JsonArray).orEmpty().filter { releaseId(it) !in ids }
+            JsonObject(remote + mapOf("known" to JsonArray(known), "newReleases" to JsonArray(news)))
+        }
         save(local = false)
+    }
+
+    /** Followed artists after looking for new releases (sent to your other devices). */
+    fun updateArtists(list: List<JsonObject>) {
+        artists = list
+        save()
     }
 
     fun replaceLiked(list: List<Track>) {

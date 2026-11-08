@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -241,6 +242,13 @@ fun SettingsScreen() {
                     icon = Icons.Filled.GraphicEq,
                     iconColor = Color(0xFFEC4899),
                 ) { Nav.open(Screen.PlaybackSettings) }
+                SettingsRow(
+                    "Notifications",
+                    listOfNotNull(if (com.lordxhobo.drift.Notices.releasesOn) "New releases" else null, if (com.lordxhobo.drift.Notices.invitesOn) "Listen Together invites" else null)
+                        .joinToString(" · ").ifEmpty { "Off" },
+                    icon = Icons.Filled.Notifications,
+                    iconColor = Color(0xFFEF4444),
+                ) { Nav.open(Screen.NotificationSettings) }
             }
         }
         item { Spacer(Modifier.size(18.dp)) }

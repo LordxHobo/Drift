@@ -434,12 +434,17 @@ object Jam {
             asked += key
             fresh += i
         }
-        if (fresh.isNotEmpty()) invites = invites + fresh.filter { n -> invites.none { it.from == n.from && it.code == n.code } }
+        if (fresh.isNotEmpty()) {
+            val added = fresh.filter { n -> invites.none { it.from == n.from && it.code == n.code } }
+            invites = invites + added
+            added.forEach { com.lordxhobo.drift.Notices.showInvite(it) }
+        }
     }
 
     /** Answers the first invite: joins, or declines. */
     suspend fun answer(invite: JamInvite, accept: Boolean) {
         invites = invites.filter { it !== invite }
+        com.lordxhobo.drift.Notices.clearInvite(invite)
         val uid = Social.me?.id
         if (uid != null) withContext(Dispatchers.IO) { runCatching { Firestore.delete("users/$uid/invites/${invite.from}") } }
         if (accept) {

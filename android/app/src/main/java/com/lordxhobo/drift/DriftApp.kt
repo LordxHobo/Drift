@@ -26,6 +26,9 @@ class DriftApp : Application(), ImageLoaderFactory {
         super.onCreate()
         NewPipe.init(HttpDownloader.shared)
         Library.load(this)
+        Notices.init(this)
+        Releases.appContext = this
+        Notices.schedule(this)
         SongCache.init(this)
         Downloads.init(this)
         Skipping.init(this)

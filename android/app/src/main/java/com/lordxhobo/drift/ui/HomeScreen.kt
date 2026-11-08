@@ -61,6 +61,7 @@ fun HomeScreen() {
                     Modifier.clip(CircleShape).clickable { Nav.open(Screen.Stats) }.padding(8.dp),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.BarChart, contentDescription = "Listening stats", tint = DriftColors.text) }
+                NotificationsButton()
                 FriendsButton()
                 // Your picture opens Settings (profile, linking, and the rest).
                 Box(
