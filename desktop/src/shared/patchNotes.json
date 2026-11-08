@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 42,
+      "date": "2026-11-08",
+      "title": "Share songs",
+      "notes": [
+        {
+          "text": "Share a song from its menu: a picture of it (cover, title and artist) for a story or a chat, or a YouTube Music link. You can also copy the link.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 41,
       "date": "2026-11-08",
       "title": "Edit your playlists",

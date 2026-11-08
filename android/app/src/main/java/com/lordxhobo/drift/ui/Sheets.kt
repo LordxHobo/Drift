@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -72,6 +73,7 @@ fun SongSheets() {
     UiState.menuTrack?.let { SongMenu(it) }
     UiState.addToPlaylist?.let { AddToPlaylistSheet(it) }
     UiState.replacing?.let { (t, list, index) -> ReplaceSheet(t, list, index) }
+    UiState.sharing?.let { ShareSheet(it) }
     UiState.newPlaylist?.let { req ->
         NameDialog(
             title = "New playlist",
@@ -107,6 +109,7 @@ private fun SongMenu(t: Track) {
         MenuItem("Play next", Icons.AutoMirrored.Filled.PlaylistPlay) { Playback.playNext(t); close() }
         MenuItem("Add to queue", Icons.AutoMirrored.Filled.QueueMusic) { Playback.addToQueue(t); close() }
         MenuItem("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd) { close(); UiState.addToPlaylist = t }
+        MenuItem("Share", Icons.Filled.Share) { close(); UiState.sharing = t }
         if (Social.me != null) MenuItem("Invite to listen together", Icons.Filled.Groups) { close(); UiState.inviteTrack = t }
         UiState.menuPlace?.let { (playlistId, index) ->
             MenuItem("Replace with another version", Icons.Filled.SwapHoriz) { close(); UiState.replacing = Triple(t, playlistId, index) }

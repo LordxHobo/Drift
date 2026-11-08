@@ -91,6 +91,8 @@ object UiState {
     /** The song friends are being invited to listen to. */
     var inviteTrack by mutableStateOf<Track?>(null)
 
+    /** The song being shared (link or picture). */
+    var sharing by mutableStateOf<Track?>(null)
     /** "Replace with another version": the song, and its list and place in it. */
     var replacing by mutableStateOf<Triple<Track, String, Int>?>(null)
 

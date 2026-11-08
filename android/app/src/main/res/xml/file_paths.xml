@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Downloaded updates, handed to Android's installer. -->
+<!-- Downloaded updates, handed to Android's installer; pictures of songs, handed to the share menu. -->
 <paths>
     <cache-path name="updates" path="updates/" />
+    <cache-path name="shared" path="shared/" />
 </paths>
