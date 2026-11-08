@@ -260,6 +260,33 @@ object CollabSync {
         }
     }
 
+    /** A new cover for a shared playlist: everyone in it gets it (whoever changes it last wins). */
+    fun coverChanged(id: String) {
+        scope.launch { runCatching { sendCover(id) } }
+    }
+
+    private suspend fun sendCover(id: String) = mutex.withLock {
+        val p = Library.playlist(id) ?: return@withLock
+        if (p.collab == null) return@withLock
+        val now = System.currentTimeMillis()
+        val photo = p.cover64?.takeIf { p.coverStyle == "photo" }?.let { runCatching { Base64.decode(it, Base64.DEFAULT) }.getOrNull() }
+        withContext(Dispatchers.IO) {
+            Firestore.patch(
+                "collabs/$id",
+                mapOf(
+                    "coverStyle" to FV.s(p.coverStyle ?: "auto"),
+                    "coverSymbol" to FV.s(p.coverSymbol ?: "music.note.list"),
+                    "colorIndex" to FV.i(p.colorIndex.toLong()),
+                    "cover" to if (photo != null && photo.size < 270_000) FV.bytes(photo) else FV.nul,
+                    "coverAt" to FV.i(now),
+                ),
+                mask = listOf("coverStyle", "coverSymbol", "colorIndex", "cover", "coverAt"),
+            )
+        }
+        bases[id]?.let { bases[id] = it.copy(coverAt = now) }
+        save()
+    }
+
     // MARK: Sharing, inviting, leaving
 
     /** Makes one of your playlists shared (you own it), or changes who's in it. */

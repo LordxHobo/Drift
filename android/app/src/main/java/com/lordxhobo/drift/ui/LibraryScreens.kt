@@ -275,7 +275,8 @@ fun PlaylistScreen(id: String?) {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Playlist options", tint = DriftColors.text) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                            DropdownMenuItem(text = { Text("Edit playlist") }, onClick = { menu = false; Nav.open(Screen.EditPlaylist(p.id)) })
+                            if (p.tracks.isNotEmpty()) DropdownMenuItem(text = { Text("Edit songs") }, onClick = { menu = false; Nav.open(Screen.EditSongs(p.id)) })
                             val c = p.collab
                             val mine = c == null || c.owner == Social.me?.id
                             if (Social.me != null && p.isAlbum != true && mine) {

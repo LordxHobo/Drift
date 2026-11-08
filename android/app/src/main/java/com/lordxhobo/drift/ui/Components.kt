@@ -1,5 +1,33 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.BeachAccess
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Piano
+import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Thunderstorm
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.foundation.Image
+import android.util.Base64
+import android.graphics.BitmapFactory
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import com.lordxhobo.drift.playback.Downloads
@@ -64,23 +92,86 @@ fun Artwork(url: String?, seed: String, size: Dp, shape: Shape = RoundedCornerSh
     }
 }
 
-/** A playlist's cover: the first four songs' artwork, or a colour tile. */
+/**
+ * The symbols a colour cover can show: the iPhone's names (what's saved and synced) and the icon drawn
+ * here. The iPhone's guitars have no Android icon: a speaker stands in.
+ */
+val coverSymbols: List<Pair<String, ImageVector>> = listOf(
+    "music.note.list" to Icons.AutoMirrored.Filled.QueueMusic,
+    "music.note" to Icons.Filled.MusicNote,
+    "heart.fill" to Icons.Filled.Favorite,
+    "star.fill" to Icons.Filled.Star,
+    "flame.fill" to Icons.Filled.LocalFireDepartment,
+    "bolt.fill" to Icons.Filled.Bolt,
+    "car.fill" to Icons.Filled.DirectionsCar,
+    "moon.stars.fill" to Icons.Filled.NightsStay,
+    "sun.max.fill" to Icons.Filled.WbSunny,
+    "cloud.rain.fill" to Icons.Filled.Thunderstorm,
+    "leaf.fill" to Icons.Filled.Eco,
+    "headphones" to Icons.Filled.Headphones,
+    "guitars.fill" to Icons.Filled.Speaker,
+    "pianokeys" to Icons.Filled.Piano,
+    "music.mic" to Icons.Filled.Mic,
+    "figure.run" to Icons.AutoMirrored.Filled.DirectionsRun,
+    "dumbbell.fill" to Icons.Filled.FitnessCenter,
+    "party.popper.fill" to Icons.Filled.Celebration,
+    "sparkles" to Icons.Filled.AutoAwesome,
+    "airplane" to Icons.Filled.Flight,
+    "beach.umbrella.fill" to Icons.Filled.BeachAccess,
+    "gamecontroller.fill" to Icons.Filled.SportsEsports,
+    "book.fill" to Icons.AutoMirrored.Filled.MenuBook,
+    "cup.and.saucer.fill" to Icons.Filled.LocalCafe,
+)
+
+fun coverSymbol(name: String?): ImageVector = coverSymbols.firstOrNull { it.first == name }?.second ?: Icons.AutoMirrored.Filled.QueueMusic
+
+private val photoCache = mutableMapOf<String, ImageBitmap?>()
+
+/** A photo cover (Base64 JPEG), decoded once. */
+fun coverPhoto(base64: String): ImageBitmap? {
+    val key = "${base64.length}:${base64.hashCode()}"
+    return photoCache.getOrPut(key) {
+        runCatching {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }.getOrNull()
+    }
+}
+
+/** A colour tile with a symbol (a colour cover, or a playlist without songs yet). */
 @Composable
-fun PlaylistCover(p: Playlist, size: Dp) {
-    val arts = p.tracks.map { it.artwork(226) }.distinct().take(4)
+fun CoverTile(colorIndex: Int, symbol: String?, size: Dp, corner: Dp = 4.dp) {
+    Box(
+        Modifier.size(size).clip(RoundedCornerShape(corner)).background(DriftColors.tiles[colorIndex.mod(DriftColors.tiles.size)]),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(coverSymbol(symbol), contentDescription = null, tint = DriftColors.text, modifier = Modifier.size(size / 2.5f))
+    }
+}
+
+/** The automatic cover: the first four songs' artwork (or the first one's; nothing without songs). */
+@Composable
+fun SongsCover(tracks: List<Track>, seed: String, size: Dp, corner: Dp = 4.dp) {
+    val arts = tracks.map { it.artwork(226) }.distinct().take(4)
     when {
-        arts.size >= 4 -> Column(Modifier.size(size).clip(RoundedCornerShape(4.dp))) {
+        arts.size >= 4 -> Column(Modifier.size(size).clip(RoundedCornerShape(corner))) {
             for (row in 0..1) Row {
-                for (col in 0..1) Artwork(arts[row * 2 + col], p.id, size / 2, RoundedCornerShape(0.dp))
+                for (col in 0..1) Artwork(arts[row * 2 + col], seed, size / 2, RoundedCornerShape(0.dp))
             }
         }
-        arts.isNotEmpty() -> Artwork(arts.first(), p.id, size)
-        else -> Box(
-            Modifier.size(size).clip(RoundedCornerShape(4.dp)).background(DriftColors.tiles[p.colorIndex.mod(DriftColors.tiles.size)]),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = DriftColors.text, modifier = Modifier.size(size / 2.5f))
-        }
+        arts.isNotEmpty() -> Artwork(arts.first(), seed, size, RoundedCornerShape(corner))
+    }
+}
+
+/** A playlist's cover, as it was set (on any device): a photo, a colour with a symbol, or its songs' artwork. */
+@Composable
+fun PlaylistCover(p: Playlist, size: Dp) {
+    val photo = p.cover64?.takeIf { p.coverStyle == "photo" }?.let { coverPhoto(it) }
+    when {
+        photo != null -> Image(photo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(RoundedCornerShape(4.dp)))
+        p.coverStyle == "color" -> CoverTile(p.colorIndex, p.coverSymbol, size)
+        p.tracks.isEmpty() -> CoverTile(p.colorIndex, p.coverSymbol, size)
+        else -> SongsCover(p.tracks, p.id, size)
     }
 }
 

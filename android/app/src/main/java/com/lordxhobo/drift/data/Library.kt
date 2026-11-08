@@ -110,6 +110,29 @@ object Library {
         update(id) { it.copy(name = trimmed) }
     }
 
+    /**
+     * What Edit playlist saves: name, cover (`style` auto, color or photo; `photo64` a new square JPEG in
+     * Base64, or null to keep the one it has), and whether it shows on your profile. Same as the iPhone.
+     */
+    fun updatePlaylist(id: String, name: String, style: String, colorIndex: Int, symbol: String, photo64: String?, isPublic: Boolean) {
+        update(id) { p ->
+            val cover = photo64 ?: p.cover64
+            // A photo cover with no photo is the automatic one; a photo no longer used goes.
+            val s = if (style == "photo" && cover == null) "auto" else style
+            p.copy(
+                name = name.trim().ifEmpty { p.name },
+                coverStyle = s,
+                colorIndex = colorIndex,
+                coverSymbol = symbol,
+                cover64 = if (s == "photo") cover else null,
+                isPublic = isPublic,
+            )
+        }
+    }
+
+    /** Edit songs: the playlist's songs in their new order, without the ones taken out. */
+    fun setTracks(id: String, tracks: List<Track>) = update(id) { it.copy(tracks = tracks) }
+
     fun deletePlaylist(id: String) {
         playlists = playlists.filterNot { it.id == id }
         save()

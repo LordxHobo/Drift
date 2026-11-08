@@ -101,6 +101,8 @@ private fun Page(screen: Screen) {
         is Screen.Folder -> FolderScreen(screen.id)
         Screen.Friends -> FriendsScreen()
         Screen.Stats -> StatsScreen()
+        is Screen.EditPlaylist -> EditPlaylistScreen(screen.id)
+        is Screen.EditSongs -> EditSongsScreen(screen.id)
         Screen.PlaybackSettings -> PlaybackSettingsScreen()
         Screen.Equalizer -> EqualizerScreen()
         is Screen.User -> UserScreen(screen.id)

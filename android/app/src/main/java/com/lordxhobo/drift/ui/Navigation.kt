@@ -26,6 +26,8 @@ sealed interface Screen {
     /** Spotify import; `link` when one was shared into Drift. */
     data class Import(val link: String? = null) : Screen
     data class Folder(val id: String) : Screen
+    data class EditPlaylist(val id: String) : Screen
+    data class EditSongs(val id: String) : Screen
     data object Friends : Screen
     data object Stats : Screen
     data class User(val id: String) : Screen
