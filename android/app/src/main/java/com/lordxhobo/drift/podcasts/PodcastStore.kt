@@ -140,6 +140,9 @@ object PodcastStore {
 
     // MARK: Episodes
 
+    /** An episode by its id, from the shows' episodes or where one was left (for downloads). */
+    fun find(id: String): Track? = progress[id]?.track ?: feeds.values.firstNotNullOfOrNull { list -> list.firstOrNull { it.id == id } }
+
     /** Newest episodes from every followed show. */
     val newEpisodes: List<Track>
         get() = subscriptions.flatMap { feeds[it.id].orEmpty() }

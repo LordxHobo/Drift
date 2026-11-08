@@ -2,6 +2,17 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 46,
+      "date": "2026-11-08",
+      "title": "Download episodes",
+      "notes": [
+        {
+          "text": "Download an episode to listen without internet: from its ⋮ menu, or Download in the player. Downloaded episodes are marked in the list and show in Settings → Storage.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 45,
       "date": "2026-11-08",
       "title": "Listening to episodes",

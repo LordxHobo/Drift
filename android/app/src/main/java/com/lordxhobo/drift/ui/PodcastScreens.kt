@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lordxhobo.drift.data.Track
 import com.lordxhobo.drift.data.formatTime
+import com.lordxhobo.drift.playback.Downloads
 import com.lordxhobo.drift.playback.Playback
 import com.lordxhobo.drift.podcasts.PodcastChannel
 import com.lordxhobo.drift.podcasts.PodcastStore
@@ -133,6 +135,7 @@ fun EpisodeRow(t: Track, showShow: Boolean = true) {
                 },
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (Downloads.isDownloaded(t.id)) Icon(Icons.Filled.ArrowCircleDown, contentDescription = "Downloaded", tint = DriftColors.accent, modifier = Modifier.size(14.dp).padding(end = 2.dp))
                 if (finished) Icon(Icons.Filled.Check, contentDescription = null, tint = DriftColors.accent, modifier = Modifier.size(14.dp).padding(end = 2.dp))
                 Text(parts.joinToString(" · "), color = DriftColors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -149,6 +152,8 @@ fun EpisodeMenu(t: Track, open: Boolean, onClose: () -> Unit) {
     DropdownMenu(expanded = open, onDismissRequest = onClose) {
         DropdownMenuItem(text = { Text("Play next") }, onClick = { onClose(); Playback.playNext(t) })
         DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onClose(); Playback.addToQueue(t) })
+        if (Downloads.isDownloaded(t.id) || Downloads.isManual(t.id)) DropdownMenuItem(text = { Text("Remove download") }, onClick = { onClose(); Downloads.remove(t.id) })
+        else DropdownMenuItem(text = { Text("Download") }, onClick = { onClose(); Downloads.downloadSong(t) })
         if (PodcastStore.isFinished(t.id)) DropdownMenuItem(text = { Text("Mark as unplayed") }, onClick = { onClose(); PodcastStore.markPlayed(t, false) })
         else DropdownMenuItem(text = { Text("Mark as played") }, onClick = { onClose(); PodcastStore.markPlayed(t, true) })
         PodcastStore.channel(t)?.let { c ->

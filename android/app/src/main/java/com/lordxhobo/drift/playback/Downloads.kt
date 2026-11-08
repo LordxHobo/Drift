@@ -149,9 +149,10 @@ object Downloads {
         val out = LinkedHashMap<String, Track>()
         // Single songs keep their track details from the library when they're in it.
         val known = (Library.liked + Library.playlists.flatMap { it.tracks }).associateBy { it.id }
-        for (id in manual) (known[id] ?: songs[id]?.track ?: pendingManual[id])?.let { out[id] = it }
-        if (LIKED in kept) for (t in Library.liked) out.putIfAbsent(t.id, t)
-        for (p in Library.playlists) if (p.id in kept) for (t in p.tracks) out.putIfAbsent(t.id, t)
+        for (id in manual) (known[id] ?: songs[id]?.track ?: pendingManual[id] ?: com.lordxhobo.drift.podcasts.PodcastStore.find(id))?.let { out[id] = it }
+        // Episodes download only when asked for (not with a kept playlist), like on the other devices.
+        if (LIKED in kept) for (t in Library.liked) if (!t.isEpisode) out.putIfAbsent(t.id, t)
+        for (p in Library.playlists) if (p.id in kept) for (t in p.tracks) if (!t.isEpisode) out.putIfAbsent(t.id, t)
         return out.values.toList()
     }
 
@@ -219,8 +220,8 @@ object Downloads {
 
     /** Downloads one song to its file. Returns its size. Blocking. */
     private suspend fun fetch(t: Track): Long {
-        val audio = YouTube.audio(t.id)
-        val url = audio.url
+        // An episode from a show's feed: its own file; anything else: YouTube's audio.
+        val url = t.audioURL ?: YouTube.audio(t.id).url
         val total = Regex("[?&]clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
         val tmp = File(dir, "${t.id}.part")
         val source = YouTubeDataSource(HttpDownloader.shared.client)

@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -291,6 +293,20 @@ private fun EpisodeControls(t: com.lordxhobo.drift.data.Track) {
 @Composable
 private fun EpisodeBottomRow(t: com.lordxhobo.drift.data.Track) {
     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        val downloaded = com.lordxhobo.drift.playback.Downloads.isDownloaded(t.id)
+        val downloading = com.lordxhobo.drift.playback.Downloads.current?.id == t.id
+        val asked = com.lordxhobo.drift.playback.Downloads.isManual(t.id)
+        BottomItem(
+            if (downloaded) Icons.Filled.DownloadDone else Icons.Filled.Download,
+            when {
+                downloaded -> "Downloaded"
+                downloading -> "${(com.lordxhobo.drift.playback.Downloads.progress * 100).toInt()}%"
+                asked -> "Waiting"
+                else -> "Download"
+            },
+        ) {
+            if (downloaded || asked) com.lordxhobo.drift.playback.Downloads.remove(t.id) else com.lordxhobo.drift.playback.Downloads.downloadSong(t)
+        }
         BottomItem(Icons.Filled.Devices, "Devices") { UiState.showDevices = true }
         val played = PodcastStore.isFinished(t.id)
         BottomItem(if (played) Icons.Filled.CheckCircle else Icons.Filled.CheckCircleOutline, if (played) "Played" else "Mark played") {
