@@ -2,6 +2,31 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 51,
+      "date": "2026-11-08",
+      "title": "Drift in Android Auto",
+      "notes": [
+        {
+          "text": "Drift now works in Android Auto: Recently played, Liked songs, your playlists (and downloaded songs) and podcasts on the car screen. Tap a song to play its list from there; episodes pick up where you left off.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "text": "Search from the car, or say \"Hey Google, play … on Drift\".",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "text": "Drift is installed from outside the Play Store, so turn on Unknown sources in Android Auto's developer settings for it to show up (tap the version number in Android Auto's settings ten times, then ⋮ → Developer settings).",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
+    {
       "id": 50,
       "date": "2026-11-08",
       "title": "Watch episodes",

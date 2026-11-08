@@ -20,10 +20,8 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
 import com.lordxhobo.drift.MainActivity
 import com.lordxhobo.drift.R
 import com.lordxhobo.drift.youtube.HttpDownloader
@@ -31,13 +29,14 @@ import com.lordxhobo.drift.youtube.YouTube
 import java.io.IOException
 
 /**
- * Plays in the background, with the notification, lock screen and Bluetooth controls (Media3).
+ * Plays in the background, with the notification, lock screen and Bluetooth controls (Media3), and
+ * shows Drift's library in Android Auto (CarLibrary).
  * Songs are queued as `drift://song/<video id>`; the audio link is found only when a song starts
  * loading (links expire after a few hours).
  */
 @UnstableApi
-class PlaybackService : MediaSessionService() {
-    private var session: MediaSession? = null
+class PlaybackService : MediaLibraryService() {
+    private var session: MediaLibrarySession? = null
     private val main = Handler(Looper.getMainLooper())
     /** Songs that already got a fresh link after failing (one retry each). */
     private val retried = mutableSetOf<String>()
@@ -96,17 +95,10 @@ class PlaybackService : MediaSessionService() {
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        session = MediaSession.Builder(this, player)
+        // Songs sent from the app arrive without their address (CarLibrary gives each one back), and
+        // Android Auto browses and searches through it.
+        session = MediaLibrarySession.Builder(this, player, CarLibrary(this))
             .setSessionActivity(open)
-            .setCallback(object : MediaSession.Callback {
-                // Songs sent from the app arrive without their address: give each one back.
-                override fun onAddMediaItems(
-                    mediaSession: MediaSession,
-                    controller: MediaSession.ControllerInfo,
-                    mediaItems: MutableList<MediaItem>,
-                ): ListenableFuture<MutableList<MediaItem>> =
-                    Futures.immediateFuture(mediaItems.map { songItem(it) }.toMutableList())
-            })
             .build()
         val notifications = DefaultMediaNotificationProvider.Builder(this).build()
         notifications.setSmallIcon(R.drawable.ic_notification)
@@ -136,7 +128,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player

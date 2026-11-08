@@ -134,7 +134,7 @@ object Playback {
 
     const val TRACK_KEY = "drift.track"
 
-    private fun itemOf(t: Track): MediaItem {
+    internal fun itemOf(t: Track): MediaItem {
         val extras = Bundle().apply { putString(TRACK_KEY, Library.json.encodeToString(t)) }
         val meta = MediaMetadata.Builder()
             .setTitle(t.title)
@@ -144,6 +144,13 @@ object Playback {
             .setExtras(extras)
             .build()
         return MediaItem.Builder().setMediaId(t.id).setMediaMetadata(meta).build()
+    }
+
+    /** Started from elsewhere (Android Auto): what "Playing from" says. */
+    fun cameFrom(source: String, list: List<Track>) {
+        playingFrom = source
+        shuffle = false
+        original = list
     }
 
     private fun trackOf(item: MediaItem): Track? {
