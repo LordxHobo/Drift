@@ -182,6 +182,10 @@ object LibrarySync {
 
     // MARK: Songs as JSON
 
+    /** For shared playlists (same song format). */
+    fun decodeTracksPublic(s: String?): List<Track>? = decodeTracks(s)
+    fun tracksJSONPublic(tracks: List<Track>): String = tracksJSON(tracks)
+
     private fun decodeTracks(s: String?): List<Track>? {
         if (s.isNullOrEmpty()) return null
         val list = runCatching { Json.parseToJsonElement(s) as JsonArray }.getOrNull() ?: return null
@@ -225,7 +229,9 @@ object LibrarySync {
             val known = synced[name]
             if (known != null && known.updatedAt >= updatedAt) continue
             if (FV.bool(f, "deleted") == true) {
-                if (name.startsWith("pl-")) withContext(Dispatchers.Main) { Library.removeRemotePlaylist(name.removePrefix("pl-")) }
+                // (Not a shared one: those come and go with their own document.)
+                val id = name.removePrefix("pl-")
+                if (name.startsWith("pl-") && Library.playlist(id)?.collab == null) withContext(Dispatchers.Main) { Library.removeRemotePlaylist(id) }
                 synced[name] = Synced("deleted", updatedAt)
                 continue
             }
@@ -274,6 +280,8 @@ object LibrarySync {
             }
             return hash(ids.joinToString(","))
         }
+        // Shared playlists come from their own document instead.
+        if (Library.playlist(name.removePrefix("pl-"))?.collab != null) return null
         val title = FV.string(f, "name") ?: return null
         val tracks = decodeTracks(FV.string(f, "tracks")) ?: return null
         val style = FV.string(f, "style")
@@ -338,7 +346,8 @@ object LibrarySync {
             "folders" to foldersFingerprint(),
             "artists" to artistsFingerprint(),
         )
-        Library.playlists.forEachIndexed { i, p -> items.add("pl-${p.id}" to playlistFingerprint(p, i)) }
+        // Shared playlists sync through their own document instead (CollabSync).
+        Library.playlists.forEachIndexed { i, p -> if (p.collab == null) items.add("pl-${p.id}" to playlistFingerprint(p, i)) }
 
         for ((name, fp) in items) {
             if (synced[name]?.fingerprint == fp) continue

@@ -21,6 +21,8 @@ data class Track(
     val added: Double? = null,
     /** A regular YouTube upload, not a YouTube Music song (keeps other devices from swapping its version). */
     val upload: Boolean? = null,
+    /** In a shared playlist: who added it (their profile ID). */
+    val addedBy: String? = null,
 ) {
     /** Artwork at roughly the asked size (YouTube Music pictures can be asked for any size). */
     fun artwork(size: Int): String {
@@ -48,6 +50,18 @@ data class Playlist(
     val folder: String? = null,
     /** A photo cover from another device (JPEG, Base64), kept so syncing doesn't drop it. */
     val cover64: String? = null,
+    /** Shared with friends (everyone in it can change it); synced through its own document. */
+    val collab: CollabInfo? = null,
+)
+
+/** Who's in a shared playlist. */
+@Serializable
+data class CollabInfo(
+    /** Who made it (their profile ID). */
+    val owner: String,
+    val members: List<String>,
+    /** Profile ID → name. */
+    val names: Map<String, String> = emptyMap(),
 )
 
 /** A folder of playlists (playlists point to it with `folder`). */

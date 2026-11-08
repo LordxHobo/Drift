@@ -46,6 +46,8 @@ class SocialException(val status: Int, message: String) : Exception(message) {
 
 class UsernameTakenException : Exception("That username was just taken.")
 class SessionLostException : Exception("Your sign-in expired.")
+/** Someone else changed the document first. */
+class ChangedMeanwhileException : Exception("Changed by someone else meanwhile.")
 
 // MARK: Sign-in (anonymous, no email)
 
@@ -151,14 +153,28 @@ object Firestore {
     }
 
     /** Create or update. `mask` limits it to those fields; `mustNotExist` makes it create-only. */
-    fun patch(path: String, fields: Map<String, JsonElement>, mask: List<String>? = null, mustNotExist: Boolean = false) {
+    /**
+     * Create or update. `mask` limits it to those fields; `mustNotExist` makes it create-only;
+     * `updateTime` only writes if nobody changed the document since (else [ChangedMeanwhileException]).
+     * Returns the document's new update time.
+     */
+    fun patch(
+        path: String,
+        fields: Map<String, JsonElement>,
+        mask: List<String>? = null,
+        mustNotExist: Boolean = false,
+        updateTime: String? = null,
+    ): String? {
         val q = mutableListOf<Pair<String, String>>()
         mask?.forEach { q.add("updateMask.fieldPaths" to it) }
         if (mustNotExist) q.add("currentDocument.exists" to "false")
+        if (updateTime != null) q.add("currentDocument.updateTime" to updateTime)
         val body = buildJsonObject { put("fields", JsonObject(fields)) }.toString()
         val (status, text) = Net.send("PATCH", url(path, q), body, token = FirebaseAuth.token())
         if (mustNotExist && (status == 400 || status == 409)) throw UsernameTakenException()
+        if (updateTime != null && (status == 400 || status == 409 || status == 412)) throw ChangedMeanwhileException()
         if (status != 200) throw SocialException.of(status, text)
+        return runCatching { FV.str((Json.parseToJsonElement(text) as JsonObject)["updateTime"]) }.getOrNull()
     }
 
     /** The names of a collection's documents (their last path part). Blocking. */

@@ -226,6 +226,12 @@ object Library {
         save(local = false)
     }
 
+    /** A shared playlist from its own document (added, or its songs, name and members updated). */
+    fun setCollabPlaylist(p: Playlist) {
+        playlists = if (playlists.any { it.id == p.id }) playlists.map { if (it.id == p.id) p else it } else playlists + p
+        save(local = false)
+    }
+
     fun removeRemotePlaylist(id: String) {
         if (playlists.none { it.id == id }) return
         playlists = playlists.filterNot { it.id == id }

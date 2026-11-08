@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 34,
+      "date": "2026-11-08",
+      "title": "Shared playlists",
+      "notes": [
+        {
+          "text": "Share a playlist with friends: open it, tap ⋮ → Share with friends. Everyone in it can add, remove and reorder songs, and changes show up for all.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Playlists friends share with you appear in Your Library by themselves, including ones shared from an iPhone or computer.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 33,
       "date": "2026-11-08",
       "title": "Friends",

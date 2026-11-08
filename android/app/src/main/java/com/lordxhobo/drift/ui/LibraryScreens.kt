@@ -1,5 +1,13 @@
 package com.lordxhobo.drift.ui
 
+import com.lordxhobo.drift.social.CollabSync
+import com.lordxhobo.drift.social.Friends
+import com.lordxhobo.drift.social.Social
+import com.lordxhobo.drift.social.UserProfile
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -126,7 +134,11 @@ private fun PlaylistRow(p: Playlist, onRename: () -> Unit, onDelete: () -> Unit,
     Box {
         LibraryRow(
             p.name,
-            if (p.isAlbum == true) "Album · ${p.albumArtist ?: ""}" else "Playlist · ${p.tracks.size} songs",
+            when {
+                p.isAlbum == true -> "Album · ${p.albumArtist ?: ""}"
+                p.collab != null -> "Shared playlist · ${p.tracks.size} songs"
+                else -> "Playlist · ${p.tracks.size} songs"
+            },
             onClick = { Nav.open(Screen.PlaylistPage(p.id)) },
             onLongClick = { menu = true },
         ) { PlaylistCover(p, 64.dp) }
@@ -252,6 +264,9 @@ fun PlaylistScreen(id: String?) {
     val tracks = p?.tracks ?: Library.liked
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
+    var collabError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -261,11 +276,29 @@ fun PlaylistScreen(id: String?) {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Playlist options", tint = DriftColors.text) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                            DropdownMenuItem(text = { Text("Delete playlist") }, onClick = {
-                                menu = false
-                                Library.deletePlaylist(p.id)
-                                Nav.back()
-                            })
+                            val c = p.collab
+                            val mine = c == null || c.owner == Social.me?.id
+                            if (Social.me != null && p.isAlbum != true && mine) {
+                                DropdownMenuItem(text = { Text(if (c == null) "Share with friends" else "Change who's in it") }, onClick = { menu = false; sharing = true })
+                            }
+                            when {
+                                c != null && mine -> DropdownMenuItem(text = { Text("Stop sharing") }, onClick = {
+                                    menu = false
+                                    scope.launch { collabError = runCatching { CollabSync.stop(p.id) }.exceptionOrNull()?.let { "Couldn't stop sharing. Check your connection." } }
+                                })
+                                c != null -> DropdownMenuItem(text = { Text("Leave shared playlist") }, onClick = {
+                                    menu = false
+                                    scope.launch {
+                                        val failed = runCatching { CollabSync.leave(p.id) }.isFailure
+                                        if (failed) collabError = "Couldn't leave. Check your connection." else Nav.back()
+                                    }
+                                })
+                                else -> DropdownMenuItem(text = { Text("Delete playlist") }, onClick = {
+                                    menu = false
+                                    Library.deletePlaylist(p.id)
+                                    Nav.back()
+                                })
+                            }
                         }
                     }
                 }
@@ -280,6 +313,15 @@ fun PlaylistScreen(id: String?) {
                     if (p?.isAlbum == true) "${p.albumArtist ?: "Album"} · ${tracks.size} songs" else "${tracks.size} songs · ${formatTotal(tracks)}",
                     color = DriftColors.muted, fontSize = 13.sp,
                 )
+                // Shared: who's in it.
+                p?.collab?.let { c ->
+                    val others = c.members.filter { it != Social.me?.id }.map { c.names[it] ?: "someone" }
+                    Text(
+                        if (others.isEmpty()) "Shared playlist" else "Shared with " + others.joinToString(", "),
+                        color = DriftColors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                collabError?.let { Text(it, color = DriftColors.error, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
                 // While its songs download: how many are on the phone.
                 if (Downloads.isKept(p?.id ?: Downloads.LIKED)) {
                     val have = tracks.count { Downloads.isDownloaded(it.id) }
@@ -310,7 +352,57 @@ fun PlaylistScreen(id: String?) {
             item { EmptyText(if (p == null) "Songs you like show up here. Tap the heart on any song." else "Add songs from a song's menu (⋮ or hold the song).") }
         }
     }
+    if (sharing && p != null) {
+        ShareDialog(p, onDismiss = { sharing = false }) { people ->
+            scope.launch {
+                collabError = runCatching { CollabSync.share(p.id, people) }.exceptionOrNull()?.let { it.message ?: "Couldn't share. Check your connection." }
+            }
+        }
+    }
     if (renaming && p != null) {
         NameDialog("Rename playlist", p.name, "Rename", onDone = { Library.rename(p.id, it) }, onDismiss = { renaming = false })
     }
+}
+
+/** Pick friends to share a playlist with (everyone picked can add, remove and reorder songs). */
+@Composable
+private fun ShareDialog(p: Playlist, onDismiss: () -> Unit, onShare: (List<UserProfile>) -> Unit) {
+    LaunchedEffect(Unit) { if (Friends.friends.isEmpty()) Friends.refresh() }
+    var picked by remember { mutableStateOf(p.collab?.members?.toSet() ?: emptySet()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share \"${p.name}\"") },
+        text = {
+            Column {
+                Text("Friends you pick can add, remove and reorder songs. It shows up in their library.", color = DriftColors.text2, fontSize = 13.sp)
+                Spacer(Modifier.size(8.dp))
+                if (Friends.friends.isEmpty()) {
+                    Text("Follow friends first (the people button on Home).", color = DriftColors.muted, fontSize = 13.sp)
+                }
+                for (f in Friends.friends) {
+                    val on = f.id in picked
+                    Row(
+                        Modifier.fillMaxWidth().clickable { picked = if (on) picked - f.id else picked + f.id }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = on, onCheckedChange = { picked = if (it) picked + f.id else picked - f.id })
+                        Avatar(f, 32.dp)
+                        Spacer(Modifier.size(10.dp))
+                        Text(f.name, color = DriftColors.text, fontSize = 15.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = picked.any { id -> Friends.friends.any { it.id == id } } || p.collab != null,
+                onClick = {
+                    onShare(Friends.friends.filter { it.id in picked })
+                    onDismiss()
+                },
+            ) { Text("Share") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        containerColor = DriftColors.surface,
+    )
 }
