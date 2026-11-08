@@ -152,7 +152,7 @@ fun EditPlaylistScreen(id: String) {
         return
     }
 
-    val save = {
+    val save: () -> Unit = {
         val before = Triple(p.coverStyle ?: "auto", p.colorIndex, p.coverSymbol) to p.cover64
         Library.updatePlaylist(id, name, style, colorIndex, symbol, newPhoto, isPublic)
         val after = Library.playlist(id)
