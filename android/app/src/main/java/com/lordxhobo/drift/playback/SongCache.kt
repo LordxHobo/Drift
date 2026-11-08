@@ -147,7 +147,9 @@ class SongDataSource(
                 return local.open(dataSpec.withUri(Uri.fromFile(file)))
             }
         }
-        val source = if (SongCache.sizeMB > 0) cached else direct
+        // Episodes from a show's feed are big files played once: not kept in the song cache.
+        val episode = uri.scheme == PlaybackService.SCHEME && uri.lastPathSegment?.startsWith("rss-") == true
+        val source = if (SongCache.sizeMB > 0 && !episode) cached else direct
         current = source
         return source.open(dataSpec)
     }

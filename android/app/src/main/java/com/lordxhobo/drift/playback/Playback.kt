@@ -275,6 +275,9 @@ object Playback {
     }
 
     /** Playback moved here from another device: the song where it was, then its queue. */
+    /** An episode, from where it was left off. */
+    fun playEpisode(t: Track) = transferIn(t, emptyList(), com.lordxhobo.drift.podcasts.PodcastStore.resumePosition(t.id), true, t.artist)
+
     fun transferIn(track: Track, queue: List<Track>, positionSeconds: Double, playing: Boolean, source: String) {
         original = listOf(track) + queue
         playingFrom = source.ifEmpty { "Another device" }

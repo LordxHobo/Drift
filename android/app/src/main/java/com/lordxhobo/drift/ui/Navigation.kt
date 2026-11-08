@@ -31,18 +31,21 @@ sealed interface Screen {
     data object Friends : Screen
     data object Stats : Screen
     data object Notifications : Screen
+    data object Podcasts : Screen
+    data class Show(val channel: com.lordxhobo.drift.podcasts.PodcastChannel) : Screen
     data object NotificationSettings : Screen
     data class User(val id: String) : Screen
     data class SharedList(val ownerId: String, val id: String, val name: String, val ownerName: String) : Screen
 }
 
-enum class Tab { HOME, SEARCH, LIBRARY }
+enum class Tab { HOME, SEARCH, PODCASTS, LIBRARY }
 
 object Nav {
     var tab by mutableStateOf(Tab.HOME)
     private val stacks = mapOf(
         Tab.HOME to mutableStateListOf<Screen>(Screen.Home),
         Tab.SEARCH to mutableStateListOf<Screen>(Screen.Search),
+        Tab.PODCASTS to mutableStateListOf<Screen>(Screen.Podcasts),
         Tab.LIBRARY to mutableStateListOf<Screen>(Screen.Library),
     )
 

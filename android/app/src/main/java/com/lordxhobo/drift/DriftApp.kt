@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.playback.Downloads
+import com.lordxhobo.drift.podcasts.PodcastStore
 import com.lordxhobo.drift.playback.Equalizer
 import com.lordxhobo.drift.playback.Skipping
 import com.lordxhobo.drift.playback.SongCache
@@ -26,6 +27,7 @@ class DriftApp : Application(), ImageLoaderFactory {
         super.onCreate()
         NewPipe.init(HttpDownloader.shared)
         Library.load(this)
+        PodcastStore.init(this)
         Notices.init(this)
         Releases.appContext = this
         Notices.schedule(this)

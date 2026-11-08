@@ -1,5 +1,17 @@
 package com.lordxhobo.drift.ui
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import com.lordxhobo.drift.data.Track
+import com.lordxhobo.drift.podcasts.YouTubePodcasts
+import com.lordxhobo.drift.podcasts.PodcastStore
+import com.lordxhobo.drift.podcasts.PodcastChannel
+import com.lordxhobo.drift.podcasts.Feeds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,19 +55,69 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /** The search tab's text and results (kept while you look at an artist or album). */
-private object SearchState {
+internal object SearchState {
     var query by mutableStateOf("")
+    /** Searching podcasts (shows, channels, episodes) instead of music. */
+    var podcasts by mutableStateOf(false)
+    var podResults by mutableStateOf<PodResults?>(null)
     var results by mutableStateOf<YouTube.SearchResults?>(null)
     var searching by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var lastSearched = ""
 }
 
+/** Podcast search results: shows (from their feed or YouTube) and episodes, or a pasted video. */
+data class PodResults(val query: String, val shows: List<PodcastChannel>, val episodes: List<Track>, val video: Track? = null, val error: String? = null)
+
+/** Podcasts: Apple's directory and YouTube side by side; a pasted feed link is that show, a YouTube link that video. */
+private suspend fun searchPodcasts(q: String): PodResults = withContext(Dispatchers.IO) {
+    val link = q.startsWith("http://", true) || q.startsWith("https://", true)
+    if (q.contains("youtu")) {
+        val video = runCatching { YouTubePodcasts.videoFromLink(q) }.getOrNull()
+        if (video != null) return@withContext PodResults(q, emptyList(), emptyList(), video)
+    }
+    if (link && !q.contains("youtu")) {
+        return@withContext try {
+            val found = Feeds.showFromLink(q) ?: return@withContext PodResults(q, emptyList(), emptyList(), error = "Couldn't find a podcast at that link. Paste the show's feed link, its Apple Podcasts page or its SoundCloud profile.")
+            withContext(Dispatchers.Main) { PodcastStore.showLoaded(found.channel, found.episodes) }
+            PodResults(q, listOf(found.channel), emptyList())
+        } catch (e: Exception) {
+            PodResults(q, emptyList(), emptyList(), error = "Couldn't open that link. Check your connection and try again.")
+        }
+    }
+    coroutineScope {
+        val shows = async { runCatching { Feeds.searchShows(q) }.getOrDefault(emptyList()) }
+        val tube = async { runCatching { YouTubePodcasts.search(q) }.getOrNull() }
+        val s = shows.await()
+        val t = tube.await()
+        if (t == null && s.isEmpty()) PodResults(q, emptyList(), emptyList(), error = "Search failed. Check your connection and try again.")
+        else PodResults(q, s + t?.first.orEmpty(), t?.second.orEmpty())
+    }
+}
+
 @Composable
 fun SearchScreen() {
     val focus = LocalFocusManager.current
-    // Searches a moment after you stop typing.
-    LaunchedEffect(SearchState.query) {
+    // Podcasts: searches a moment after you stop typing.
+    LaunchedEffect(SearchState.query, SearchState.podcasts) {
+        if (!SearchState.podcasts) return@LaunchedEffect
+        val q = SearchState.query.trim()
+        if (q.isEmpty()) {
+            SearchState.podResults = null
+            return@LaunchedEffect
+        }
+        if (q == SearchState.podResults?.query) return@LaunchedEffect
+        delay(450)
+        SearchState.searching = true
+        try {
+            SearchState.podResults = searchPodcasts(q)
+        } finally {
+            SearchState.searching = false
+        }
+    }
+    // Music: searches a moment after you stop typing.
+    LaunchedEffect(SearchState.query, SearchState.podcasts) {
+        if (SearchState.podcasts) return@LaunchedEffect
         val q = SearchState.query.trim()
         if (q.isEmpty()) {
             SearchState.results = null
@@ -90,7 +152,7 @@ fun SearchScreen() {
         TextField(
             value = SearchState.query,
             onValueChange = { SearchState.query = it },
-            placeholder = { Text("What do you want to listen to?") },
+            placeholder = { Text(if (SearchState.podcasts) "Shows, channels, or paste a link" else "What do you want to listen to?") },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
                 if (SearchState.query.isNotEmpty()) {
@@ -118,6 +180,20 @@ fun SearchScreen() {
             ),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         )
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((label, pods) in listOf("Music" to false, "Podcasts" to true)) {
+                val on = SearchState.podcasts == pods
+                Text(
+                    label, color = if (on) DriftColors.onAccent else DriftColors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(17.dp)).background(if (on) DriftColors.accent else DriftColors.surface2)
+                        .clickable { SearchState.podcasts = pods }.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
+        if (SearchState.podcasts) {
+            PodcastResults()
+            return@Column
+        }
 
         val r = SearchState.results
         when {
@@ -158,6 +234,33 @@ fun SearchScreen() {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PodcastResults() {
+    val r = SearchState.podResults
+    when {
+        SearchState.searching && (r == null || r.query != SearchState.query.trim()) -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = DriftColors.accent)
+        }
+        r == null || SearchState.query.isBlank() -> EmptyText("Find podcasts and YouTube channels. Paste a show's RSS feed link to follow it, or a YouTube link to play any video.")
+        r.error != null -> EmptyText(r.error)
+        r.video == null && r.shows.isEmpty() && r.episodes.isEmpty() -> EmptyText("Nothing found for \u201C${r.query}\u201D.")
+        else -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            r.video?.let { v ->
+                item { SectionTitle("Video") }
+                item { EpisodeRow(v) }
+            }
+            if (r.shows.isNotEmpty()) {
+                item { SectionTitle("Shows and channels") }
+                items(r.shows.size, key = { "s-" + r.shows[it].id }) { ShowRow(r.shows[it]) }
+            }
+            if (r.episodes.isNotEmpty()) {
+                item { SectionTitle("Episodes") }
+                items(r.episodes.size, key = { "e-" + r.episodes[it].id }) { EpisodeRow(r.episodes[it]) }
             }
         }
     }

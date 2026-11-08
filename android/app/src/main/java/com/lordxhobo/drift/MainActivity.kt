@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lordxhobo.drift.playback.Playback
+import com.lordxhobo.drift.podcasts.PodcastStore
 import com.lordxhobo.drift.social.LibrarySync
 import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.ui.DriftRoot
@@ -76,6 +77,12 @@ class MainActivity : ComponentActivity() {
         Nav.open(Screen.Import(text))
         // Handled once (not again after the screen turns).
         intent.action = null
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Where each episode was left, saved before Android may close Drift.
+        PodcastStore.flush()
     }
 
     override fun onResume() {

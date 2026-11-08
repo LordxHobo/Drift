@@ -50,8 +50,10 @@ class PlaybackService : MediaSessionService() {
             val uri = spec.uri
             if (uri.scheme == SCHEME) {
                 val id = uri.lastPathSegment ?: throw IOException("No song")
+                // An episode from a show's own feed: its audio file, as it is.
+                val feedAudio = uri.getQueryParameter("audio")
                 // Any failure finding the link counts as a loading error, so the player can recover.
-                val url = try {
+                val url = feedAudio ?: try {
                     YouTube.audio(id).url
                 } catch (e: IOException) {
                     throw e
@@ -155,7 +157,14 @@ class PlaybackService : MediaSessionService() {
     companion object {
         const val SCHEME = "drift"
 
-        fun songItem(item: MediaItem): MediaItem =
-            item.buildUpon().setUri(Uri.parse("$SCHEME://song/${item.mediaId}")).build()
+        /** Where a song's sound comes from: `drift://song/<id>` (found when it loads), with a feed episode's file. */
+        fun songItem(item: MediaItem): MediaItem {
+            val track = item.mediaMetadata.extras?.getString(Playback.TRACK_KEY)?.let {
+                runCatching { com.lordxhobo.drift.data.Library.json.decodeFromString(com.lordxhobo.drift.data.Track.serializer(), it) }.getOrNull()
+            }
+            val uri = Uri.parse("$SCHEME://song/${item.mediaId}").buildUpon()
+            track?.audioURL?.let { uri.appendQueryParameter("audio", it) }
+            return item.buildUpon().setUri(uri.build()).build()
+        }
     }
 }

@@ -92,6 +92,14 @@ fun Artwork(url: String?, seed: String, size: Dp, shape: Shape = RoundedCornerSh
     }
 }
 
+/** A picture of any shape (an episode's 16:9 thumbnail), cropped to fill it. */
+@Composable
+fun Picture(url: String?, seed: String, width: Dp, height: Dp, shape: Shape = RoundedCornerShape(6.dp)) {
+    Box(Modifier.size(width, height).clip(shape).background(DriftColors.tile(seed)), contentAlignment = Alignment.Center) {
+        if (url != null) AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    }
+}
+
 /**
  * The symbols a colour cover can show: the iPhone's names (what's saved and synced) and the icon drawn
  * here. The iPhone's guitars have no Android icon: a speaker stands in.

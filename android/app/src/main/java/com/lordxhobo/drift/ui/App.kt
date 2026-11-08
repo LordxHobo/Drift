@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -89,6 +90,8 @@ private fun Page(screen: Screen) {
         Screen.Home -> HomeScreen()
         Screen.Search -> SearchScreen()
         Screen.Library -> LibraryScreen()
+        Screen.Podcasts -> PodcastsScreen()
+        is Screen.Show -> ShowScreen(screen.channel)
         Screen.Liked -> PlaylistScreen(null)
         is Screen.PlaylistPage -> PlaylistScreen(screen.id)
         is Screen.ArtistPage -> ArtistScreen(screen.ref)
@@ -135,6 +138,7 @@ private fun TabBar() {
     ) {
         TabItem(Tab.HOME, "Home", Icons.Filled.Home, Modifier.weight(1f))
         TabItem(Tab.SEARCH, "Search", Icons.Filled.Search, Modifier.weight(1f))
+        TabItem(Tab.PODCASTS, "Podcasts", Icons.Filled.Podcasts, Modifier.weight(1f))
         TabItem(Tab.LIBRARY, "Your Library", Icons.Filled.LibraryMusic, Modifier.weight(1f))
     }
 }

@@ -25,7 +25,20 @@ data class Track(
     val addedBy: String? = null,
     /** Picked by hand ("Replace with another version"): played exactly as chosen. */
     val chosen: Boolean? = null,
+    /** A podcast episode (a YouTube video, or a show's audio file): resumes where you left off. */
+    val podcast: Boolean? = null,
+    /** The show it's from (a YouTube channel or playlist, or "rss-…" for a show's own feed). */
+    val channelID: String? = null,
+    val channelAvatar: String? = null,
+    /** When it came out (seconds since 2001-01-01). */
+    val published: Double? = null,
+    /** An episode from a show's feed: its audio file (not on YouTube). */
+    val audioURL: String? = null,
+    /** …and the feed it's from. */
+    val feedURL: String? = null,
 ) {
+    val isEpisode: Boolean get() = podcast == true
+
     /** Artwork at roughly the asked size (YouTube Music pictures can be asked for any size). */
     fun artwork(size: Int): String {
         val url = artworkURL ?: return "https://i.ytimg.com/vi/$id/hqdefault.jpg"

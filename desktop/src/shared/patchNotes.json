@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 44,
+      "date": "2026-11-08",
+      "title": "Podcasts",
+      "notes": [
+        {
+          "text": "Podcasts have their own tab: follow shows and YouTube channels and see their new episodes, with a page for each show.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Find them in Search → Podcasts (Apple's podcast directory and YouTube), or paste a show's feed link, its Apple Podcasts page, or a YouTube link to play any video.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 43,
       "date": "2026-11-08",
       "title": "Notifications",
