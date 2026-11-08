@@ -63,12 +63,12 @@ class PlaybackService : MediaSessionService() {
         }
         // Downloads first, then the song cache, then YouTube.
         val sources = SongDataSource.Factory(SongDataSource.cacheFactory(resolving), resolving)
-        // The sound passes a level meter on its way out (for skipping silence).
+        // On its way out, the sound passes a level meter (for skipping silence), then the equalizer.
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
                 DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
-                    .setAudioProcessors(arrayOf<AudioProcessor>(LevelMeter()))
+                    .setAudioProcessors(arrayOf<AudioProcessor>(LevelMeter(), EqualizerProcessor()))
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
         }

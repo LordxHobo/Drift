@@ -102,6 +102,7 @@ private fun Page(screen: Screen) {
         Screen.Friends -> FriendsScreen()
         Screen.Stats -> StatsScreen()
         Screen.PlaybackSettings -> PlaybackSettingsScreen()
+        Screen.Equalizer -> EqualizerScreen()
         is Screen.User -> UserScreen(screen.id)
         is Screen.SharedList -> SharedListScreen(screen.ownerId, screen.id, screen.name, screen.ownerName)
     }

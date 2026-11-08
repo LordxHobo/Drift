@@ -8,6 +8,11 @@ import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import com.lordxhobo.drift.playback.Downloads
+import com.lordxhobo.drift.playback.Equalizer
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import com.lordxhobo.drift.playback.Skipping
 import com.lordxhobo.drift.playback.SongCache
 import android.content.Context
@@ -232,7 +237,7 @@ fun SettingsScreen() {
             Group {
                 SettingsRow(
                     "Playback",
-                    "Skip non-music parts and silence",
+                    "Equalizer ${if (Equalizer.enabled) Equalizer.presetName() else "off"} · Skip non-music parts and silence",
                     icon = Icons.Filled.GraphicEq,
                     iconColor = Color(0xFFEC4899),
                 ) { Nav.open(Screen.PlaybackSettings) }
@@ -295,6 +300,17 @@ fun PlaybackSettingsScreen() {
         item { BackBar() }
         item { PageTitle("Playback") }
         item {
+            Group {
+                SettingsRow(
+                    "Equalizer",
+                    if (Equalizer.enabled) Equalizer.presetName() else "Off",
+                    icon = Icons.Filled.GraphicEq,
+                    iconColor = Color(0xFFEC4899),
+                ) { Nav.open(Screen.Equalizer) }
+            }
+        }
+        item { Spacer(Modifier.size(18.dp)) }
+        item {
             Text(
                 "AD-FREE LISTENING", color = DriftColors.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 32.dp, top = 8.dp, bottom = 6.dp),
@@ -313,6 +329,78 @@ fun PlaybackSettingsScreen() {
                     Skipping.silence,
                 ) { Skipping.changeSilence(it) }
             }
+        }
+    }
+}
+
+@Composable
+fun EqualizerScreen() {
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { BackBar() }
+        item { PageTitle("Equalizer") }
+        item {
+            Group {
+                ToggleRow(
+                    "Equalizer",
+                    "Shapes the sound of every song, streamed or downloaded. Same presets as the iPhone and computer.",
+                    Equalizer.enabled,
+                ) { Equalizer.turn(it) }
+            }
+        }
+        item {
+            val current = Equalizer.presetName()
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (p in Equalizer.presets) {
+                    val on = Equalizer.enabled && p.name == current
+                    Text(
+                        p.name, color = if (on) DriftColors.onAccent else DriftColors.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) DriftColors.accent else DriftColors.surface2)
+                            .clickable { Equalizer.choose(p) }.padding(horizontal = 14.dp, vertical = 7.dp),
+                    )
+                }
+                if (current == "Custom") {
+                    Text(
+                        "Custom", color = DriftColors.onAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(DriftColors.accent).padding(horizontal = 14.dp, vertical = 7.dp),
+                    )
+                }
+            }
+        }
+        item {
+            Group {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Equalizer.bands.forEachIndexed { i, hz ->
+                        val db = Equalizer.gains[i]
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${Equalizer.label(hz)} Hz", color = DriftColors.text2, fontSize = 12.sp, modifier = Modifier.width(56.dp))
+                            Slider(
+                                value = db.toFloat(),
+                                onValueChange = { v ->
+                                    // Snaps to half decibels; moving a band turns the equalizer on.
+                                    if (!Equalizer.enabled) Equalizer.turn(true)
+                                    Equalizer.changeBand(i, Math.round(v * 2) / 2.0)
+                                },
+                                valueRange = -Equalizer.MAX_DB.toFloat()..Equalizer.MAX_DB.toFloat(),
+                                colors = SliderDefaults.colors(thumbColor = DriftColors.text, activeTrackColor = DriftColors.accent, inactiveTrackColor = DriftColors.surface2),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                (if (db > 0) "+" else "") + (if (db % 1.0 == 0.0) "${db.toInt()}" else "$db") + " dB",
+                                color = DriftColors.text2, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Text(
+                "Reset", color = DriftColors.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(8.dp)).clickable { Equalizer.choose(Equalizer.presets.first()) }.padding(8.dp),
+            )
         }
     }
 }

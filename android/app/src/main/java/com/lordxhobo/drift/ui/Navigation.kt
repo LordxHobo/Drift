@@ -22,6 +22,7 @@ sealed interface Screen {
     data object LinkComputer : Screen
     data object Storage : Screen
     data object PlaybackSettings : Screen
+    data object Equalizer : Screen
     /** Spotify import; `link` when one was shared into Drift. */
     data class Import(val link: String? = null) : Screen
     data class Folder(val id: String) : Screen
