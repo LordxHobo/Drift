@@ -137,18 +137,46 @@ object YouTube {
 
     private val videoCache = ConcurrentHashMap<String, Pair<List<InnerTube.VideoFormat>, Long>>()
 
-    /** The sharpest H.264 picture up to `maxHeight` (blocking). Null when YouTube gave none. */
+    /**
+     * The sharpest picture up to `maxHeight` (blocking), H.264 first, then VP9, then AV1 (only on phones
+     * that can play it). Null when YouTube gave none. The quick path first; when it has no picture, the
+     * full extraction (NewPipeExtractor), as the computer does.
+     */
     fun video(id: String, maxHeight: Int): Video? {
-        val cached = videoCache[id]?.takeIf { it.second > System.currentTimeMillis() }?.first
-        val list = cached ?: runCatching { tube.quickAudio(id, visitorData) }.getOrNull()?.let { q ->
-            q.visitorData?.let { visitorData = it }
-            videoCache[id] = q.videos to System.currentTimeMillis() + 3 * 3600_000L
-            q.videos
-        } ?: return null
+        val list = videoCache[id]?.takeIf { it.second > System.currentTimeMillis() }?.first ?: run {
+            val quick = runCatching { tube.quickAudio(id, visitorData) }.getOrNull()
+            quick?.visitorData?.let { visitorData = it }
+            val found = quick?.videos.orEmpty().filter { playable(it.codec) }.ifEmpty { fullVideo(id) }
+            if (found.isNotEmpty()) videoCache[id] = found to System.currentTimeMillis() + 3 * 3600_000L
+            found
+        }
         val lowest = list.minByOrNull { it.height } ?: return null
         val pool = list.filter { it.height <= maxHeight }.ifEmpty { listOf(lowest) }
-        val pick = pool.maxWithOrNull(compareBy({ it.height }, { it.rate })) ?: lowest
+        val pick = pool.maxWithOrNull(compareBy<InnerTube.VideoFormat>({ it.height }, { -it.codec }, { it.rate })) ?: lowest
         return Video(pick.url, pick.height, list.map { it.height }.distinct().sorted())
+    }
+
+    /** Picture-only versions from the full extraction. */
+    private fun fullVideo(id: String): List<InnerTube.VideoFormat> = runCatching {
+        val info = StreamInfo.getInfo(yt, "https://www.youtube.com/watch?v=$id")
+        info.videoOnlyStreams
+            .filter { it.isUrl && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.height > 0 }
+            .map { InnerTube.VideoFormat(it.height, it.content, it.bitrate, InnerTube.codecRank(it.codec ?: it.format?.mimeType.orEmpty())) }
+            .filter { playable(it.codec) }
+    }.getOrDefault(emptyList())
+
+    /** H.264 and VP9 play on every phone; AV1 only on ones with a decoder for it. */
+    private fun playable(codec: Int): Boolean = when (codec) {
+        0, 1 -> true
+        2 -> av1
+        else -> false
+    }
+
+    private val av1: Boolean by lazy {
+        runCatching {
+            android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos
+                .any { !it.isEncoder && it.supportedTypes.any { t -> t.equals("video/av01", ignoreCase = true) } }
+        }.getOrDefault(false)
     }
 
     private val JSON = "application/json".toMediaType()

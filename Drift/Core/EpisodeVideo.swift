@@ -83,8 +83,10 @@ final class EpisodeVideo {
             }
             self.height = found.height
             self.heights = found.heights
-            let loader = StreamLoader(url: found.url)
-            let item = AVPlayerItem(asset: loader.asset)
+            // A file: through the loader. The iPhone app's stream: as it is, no sharper than asked.
+            let loader = found.hls ? nil : StreamLoader(url: found.url)
+            let item = loader.map { AVPlayerItem(asset: $0.asset) } ?? AVPlayerItem(url: found.url)
+            if found.hls { item.preferredMaximumResolution = CGSize(width: max * 16 / 9, height: max) }
             item.preferredForwardBufferDuration = 10
             self.statusObserver = item.observe(\.status) { [weak self] item, _ in
                 let status = item.status

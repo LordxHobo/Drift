@@ -154,22 +154,60 @@ actor StreamResolver {
     /// Picture-only versions seen with the sound, per video.
     private var videoCache: [String: ([VideoFormat], Date)] = [:]
 
-    /// The picture for an episode (no sound): the sharpest H.264 version up to `maxHeight`, and
-    /// every height it comes in. nil when YouTube gave none.
-    func video(_ videoID: String, maxHeight: Int) async -> (url: URL, height: Int, heights: [Int])? {
+    /// The iPhone app's stream for an episode (picture with sound, played muted), and its heights.
+    private var hlsVideoCache: [String: (URL, [Int], Date)] = [:]
+
+    /// The picture for an episode (no sound): the sharpest H.264 version up to `maxHeight`, and every
+    /// height it comes in. Tries, in order: the quick links, the full extraction, then the iPhone app's
+    /// stream (`hls`: true; AVPlayer picks the version, capped at `maxHeight`). nil when none has video.
+    func video(_ videoID: String, maxHeight: Int) async -> (url: URL, height: Int, heights: [Int], hls: Bool)? {
         if !(videoCache[videoID].map { $0.1 > Date() } ?? false) {
+            var list: [VideoFormat] = []
             if let quick = try? await withTimeout(4, { [visitorData] in
                 try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData)
             }) {
                 if let v = quick.visitorData { visitorData = v }
-                videoCache[videoID] = (quick.videos, Date().addingTimeInterval(3 * 3600))
+                list = quick.videos
             }
+            // The quick links had no H.264 picture: the full extraction's.
+            if list.isEmpty, let streams = try? await YouTube(videoID: videoID, methods: [.local, .remote]).streams {
+                list = streams.filterVideoOnly().compactMap { s in
+                    guard s.fileExtension == .mp4, s.isNativelyPlayable, let h = s.videoResolution, h > 0 else { return nil }
+                    return VideoFormat(height: h, url: s.url, rate: s.averageBitrate ?? s.bitrate ?? 0)
+                }
+            }
+            if !list.isEmpty { videoCache[videoID] = (list, Date().addingTimeInterval(3 * 3600)) }
         }
-        guard let list = videoCache[videoID]?.0, let lowest = list.min(by: { $0.height < $1.height }) else { return nil }
-        let heights = Array(Set(list.map(\.height))).sorted()
-        let pool = list.filter { $0.height <= maxHeight }
-        let pick = (pool.isEmpty ? [lowest] : pool).max { ($0.height, $0.rate) < ($1.height, $1.rate) } ?? lowest
-        return (pick.url, pick.height, heights)
+        if let list = videoCache[videoID]?.0, let lowest = list.min(by: { $0.height < $1.height }) {
+            let heights = Array(Set(list.map(\.height))).sorted()
+            let pool = list.filter { $0.height <= maxHeight }
+            let pick = (pool.isEmpty ? [lowest] : pool).max { ($0.height, $0.rate) < ($1.height, $1.rate) } ?? lowest
+            return (pick.url, pick.height, heights, false)
+        }
+        // Last: the iPhone app's stream.
+        if !(hlsVideoCache[videoID].map { $0.2 > Date() } ?? false) {
+            guard let r = try? await withTimeout(5, { [visitorData] in
+                try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData, client: .iOS)
+            }), r.stream.source == "ios-hls" else { return nil }
+            let heights = await Self.streamHeights(r.stream.url)
+            guard !heights.isEmpty else { return nil }
+            hlsVideoCache[videoID] = (r.stream.url, heights, Date().addingTimeInterval(3 * 3600))
+        }
+        guard let entry = hlsVideoCache[videoID], let lowest = entry.1.first else { return nil }
+        return (entry.0, entry.1.last(where: { $0 <= maxHeight }) ?? lowest, entry.1, true)
+    }
+
+    /// The picture heights a stream comes in (from its RESOLUTION=WxH lines).
+    private static func streamHeights(_ url: URL) async -> [Int] {
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let text = String(data: data, encoding: .utf8) else { return [] }
+        var found = Set<Int>()
+        for line in text.split(separator: "\n") {
+            guard let r = line.range(of: "RESOLUTION=") else { continue }
+            let value = line[r.upperBound...].prefix { $0.isNumber || $0 == "x" }
+            if let h = value.split(separator: "x").last.flatMap({ Int($0) }), h > 0 { found.insert(h) }
+        }
+        return found.sorted()
     }
 
     /// YouTube's visionOS client hands out direct audio links without the web page or signature

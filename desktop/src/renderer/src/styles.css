@@ -4959,3 +4959,49 @@ a.btn.disabled {
 .send-note {
   margin-top: 12px;
 }
+
+/* Full player: an episode without chapters (or with them hidden) gets the whole width. */
+.fp-chapters-toggle {
+  position: absolute;
+  top: 38px;
+  right: 20px;
+  z-index: 2;
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(255, 255, 255, 0.12);
+}
+.fp-chapters-toggle.active {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.28);
+}
+.fp-body.solo {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+.fp-body.solo .fp-left {
+  width: min(100%, 440px);
+}
+.fp-body.solo .fp-left.with-video {
+  width: min(100%, 1180px, calc((100vh - 330px) * 16 / 9));
+  min-width: 320px;
+}
+
+/* Side panel tabs: four of them fit on one line. */
+.m-panel .side-head {
+  gap: 8px;
+}
+.m-panel .seg {
+  flex: 1;
+  min-width: 0;
+}
+.m-panel .seg button {
+  flex: 1 1 auto;
+  padding: 0 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.m-panel .seg .tab-count {
+  margin-left: 4px;
+}

@@ -157,8 +157,8 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
     // MARK: Audio links
 
     /** A direct audio link from YouTube's visionOS client: one request, no signature decoding. */
-    /** One picture-only version of a video (H.264), for episode video. */
-    data class VideoFormat(val height: Int, val url: String, val rate: Int)
+    /** One picture-only version of a video, for episode video. `codec`: 0 = H.264, 1 = VP9, 2 = AV1. */
+    data class VideoFormat(val height: Int, val url: String, val rate: Int, val codec: Int = 0)
 
     data class Quick(val url: String, val kbps: Int, val visitorData: String?, val videos: List<VideoFormat> = emptyList())
 
@@ -203,13 +203,13 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
         }
         fun rate(f: JsonObject): Int = (str(f["averageBitrate"]) ?: str(f["bitrate"]))?.toIntOrNull() ?: 0
         val pick = audio.maxByOrNull { rate(it) } ?: throw IllegalStateException("No audio for this song")
-        // Picture-only H.264 versions, for episode video.
+        // Picture-only versions, for episode video (H.264, VP9 or AV1).
         val videos = formats.mapNotNull { f ->
             val mime = str(f["mimeType"]) ?: return@mapNotNull null
             val url = str(f["url"]) ?: return@mapNotNull null
             val height = str(f["height"])?.toIntOrNull() ?: return@mapNotNull null
-            if (!mime.startsWith("video/mp4") || !mime.contains("avc1") || height <= 0) return@mapNotNull null
-            VideoFormat(height, url, rate(f))
+            if (!mime.startsWith("video/") || height <= 0) return@mapNotNull null
+            VideoFormat(height, url, rate(f), codecRank(mime))
         }
         return Quick(str(pick["url"])!!, rate(pick) / 1000, str(dig(json, "responseContext", "visitorData")) ?: visitorData, videos)
     }
@@ -355,6 +355,14 @@ class InnerTube(private val send: (url: String, headers: Map<String, String>, bo
     }
 
     companion object {
+        /** 0 = H.264, 1 = VP9, 2 = AV1 (3 = something else). */
+        fun codecRank(codecs: String): Int = when {
+            codecs.contains("avc1") -> 0
+            codecs.contains("vp9") || codecs.contains("vp09") -> 1
+            codecs.contains("av01") -> 2
+            else -> 3
+        }
+
         const val WEB_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         const val VISION_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
         private const val FLEX = "musicResponsiveListItemFlexColumnRenderer"

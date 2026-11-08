@@ -2,6 +2,37 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 52,
+      "date": "2026-11-09",
+      "title": "Episode video fixes",
+      "notes": [
+        {
+          "text": "Episode video works again: when YouTube's quick link has no picture the iPhone can play, Drift now finds one another way instead of saying there's no video.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "text": "Episode video works again: Drift now also uses the other formats YouTube offers (and finds the video another way when needed) instead of saying there's no video.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "text": "Apple Music style: an episode without chapters now shows its video (or picture) across the whole full-screen player instead of small next to an empty chapter list. Episodes with chapters have a button to hide or show them.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "The tabs above the side panel (Chapters, Up Next, Friends, Inbox) now fit on one line.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 51,
       "date": "2026-11-08",
       "title": "Drift in Android Auto",

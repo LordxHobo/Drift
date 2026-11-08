@@ -13,7 +13,7 @@ import type { MenuItem, Route } from './state'
 import { jumpTo, playList, removeFromQueue, setSpeed, usePlayer } from './player'
 import { Progress, Transport, Volume } from './controls'
 import { LyricsLines } from './lyrics'
-import { ChapterList, CurrentChapter } from './chapters'
+import { ChapterList, CurrentChapter, useChapters } from './chapters'
 import { Art, Avatar, IconButton, UpdateButton, LikedCover, PlaylistCover, TrackArt, goToArtist, isLiked, newPlaylist, playlistMenu, toggleLike, trackMenu } from './ui'
 import { ImportPill, openImport } from './views/import'
 import { DownloadPill } from './downloads'
@@ -675,6 +675,8 @@ export function FullPlayer(): JSX.Element | null {
   const p = usePlayer()
   const t = p.current
   const videoOn = useVideoOn()
+  const { chapters } = useChapters(t)
+  const [showChapters, setShowChapters] = useState(() => readChaptersPref())
   useEffect(() => {
     if (!open) return
     const key = (e: KeyboardEvent): void => {
@@ -685,14 +687,30 @@ export function FullPlayer(): JSX.Element | null {
   }, [open])
   if (!open || !t) return null
   const art = artwork(t, 800)
+  // An episode: its chapters on the right only when it has some (and they're not turned off); otherwise
+  // the video or picture gets the whole width.
+  const hasChapters = !!t.podcast && chapters.length > 0
+  const side = !t.podcast || (hasChapters && showChapters)
+  const toggleChapters = (): void => {
+    const next = !showChapters
+    setShowChapters(next)
+    try {
+      localStorage.setItem('fullPlayerChapters', next ? 'on' : 'off')
+    } catch {
+      // not saved: fine
+    }
+  }
   return (
     <div className="full-player">
       <div className="fp-bg" style={{ backgroundImage: art ? `url("${art}")` : undefined }} />
       <div className="fp-shade" />
       <div className="fp-drag" />
       <IconButton icon="minimize" label="Close player" className="fp-close" onClick={() => fullPlayerStore.set(false)} />
-      <div className="fp-body">
-        <div className="fp-left">
+      {hasChapters && (
+        <IconButton icon="chapters" label={showChapters ? 'Hide chapters' : 'Show chapters'} active={showChapters} className="fp-chapters-toggle" onClick={toggleChapters} />
+      )}
+      <div className={`fp-body${side ? '' : ' solo'}`}>
+        <div className={`fp-left${videoOn ? ' with-video' : ''}`}>
           {videoOn ? <VideoSurface className="fp-video" /> : <TrackArt track={t} px={800} className="fp-art" radius={12} />}
           <div className="fp-meta">
             <div>
@@ -708,12 +726,23 @@ export function FullPlayer(): JSX.Element | null {
           <Transport size="large" />
           <Volume />
         </div>
-        <div className="fp-right">
-          {t.podcast ? <ChapterList track={t} size="large" /> : <LyricsLines track={t} size="large" />}
-        </div>
+        {side && (
+          <div className="fp-right">
+            {t.podcast ? <ChapterList track={t} size="large" /> : <LyricsLines track={t} size="large" />}
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+/** Whether the full player shows an episode's chapters (on unless turned off). */
+function readChaptersPref(): boolean {
+  try {
+    return localStorage.getItem('fullPlayerChapters') !== 'off'
+  } catch {
+    return true
+  }
 }
 
 export function MusicSidePanel(): JSX.Element | null {
