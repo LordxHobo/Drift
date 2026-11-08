@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.playback.Downloads
+import com.lordxhobo.drift.playback.Skipping
 import com.lordxhobo.drift.playback.SongCache
 import com.lordxhobo.drift.social.CollabSync
 import com.lordxhobo.drift.social.Friends
@@ -26,6 +27,7 @@ class DriftApp : Application(), ImageLoaderFactory {
         Library.load(this)
         SongCache.init(this)
         Downloads.init(this)
+        Skipping.init(this)
         LibrarySync.init(this)
         PlaylistSharing.init()
         Friends.init()

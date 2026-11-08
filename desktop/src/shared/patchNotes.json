@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 38,
+      "date": "2026-11-08",
+      "title": "Ad-free listening",
+      "notes": [
+        {
+          "text": "Skips the parts of music videos that aren't music (intros, outros, talking), using SponsorBlock, the same as the iPhone and computer.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "When a song ends in a long stretch of silence, Drift moves on to the next one. Both can be turned off in Settings → Playback.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 37,
       "date": "2026-11-08",
       "title": "Listening stats",

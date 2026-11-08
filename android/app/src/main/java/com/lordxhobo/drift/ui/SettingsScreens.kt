@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import com.lordxhobo.drift.playback.Downloads
+import com.lordxhobo.drift.playback.Skipping
 import com.lordxhobo.drift.playback.SongCache
 import android.content.Context
 import android.content.Intent
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -229,6 +231,17 @@ fun SettingsScreen() {
         item {
             Group {
                 SettingsRow(
+                    "Playback",
+                    "Skip non-music parts and silence",
+                    icon = Icons.Filled.GraphicEq,
+                    iconColor = Color(0xFFEC4899),
+                ) { Nav.open(Screen.PlaybackSettings) }
+            }
+        }
+        item { Spacer(Modifier.size(18.dp)) }
+        item {
+            Group {
+                SettingsRow(
                     "Keep playing in the background",
                     if (allowed) "Drift may run with the screen off" else "Your phone may stop Drift to save battery",
                     icon = Icons.Filled.BatteryChargingFull,
@@ -270,6 +283,36 @@ fun SettingsScreen() {
                 color = DriftColors.muted, fontSize = 12.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp).clickable { UiState.showAllNotes = true }.padding(8.dp),
             )
+        }
+    }
+}
+
+// MARK: Playback
+
+@Composable
+fun PlaybackSettingsScreen() {
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { BackBar() }
+        item { PageTitle("Playback") }
+        item {
+            Text(
+                "AD-FREE LISTENING", color = DriftColors.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 32.dp, top = 8.dp, bottom = 6.dp),
+            )
+        }
+        item {
+            Group {
+                ToggleRow(
+                    "Skip non-music segments",
+                    "Jumps past intros, outros and talking in music videos using community-marked timestamps (SponsorBlock).",
+                    Skipping.nonMusic,
+                ) { Skipping.changeNonMusic(it) }
+                ToggleRow(
+                    "Skip silence at the end",
+                    "Moves to the next song when a song ends in 15 seconds or more of dead air (hidden tracks, minutes of silence).",
+                    Skipping.silence,
+                ) { Skipping.changeSilence(it) }
+            }
         }
     }
 }

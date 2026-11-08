@@ -54,7 +54,11 @@ object Jam {
     var invites by mutableStateOf(listOf<JamInvite>())
         private set
     /** A short message to show (joined, ended…), cleared once shown. */
-    var notice by mutableStateOf<String?>(null)
+    var notice: String?
+        get() = com.lordxhobo.drift.playback.Notice.text
+        set(v) {
+            com.lordxhobo.drift.playback.Notice.text = v
+        }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }

@@ -1,6 +1,7 @@
 package com.lordxhobo.drift.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Handler
@@ -10,9 +11,13 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -36,6 +41,7 @@ class PlaybackService : MediaSessionService() {
     private val main = Handler(Looper.getMainLooper())
     /** Songs that already got a fresh link after failing (one retry each). */
     private val retried = mutableSetOf<String>()
+    private var skips: SkipMonitor? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -57,7 +63,16 @@ class PlaybackService : MediaSessionService() {
         }
         // Downloads first, then the song cache, then YouTube.
         val sources = SongDataSource.Factory(SongDataSource.cacheFactory(resolving), resolving)
-        val player = ExoPlayer.Builder(this)
+        // The sound passes a level meter on its way out (for skipping silence).
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setAudioProcessors(arrayOf<AudioProcessor>(LevelMeter()))
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+        }
+        val player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(sources))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
@@ -72,6 +87,8 @@ class PlaybackService : MediaSessionService() {
                 mediaItem?.mediaId?.let { retried.remove(it) }
             }
         })
+
+        skips = SkipMonitor(player).also { it.start() }
 
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -126,6 +143,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        skips?.stop()
         session?.run {
             player.release()
             release()

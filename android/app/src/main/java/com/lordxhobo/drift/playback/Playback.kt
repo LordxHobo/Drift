@@ -132,7 +132,7 @@ object Playback {
 
     // MARK: Songs ⇄ player items
 
-    private const val TRACK_KEY = "drift.track"
+    const val TRACK_KEY = "drift.track"
 
     private fun itemOf(t: Track): MediaItem {
         val extras = Bundle().apply { putString(TRACK_KEY, Library.json.encodeToString(t)) }
