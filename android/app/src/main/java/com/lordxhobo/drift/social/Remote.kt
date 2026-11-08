@@ -19,7 +19,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-/** This phone, as your other devices see it (the same ID for its listening history). */
+/** This phone, as your other devices see it (the same ID names its listening history). */
 object ThisDevice {
     lateinit var id: String
         private set
@@ -28,9 +28,12 @@ object ThisDevice {
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences("drift.settings", Context.MODE_PRIVATE)
-        id = prefs.getString("deviceId", null) ?: UUID.randomUUID().toString().uppercase().also {
-            prefs.edit().putString("deviceId", it).apply()
-        }
+        // Short, letters and digits only (like the iPhone's "ios…" and the computer's "pc…"): it's part of
+        // field names in the synced library, where a "-" isn't allowed.
+        id = prefs.getString("deviceId", null)?.takeIf { it.all { c -> c.isLetterOrDigit() } }
+            ?: ("and" + UUID.randomUUID().toString().replace("-", "").take(8).lowercase()).also {
+                prefs.edit().putString("deviceId", it).apply()
+            }
         // The name you gave the phone (Settings → About phone), else its model.
         name = (if (Build.VERSION.SDK_INT >= 25) runCatching { Settings.Global.getString(context.contentResolver, "device_name") }.getOrNull() else null)
             ?.takeIf { it.isNotBlank() }

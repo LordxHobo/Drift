@@ -12,6 +12,7 @@ import com.lordxhobo.drift.social.Jam
 import com.lordxhobo.drift.social.Remote
 import com.lordxhobo.drift.social.ThisDevice
 import com.lordxhobo.drift.social.LibrarySync
+import com.lordxhobo.drift.social.PlayHistory
 import com.lordxhobo.drift.social.PlaylistSharing
 import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.youtube.HttpDownloader
@@ -31,6 +32,7 @@ class DriftApp : Application(), ImageLoaderFactory {
         CollabSync.init(this)
         Social.init(this)
         ThisDevice.init(this)
+        PlayHistory.init(this)
         Remote.init()
         Jam.init()
     }

@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 37,
+      "date": "2026-11-08",
+      "title": "Listening stats",
+      "notes": [
+        {
+          "text": "Listening stats: your top songs and artists, and how many minutes you listen, over 4 weeks, 6 months, this year or all time. Tap the chart button on Home, or Settings → Listening stats.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "With a Drift profile, it adds up what you play on your iPhone and computer too.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 36,
       "date": "2026-11-08",
       "title": "Listen Together",

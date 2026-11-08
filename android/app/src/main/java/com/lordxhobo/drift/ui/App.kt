@@ -100,6 +100,7 @@ private fun Page(screen: Screen) {
         is Screen.Import -> ImportScreen(screen.link)
         is Screen.Folder -> FolderScreen(screen.id)
         Screen.Friends -> FriendsScreen()
+        Screen.Stats -> StatsScreen()
         is Screen.User -> UserScreen(screen.id)
         is Screen.SharedList -> SharedListScreen(screen.ownerId, screen.id, screen.name, screen.ownerName)
     }

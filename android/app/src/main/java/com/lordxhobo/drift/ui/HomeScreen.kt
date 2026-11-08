@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -56,6 +57,10 @@ fun HomeScreen() {
                     greeting, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.weight(1f),
                 )
+                Box(
+                    Modifier.clip(CircleShape).clickable { Nav.open(Screen.Stats) }.padding(8.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.BarChart, contentDescription = "Listening stats", tint = DriftColors.text) }
                 FriendsButton()
                 // Your picture opens Settings (profile, linking, and the rest).
                 Box(

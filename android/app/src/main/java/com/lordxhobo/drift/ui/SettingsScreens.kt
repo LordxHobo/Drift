@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
@@ -216,6 +217,12 @@ fun SettingsScreen() {
                     icon = Icons.Filled.ArrowCircleDown,
                     iconColor = Color(0xFF2DD4BF),
                 ) { Nav.open(Screen.Storage) }
+                SettingsRow(
+                    "Listening stats",
+                    "Your top songs and artists, and how much you listen",
+                    icon = Icons.Filled.BarChart,
+                    iconColor = Color(0xFFF59E0B),
+                ) { Nav.open(Screen.Stats) }
             }
         }
         item { Spacer(Modifier.size(18.dp)) }
