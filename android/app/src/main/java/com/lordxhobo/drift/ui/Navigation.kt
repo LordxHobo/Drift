@@ -24,6 +24,9 @@ sealed interface Screen {
     /** Spotify import; `link` when one was shared into Drift. */
     data class Import(val link: String? = null) : Screen
     data class Folder(val id: String) : Screen
+    data object Friends : Screen
+    data class User(val id: String) : Screen
+    data class SharedList(val ownerId: String, val id: String, val name: String, val ownerName: String) : Screen
 }
 
 enum class Tab { HOME, SEARCH, LIBRARY }

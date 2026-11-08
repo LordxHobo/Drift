@@ -185,6 +185,32 @@ object Firestore {
         return out
     }
 
+    /** A structured query (where, orderBy, limit) over a collection. Returns the documents found. */
+    fun query(structured: JsonObject, parent: String = ""): List<JsonObject> {
+        val url = if (parent.isEmpty()) "${FirebaseConfig.DOCUMENTS_URL}:runQuery" else "${FirebaseConfig.DOCUMENTS_URL}/$parent:runQuery"
+        val body = buildJsonObject { put("structuredQuery", structured) }.toString()
+        val (status, text) = Net.send("POST", url, body, token = FirebaseAuth.token())
+        if (status != 200) throw SocialException.of(status, text)
+        return (Json.parseToJsonElement(text) as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.get("document") as? JsonObject }
+    }
+
+    /** Several documents at once; missing ones are left out. */
+    fun batchGet(paths: List<String>): List<JsonObject> {
+        if (paths.isEmpty()) return emptyList()
+        val out = mutableListOf<JsonObject>()
+        for (chunk in paths.chunked(100)) {
+            val body = buildJsonObject {
+                put("documents", JsonArray(chunk.map { JsonPrimitive("${FirebaseConfig.DOCUMENTS_PATH}/$it") }))
+            }.toString()
+            val (status, text) = Net.send("POST", "${FirebaseConfig.DOCUMENTS_URL}:batchGet", body, token = FirebaseAuth.token())
+            if (status != 200) throw SocialException.of(status, text)
+            (Json.parseToJsonElement(text) as? JsonArray).orEmpty().forEach { r ->
+                ((r as? JsonObject)?.get("found") as? JsonObject)?.let { out.add(it) }
+            }
+        }
+        return out
+    }
+
     fun delete(path: String) {
         val (status, body) = Net.send("DELETE", url(path), token = FirebaseAuth.token())
         if (status != 200 && status != 404) throw SocialException.of(status, body)
@@ -201,7 +227,27 @@ object FV {
     fun strings(v: List<String>): JsonElement =
         buildJsonObject { put("arrayValue", buildJsonObject { put("values", JsonArray(v.map { s(it) })) }) }
 
+    fun d(v: Double): JsonElement = buildJsonObject { put("doubleValue", v) }
+    fun map(fields: Map<String, JsonElement>): JsonElement =
+        buildJsonObject { put("mapValue", buildJsonObject { put("fields", JsonObject(fields)) }) }
+    fun array(values: List<JsonElement>): JsonElement =
+        buildJsonObject { put("arrayValue", buildJsonObject { put("values", JsonArray(values)) }) }
+
     fun str(e: JsonElement?): String? = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+
+    /** A map field's own fields. */
+    fun mapFields(f: JsonObject?, k: String): JsonObject? = ((value(f, k, "mapValue") as? JsonObject)?.get("fields")) as? JsonObject
+
+    /** An array field's values (each a typed value). */
+    fun values(f: JsonObject?, k: String): List<JsonObject> =
+        ((value(f, k, "arrayValue") as? JsonObject)?.get("values") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+
+    /** A number that may be stored as an integer or a double. */
+    fun number(f: JsonObject?, k: String): Double? =
+        str(value(f, k, "doubleValue"))?.toDoubleOrNull() ?: str(value(f, k, "integerValue"))?.toDoubleOrNull()
+
+    /** The document's ID (last part of its name). */
+    fun id(doc: JsonObject): String = str(doc["name"])?.substringAfterLast('/') ?: ""
 
     fun fields(doc: JsonObject?): JsonObject? = doc?.get("fields") as? JsonObject
 

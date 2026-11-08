@@ -1,5 +1,6 @@
 package com.lordxhobo.drift.ui
 
+import com.lordxhobo.drift.social.Friends
 import com.lordxhobo.drift.AppUpdates
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.LinearProgressIndicator
@@ -532,6 +533,14 @@ private fun EditProfile(me: UserProfile) {
             SettingsRow("Link a computer", "Use your library in Drift on a computer", icon = Icons.Filled.Computer, iconColor = Color(0xFFF5A524)) {
                 Nav.open(Screen.LinkComputer)
             }
+        }
+        Spacer(Modifier.size(18.dp))
+        Group {
+            ToggleRow(
+                "Share what I'm listening to",
+                "Friends see the song you're playing on your profile.",
+                me.shareActivity,
+            ) { on -> scope.launch { error = runCatching { Friends.setShareActivity(on) }.exceptionOrNull()?.message } }
         }
         Spacer(Modifier.size(18.dp))
         Group {

@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.lordxhobo.drift.data.Track
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -33,7 +34,25 @@ data class UserProfile(
     val avatar64: String? = null,
     val following: List<String> = emptyList(),
     val shareActivity: Boolean = true,
+    /** What they play(ed) last, and whether it's playing (seconds since 1970 for `updatedAt`). */
+    val nowPlaying: Track? = null,
+    val playing: Boolean = false,
+    val updatedAt: Long? = null,
+    /** Their Listen Together session, if they're in one. */
+    val jam: String? = null,
+    /** Whether friends can invite them to listen together (null = yes). */
+    val allowInvites: Boolean? = null,
 ) {
+    /** Playing right now (a recent update while playing), not just the last thing played. */
+    val listeningNow: Boolean
+        get() {
+            val t = nowPlaying ?: return false
+            val at = updatedAt ?: return false
+            if (!playing) return false
+            val allowance = (t.duration ?: 0.0) + 15 * 60
+            return System.currentTimeMillis() / 1000.0 - at < allowance
+        }
+
     /** What to call them: their display name, or their username until they set one. */
     val name: String get() = displayName?.trim()?.takeIf { it.isNotEmpty() } ?: username
 
@@ -44,6 +63,9 @@ data class UserProfile(
             val name = FV.str(doc["name"]) ?: return null
             val f = FV.fields(doc)
             val username = FV.string(f, "username") ?: return null
+            val np = FV.mapFields(f, "nowPlaying")
+            val npId = FV.string(np, "id")
+            val npTitle = FV.string(np, "title")
             return UserProfile(
                 id = name.substringAfterLast('/'),
                 username = username,
@@ -51,6 +73,14 @@ data class UserProfile(
                 avatar64 = FV.data(f, "avatar")?.let { Base64.encodeToString(it, Base64.NO_WRAP) },
                 following = FV.stringArray(f, "following"),
                 shareActivity = FV.bool(f, "shareActivity") ?: true,
+                nowPlaying = if (npId != null && npTitle != null) Track(
+                    id = npId, title = npTitle, artist = FV.string(np, "artist") ?: "",
+                    duration = FV.number(np, "duration"), artworkURL = FV.string(np, "artwork"),
+                ) else null,
+                playing = FV.bool(f, "playing") ?: false,
+                updatedAt = FV.long(f, "updatedAt"),
+                jam = FV.string(f, "jam")?.takeIf { it.isNotEmpty() },
+                allowInvites = FV.bool(f, "allowInvites"),
             )
         }
     }
@@ -101,7 +131,10 @@ object Social {
             me = profile
             status = if (profile != null) Status.READY else Status.NO_PROFILE
             cache()
-            if (profile != null) LibrarySync.syncNow()
+            if (profile != null) {
+                LibrarySync.syncNow()
+                PlaylistSharing.profileReady()
+            }
         } catch (e: SessionLostException) {
             FirebaseAuth.forget()
             LibrarySync.forget()
@@ -111,6 +144,25 @@ object Social {
         } catch (e: Exception) {
             // Offline: keep the cached profile; try again next launch.
             if (me == null) status = Status.NO_PROFILE
+        }
+    }
+
+    /** Reloads your profile (following list, settings) from the server. */
+    suspend fun reload(): UserProfile? {
+        val uid = me?.id ?: return null
+        val doc = withContext(Dispatchers.IO) { runCatching { Firestore.get("users/$uid") }.getOrNull() } ?: return me
+        UserProfile.from(doc)?.let {
+            me = it
+            cache()
+        }
+        return me
+    }
+
+    /** Your profile changed here (following, settings): keep the copy in step. */
+    fun updateMe(change: (UserProfile) -> UserProfile) {
+        me?.let {
+            me = change(it)
+            cache()
         }
     }
 
@@ -172,6 +224,7 @@ object Social {
             status = Status.READY
             cache()
             LibrarySync.syncNow()
+            PlaylistSharing.profileReady()
         }
     }
 
@@ -222,8 +275,9 @@ object Social {
 
     suspend fun deleteProfile() = withContext(Dispatchers.IO) {
         val p = me ?: return@withContext
-        // The synced library too, so a new profile starts empty.
+        // The synced library and shown playlists too, so a new profile starts empty.
         LibrarySync.removeAll(p.id)
+        PlaylistSharing.removeAll(p.id)
         Firestore.delete("users/${p.id}")
         runCatching { Firestore.delete("usernames/${p.username}") }
         FirebaseAuth.forget()

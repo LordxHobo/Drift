@@ -56,6 +56,7 @@ fun HomeScreen() {
                     greeting, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.weight(1f),
                 )
+                FriendsButton()
                 // Your picture opens Settings (profile, linking, and the rest).
                 Box(
                     Modifier.clip(CircleShape).clickable { Nav.open(Screen.Settings) }.padding(4.dp)

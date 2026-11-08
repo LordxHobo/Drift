@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 33,
+      "date": "2026-11-08",
+      "title": "Friends",
+      "notes": [
+        {
+          "text": "Follow friends and see what they're listening to: tap the people button at the top of Home, and search by name or username.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Friends' profiles show what they're playing and the playlists they share. Play them, or save a copy.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Friends see what you're listening to, and your playlists (all but private ones). Turn sharing off in Settings → Profile & devices.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 32,
       "date": "2026-11-08",
       "title": "Updates from inside Drift",

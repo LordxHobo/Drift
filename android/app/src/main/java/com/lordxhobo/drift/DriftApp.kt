@@ -6,7 +6,9 @@ import coil.ImageLoaderFactory
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.playback.Downloads
 import com.lordxhobo.drift.playback.SongCache
+import com.lordxhobo.drift.social.Friends
 import com.lordxhobo.drift.social.LibrarySync
+import com.lordxhobo.drift.social.PlaylistSharing
 import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.youtube.HttpDownloader
 import org.schabi.newpipe.extractor.NewPipe
@@ -20,6 +22,8 @@ class DriftApp : Application(), ImageLoaderFactory {
         SongCache.init(this)
         Downloads.init(this)
         LibrarySync.init(this)
+        PlaylistSharing.init()
+        Friends.init()
         Social.init(this)
     }
 

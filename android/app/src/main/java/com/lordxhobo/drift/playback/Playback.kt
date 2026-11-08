@@ -95,6 +95,10 @@ object Playback {
         }
     }
 
+    /** Called when the song or play/pause changes (friends' activity, stats, other devices listen). */
+    val onChange = mutableListOf<(Track?, Boolean) -> Unit>()
+    private var lastNotified: Pair<String?, Boolean>? = null
+
     private fun readAll(p: Player) {
         val list = (0 until p.mediaItemCount).mapNotNull { trackOf(p.getMediaItemAt(it)) }
         if (list.map { it.id } != queue.map { it.id }) queue = list
@@ -109,6 +113,11 @@ object Playback {
         error = p.playerError?.let { "Couldn't play this song. Check your connection." }
         val d = p.duration
         duration = if (d > 0) d else ((current?.duration ?: 0.0) * 1000).toLong()
+        val now = current?.id to isPlaying
+        if (now != lastNotified) {
+            lastNotified = now
+            onChange.forEach { it(current, isPlaying) }
+        }
     }
 
     // MARK: Songs ⇄ player items
