@@ -48,6 +48,8 @@ import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.data.Track
 import com.lordxhobo.drift.playback.Playback
 import com.lordxhobo.drift.social.Friends
+import com.lordxhobo.drift.social.Jam
+import androidx.compose.material.icons.filled.Groups
 import com.lordxhobo.drift.social.SharedPlaylist
 import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.social.UserProfile
@@ -221,6 +223,29 @@ fun UserScreen(id: String) {
                             colors = ButtonDefaults.buttonColors(containerColor = DriftColors.accent, contentColor = DriftColors.onAccent),
                         ) { Text("Follow", fontWeight = FontWeight.Bold) }
                     }
+                }
+            }
+        }
+        val jam = u.jam
+        if (jam != null && u.id != Social.me?.id && Social.me != null) {
+            item {
+                val inIt = Jam.state?.code == jam
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(10.dp)).background(DriftColors.surface)
+                        .clickable(enabled = !working && !inIt) {
+                            working = true
+                            scope.launch { runCatching { joinFriend(u) }.onFailure { Jam.notice = it.message ?: "Couldn't join." }; working = false }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Groups, contentDescription = null, tint = DriftColors.accent)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        if (inIt) "You're listening together" else "${u.name} is in a Listen Together session",
+                        color = DriftColors.text, fontSize = 14.sp, modifier = Modifier.weight(1f),
+                    )
+                    if (!inIt) Text("Join", color = DriftColors.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

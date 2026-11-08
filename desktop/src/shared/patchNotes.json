@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 36,
+      "date": "2026-11-08",
+      "title": "Listen Together",
+      "notes": [
+        {
+          "text": "Listen to the same songs at the same time as friends, each on your own device. In the player, tap Together to start a session or join one, with a code or from a friend.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Invite friends from a song's menu: Invite to listen together. Their invites pop up here too, and you can turn them off in Settings → Friends can invite me.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 35,
       "date": "2026-11-08",
       "title": "Play on your other devices",

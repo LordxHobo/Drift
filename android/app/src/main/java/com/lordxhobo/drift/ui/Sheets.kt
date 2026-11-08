@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
@@ -58,6 +59,7 @@ import com.lordxhobo.drift.data.ArtistRef
 import com.lordxhobo.drift.data.Library
 import com.lordxhobo.drift.data.Track
 import com.lordxhobo.drift.playback.Playback
+import com.lordxhobo.drift.social.Social
 import com.lordxhobo.drift.youtube.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +105,7 @@ private fun SongMenu(t: Track) {
         MenuItem("Play next", Icons.AutoMirrored.Filled.PlaylistPlay) { Playback.playNext(t); close() }
         MenuItem("Add to queue", Icons.AutoMirrored.Filled.QueueMusic) { Playback.addToQueue(t); close() }
         MenuItem("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd) { close(); UiState.addToPlaylist = t }
+        if (Social.me != null) MenuItem("Invite to listen together", Icons.Filled.Groups) { close(); UiState.inviteTrack = t }
         UiState.menuPlace?.let { (playlistId, index) ->
             MenuItem("Remove from this playlist", Icons.Filled.Delete) { Library.remove(index, playlistId); close() }
         }

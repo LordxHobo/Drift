@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lordxhobo.drift.data.formatTime
 import com.lordxhobo.drift.playback.Playback
+import com.lordxhobo.drift.social.Jam
 
 /** The full player: artwork, the song, the position, the controls and the queue. */
 @Composable
@@ -167,7 +169,7 @@ fun NowPlayingScreen() {
                 Text(it, color = DriftColors.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
             }
 
-            // Bottom row: Lyrics, devices and the queue.
+            // Bottom row: Lyrics, devices, Listen Together and the queue.
             Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(
                     Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showLyrics = true }.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -182,6 +184,15 @@ fun NowPlayingScreen() {
                 ) {
                     Icon(Icons.Filled.Devices, contentDescription = null, tint = DriftColors.text)
                     Text("Devices", color = DriftColors.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showJam = true }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    val jam = Jam.state
+                    val tint = if (jam != null) DriftColors.accent else DriftColors.text
+                    Icon(Icons.Filled.Groups, contentDescription = null, tint = tint)
+                    Text(if (jam != null) "Together · ${jam.members.size}" else "Together", color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Column(
                     Modifier.clip(RoundedCornerShape(8.dp)).clickable { UiState.showQueue = true }.padding(horizontal = 12.dp, vertical = 6.dp),

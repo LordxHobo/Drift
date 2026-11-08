@@ -541,6 +541,11 @@ private fun EditProfile(me: UserProfile) {
                 "Friends see the song you're playing on your profile.",
                 me.shareActivity,
             ) { on -> scope.launch { error = runCatching { Friends.setShareActivity(on) }.exceptionOrNull()?.message } }
+            ToggleRow(
+                "Friends can invite me",
+                "Friends you follow back can invite you to listen together.",
+                me.allowInvites != false,
+            ) { on -> scope.launch { error = runCatching { Friends.setAllowInvites(on) }.exceptionOrNull()?.message } }
         }
         Spacer(Modifier.size(18.dp))
         Group {

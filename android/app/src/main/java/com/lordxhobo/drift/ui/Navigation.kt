@@ -81,6 +81,10 @@ object UiState {
     var showLyrics by mutableStateOf(false)
     /** "Play on": this phone or another device. */
     var showDevices by mutableStateOf(false)
+    /** Listen Together (start, join, who's in it). */
+    var showJam by mutableStateOf(false)
+    /** The song friends are being invited to listen to. */
+    var inviteTrack by mutableStateOf<Track?>(null)
 
     fun openMenu(t: Track, place: Pair<String, Int>? = null) {
         menuPlace = place

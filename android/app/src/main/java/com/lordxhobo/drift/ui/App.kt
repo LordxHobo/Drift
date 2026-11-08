@@ -72,6 +72,10 @@ fun DriftRoot() {
         }
         SongSheets()
         if (UiState.showDevices) DevicesSheet()
+        if (UiState.showJam) JamSheet()
+        InviteSheet()
+        IncomingInvite()
+        NoticeBar()
         // The battery tip waits until What's new is closed.
         if (!WhatsNewOnLaunch()) BatteryTip()
         if (UiState.showAllNotes) AllNotes { UiState.showAllNotes = false }

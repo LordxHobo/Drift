@@ -91,9 +91,19 @@ object Playback {
         override fun onEvents(player: Player, events: Player.Events) = readAll(player)
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) naturalEndAt = System.currentTimeMillis()
             mediaItem?.let { trackOf(it) }?.let { Library.addRecent(it) }
         }
     }
+
+    /** Listen Together: jumps made here (to tell the others), and when a song last ended by itself. */
+    var seeks = 0
+        private set
+    var naturalEndAt = 0L
+        private set
+
+    /** Where the song is right now (ms), not just as of the last read. */
+    fun exactPosition(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: position
 
     /** Called when the song or play/pause changes (friends' activity, stats, other devices listen). */
     val onChange = mutableListOf<(Track?, Boolean) -> Unit>()
@@ -184,10 +194,14 @@ object Playback {
 
     /** The previous song, or back to the start of this one after the first few seconds. */
     fun previous() = withController { c ->
-        if (c.currentPosition > 3000 || !c.hasPreviousMediaItem()) c.seekTo(0) else c.seekToPreviousMediaItem()
+        if (c.currentPosition > 3000 || !c.hasPreviousMediaItem()) {
+            seeks++
+            c.seekTo(0)
+        } else c.seekToPreviousMediaItem()
     }
 
     fun seek(ms: Long) = withController { c ->
+        seeks++
         c.seekTo(ms)
         position = ms
     }
@@ -271,6 +285,36 @@ object Playback {
             c.setMediaItems(original.map { itemOf(it) }, 0, (positionSeconds * 1000).toLong().coerceAtLeast(0))
             c.prepare()
             if (playing) c.play() else c.pause()
+        }
+    }
+
+    /**
+     * Listen Together: plays what the session plays (the song, what's after it, where, and whether).
+     * Only changes what differs, so the music keeps going smoothly.
+     */
+    fun jamPlay(track: Track, upcoming: List<Track>, positionSeconds: Double, playing: Boolean) {
+        if (current?.id != track.id) {
+            transferIn(track, upcoming, positionSeconds, playing, "Listening together")
+            return
+        }
+        withController { c ->
+            if (upNext.map { it.id } != upcoming.map { it.id }) {
+                val from = c.currentMediaItemIndex + 1
+                if (from < c.mediaItemCount) c.removeMediaItems(from, c.mediaItemCount)
+                c.addMediaItems(upcoming.map { itemOf(it) })
+                original = listOf(track) + upcoming
+            }
+            // Paused, or just paused/started: the exact spot. While playing on: only bigger gaps (no stutter).
+            val tolerance = if (!playing || playing != c.isPlaying) 0.3 else 1.5
+            val target = (positionSeconds * 1000).toLong().coerceAtLeast(0)
+            if (kotlin.math.abs(c.currentPosition - target) > tolerance * 1000) {
+                c.seekTo(target)
+                position = target
+            }
+            if (playing && !c.isPlaying) {
+                if (c.playbackState == Player.STATE_IDLE) c.prepare()
+                c.play()
+            } else if (!playing && c.isPlaying) c.pause()
         }
     }
 
