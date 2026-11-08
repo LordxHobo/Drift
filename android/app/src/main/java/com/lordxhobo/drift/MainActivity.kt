@@ -72,9 +72,10 @@ class MainActivity : ComponentActivity() {
         handleOpen(intent)
     }
 
-    /** A Spotify link shared to Drift (from Spotify's share menu): open the import with it. */
+    /** A link shared to Drift or opened with it: a Spotify one opens the import, a YouTube one plays. */
     private fun handleShare(intent: Intent?) {
-        val text = when (intent?.action) {
+        if (intent == null) return
+        val text = when (intent.action) {
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             // A YouTube or YouTube Music link opened with Drift.
             Intent.ACTION_VIEW -> intent.dataString
