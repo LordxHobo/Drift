@@ -345,7 +345,7 @@ fun PlaylistScreen(id: String?) {
             TrackRow(
                 t,
                 onClick = { Playback.play(tracks, i, name) },
-                onMenu = { UiState.openMenu(t, p?.let { it.id to i }) },
+                onMenu = { UiState.openMenu(t, (p?.id ?: Library.LIKED) to i) },
             )
         }
         if (tracks.isEmpty()) {

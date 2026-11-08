@@ -89,6 +89,9 @@ object UiState {
     /** The song friends are being invited to listen to. */
     var inviteTrack by mutableStateOf<Track?>(null)
 
+    /** "Replace with another version": the song, and its list and place in it. */
+    var replacing by mutableStateOf<Triple<Track, String, Int>?>(null)
+
     fun openMenu(t: Track, place: Pair<String, Int>? = null) {
         menuPlace = place
         menuTrack = t

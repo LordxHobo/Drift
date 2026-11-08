@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 40,
+      "date": "2026-11-08",
+      "title": "Pick the right version",
+      "notes": [
+        {
+          "text": "A song in a playlist or Liked songs plays the wrong version (a live take, a music video)? In its menu, tap Replace with another version and pick the right one from YouTube Music or YouTube. You can listen to each first.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "The swap syncs to your iPhone and computer, like the ones made there show up here.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 39,
       "date": "2026-11-08",
       "title": "Equalizer",

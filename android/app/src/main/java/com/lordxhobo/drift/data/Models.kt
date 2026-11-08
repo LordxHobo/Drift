@@ -23,6 +23,8 @@ data class Track(
     val upload: Boolean? = null,
     /** In a shared playlist: who added it (their profile ID). */
     val addedBy: String? = null,
+    /** Picked by hand ("Replace with another version"): played exactly as chosen. */
+    val chosen: Boolean? = null,
 ) {
     /** Artwork at roughly the asked size (YouTube Music pictures can be asked for any size). */
     fun artwork(size: Int): String {

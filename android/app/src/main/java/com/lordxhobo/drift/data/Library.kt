@@ -78,6 +78,9 @@ object Library {
 
     // Liked songs
 
+    /** Liked songs, where a song's place is given as a list ("Replace with another version"). */
+    const val LIKED = "liked"
+
     fun isLiked(id: String): Boolean = liked.any { it.id == id }
 
     fun toggleLike(t: Track) {
@@ -126,6 +129,23 @@ object Library {
 
     fun remove(index: Int, from: String) {
         update(from) { p -> p.copy(tracks = p.tracks.filterIndexed { i, _ -> i != index }) }
+    }
+
+    /**
+     * Swaps a song for another version in the same spot (`from` is a playlist, or "liked"); if the new one
+     * is already in the list, the old one just goes. Keeps when it was added.
+     */
+    fun replace(from: String, index: Int, oldId: String, t: Track) {
+        fun swap(list: List<Track>): List<Track> {
+            val i = if (list.getOrNull(index)?.id == oldId) index else list.indexOfFirst { it.id == oldId }
+            if (i < 0) return list
+            if (list.withIndex().any { (j, x) -> j != i && x.id == t.id }) return list.filterIndexed { j, _ -> j != i }
+            return list.toMutableList().also { it[i] = t.copy(added = list[i].added, addedBy = list[i].addedBy) }
+        }
+        if (from == LIKED) {
+            liked = swap(liked)
+            save()
+        } else update(from) { p -> p.copy(tracks = swap(p.tracks)) }
     }
 
     /** An album saved to the library (kept as a playlist). */

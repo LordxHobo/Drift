@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
@@ -70,6 +71,7 @@ import kotlinx.coroutines.launch
 fun SongSheets() {
     UiState.menuTrack?.let { SongMenu(it) }
     UiState.addToPlaylist?.let { AddToPlaylistSheet(it) }
+    UiState.replacing?.let { (t, list, index) -> ReplaceSheet(t, list, index) }
     UiState.newPlaylist?.let { req ->
         NameDialog(
             title = "New playlist",
@@ -107,7 +109,8 @@ private fun SongMenu(t: Track) {
         MenuItem("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd) { close(); UiState.addToPlaylist = t }
         if (Social.me != null) MenuItem("Invite to listen together", Icons.Filled.Groups) { close(); UiState.inviteTrack = t }
         UiState.menuPlace?.let { (playlistId, index) ->
-            MenuItem("Remove from this playlist", Icons.Filled.Delete) { Library.remove(index, playlistId); close() }
+            MenuItem("Replace with another version", Icons.Filled.SwapHoriz) { close(); UiState.replacing = Triple(t, playlistId, index) }
+            if (playlistId != Library.LIKED) MenuItem("Remove from this playlist", Icons.Filled.Delete) { Library.remove(index, playlistId); close() }
         }
         // Single songs; songs in a downloaded playlist come and go with it.
         when {
