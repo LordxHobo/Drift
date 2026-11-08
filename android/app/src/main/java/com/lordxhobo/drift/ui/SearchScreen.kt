@@ -1,5 +1,7 @@
 package com.lordxhobo.drift.ui
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
@@ -59,6 +61,10 @@ internal object SearchState {
     var query by mutableStateOf("")
     /** Searching podcasts (shows, channels, episodes) instead of music. */
     var podcasts by mutableStateOf(false)
+    /** Searching all of YouTube (fan uploads, live sets, mixes, pasted links) instead of YouTube Music. */
+    var youtube by mutableStateOf(false)
+    var tubeResults by mutableStateOf<TubeResults?>(null)
+    var loadingMore by mutableStateOf(false)
     var podResults by mutableStateOf<PodResults?>(null)
     var results by mutableStateOf<YouTube.SearchResults?>(null)
     var searching by mutableStateOf(false)
@@ -68,6 +74,9 @@ internal object SearchState {
 
 /** Podcast search results: shows (from their feed or YouTube) and episodes, or a pasted video. */
 data class PodResults(val query: String, val shows: List<PodcastChannel>, val episodes: List<Track>, val video: Track? = null, val error: String? = null)
+
+/** YouTube search results: songs, and the next page's token. */
+data class TubeResults(val query: String, val tracks: List<Track>, val more: String?, val error: String? = null)
 
 /** Podcasts: Apple's directory and YouTube side by side; a pasted feed link is that show, a YouTube link that video. */
 private suspend fun searchPodcasts(q: String): PodResults = withContext(Dispatchers.IO) {
@@ -115,9 +124,29 @@ fun SearchScreen() {
             SearchState.searching = false
         }
     }
+    // YouTube: searches a moment after you stop typing.
+    LaunchedEffect(SearchState.query, SearchState.youtube, SearchState.podcasts) {
+        if (!SearchState.youtube || SearchState.podcasts) return@LaunchedEffect
+        val q = SearchState.query.trim()
+        if (q.isEmpty()) {
+            SearchState.tubeResults = null
+            return@LaunchedEffect
+        }
+        if (q == SearchState.tubeResults?.query) return@LaunchedEffect
+        delay(450)
+        SearchState.searching = true
+        try {
+            SearchState.tubeResults = withContext(Dispatchers.IO) {
+                runCatching { YouTubePodcasts.searchYouTube(q) }
+                    .fold({ TubeResults(q, it.first, it.second) }, { TubeResults(q, emptyList(), null, "Search failed. Check your connection and try again.") })
+            }
+        } finally {
+            SearchState.searching = false
+        }
+    }
     // Music: searches a moment after you stop typing.
-    LaunchedEffect(SearchState.query, SearchState.podcasts) {
-        if (SearchState.podcasts) return@LaunchedEffect
+    LaunchedEffect(SearchState.query, SearchState.podcasts, SearchState.youtube) {
+        if (SearchState.podcasts || SearchState.youtube) return@LaunchedEffect
         val q = SearchState.query.trim()
         if (q.isEmpty()) {
             SearchState.results = null
@@ -152,7 +181,15 @@ fun SearchScreen() {
         TextField(
             value = SearchState.query,
             onValueChange = { SearchState.query = it },
-            placeholder = { Text(if (SearchState.podcasts) "Shows, channels, or paste a link" else "What do you want to listen to?") },
+            placeholder = {
+                Text(
+                    when {
+                        SearchState.podcasts -> "Shows, channels, or paste a link"
+                        SearchState.youtube -> "Search YouTube or paste a link"
+                        else -> "What do you want to listen to?"
+                    },
+                )
+            },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
                 if (SearchState.query.isNotEmpty()) {
@@ -181,17 +218,22 @@ fun SearchScreen() {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         )
         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((label, pods) in listOf("Music" to false, "Podcasts" to true)) {
-                val on = SearchState.podcasts == pods
+            for ((label, mode) in listOf("YouTube Music" to 0, "YouTube" to 1, "Podcasts" to 2)) {
+                val current = if (SearchState.podcasts) 2 else if (SearchState.youtube) 1 else 0
+                val on = current == mode
                 Text(
                     label, color = if (on) DriftColors.onAccent else DriftColors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(RoundedCornerShape(17.dp)).background(if (on) DriftColors.accent else DriftColors.surface2)
-                        .clickable { SearchState.podcasts = pods }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        .clickable { SearchState.podcasts = mode == 2; SearchState.youtube = mode == 1 }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
         }
         if (SearchState.podcasts) {
             PodcastResults()
+            return@Column
+        }
+        if (SearchState.youtube) {
+            YouTubeResults()
             return@Column
         }
 
@@ -261,6 +303,49 @@ private fun PodcastResults() {
             if (r.episodes.isNotEmpty()) {
                 item { SectionTitle("Episodes") }
                 items(r.episodes.size, key = { "e-" + r.episodes[it].id }) { EpisodeRow(r.episodes[it]) }
+            }
+        }
+    }
+}
+
+/** All of YouTube: fan uploads, live sets and mixes that aren't on YouTube Music (only the audio plays). */
+@Composable
+private fun YouTubeResults() {
+    val scope = rememberCoroutineScope()
+    val r = SearchState.tubeResults
+    when {
+        SearchState.searching && (r == null || r.query != SearchState.query.trim()) -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = DriftColors.accent)
+        }
+        r == null || SearchState.query.isBlank() -> EmptyText("Search all of YouTube for anything that isn't on YouTube Music (fan uploads, live sets, mixes), or paste a YouTube link. Only the audio plays.")
+        r.error != null -> EmptyText(r.error)
+        r.tracks.isEmpty() -> EmptyText("Nothing on YouTube for \u201C${r.query}\u201D.")
+        else -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            item { SectionTitle("On YouTube") }
+            items(r.tracks.size, key = { "y-" + r.tracks[it].id }) { i ->
+                val t = r.tracks[i]
+                TrackRow(t, onClick = { Playback.play(r.tracks, i, "YouTube") }, onMenu = { UiState.openMenu(t) })
+            }
+            r.more?.let { token ->
+                item {
+                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        if (SearchState.loadingMore) CircularProgressIndicator(color = DriftColors.accent)
+                        else Text(
+                            "Load more", color = DriftColors.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                                SearchState.loadingMore = true
+                                scope.launch {
+                                    val next = withContext(Dispatchers.IO) { runCatching { YouTubePodcasts.searchYouTube(r.query, token) }.getOrNull() }
+                                    val cur = SearchState.tubeResults
+                                    if (next != null && cur?.query == r.query) {
+                                        SearchState.tubeResults = cur.copy(tracks = (cur.tracks + next.first).distinctBy { it.id }, more = next.second)
+                                    }
+                                    SearchState.loadingMore = false
+                                }
+                            }.padding(12.dp),
+                        )
+                    }
+                }
             }
         }
     }

@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 47,
+      "date": "2026-11-08",
+      "title": "All of YouTube, and shared links",
+      "notes": [
+        {
+          "text": "Search has a YouTube mode, like the iPhone and computer: fan uploads, live sets and mixes that aren't on YouTube Music, or paste a YouTube link to play it.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Share a song from YouTube or YouTube Music to Drift (Share → Drift) and it plays here. To have YouTube links open in Drift, turn it on in Android's Settings → Apps → Drift → Open by default.",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 46,
       "date": "2026-11-08",
       "title": "Download episodes",

@@ -409,6 +409,24 @@ object YouTubePodcasts {
         return fresh + dated
     }
 
+    // MARK: All of YouTube, for music (fan uploads, live sets, mixes)
+
+    /** A video as a song: just its audio, as uploaded. */
+    private fun asSong(t: Track, upload: Boolean = true) = Track(
+        id = t.id, title = t.title, artist = t.artist, duration = t.duration,
+        artworkURL = "https://i.ytimg.com/vi/${t.id}/hqdefault.jpg", upload = if (upload) true else null,
+    )
+
+    /** Videos on YouTube as songs (about 20 a page; `more` is the next page's token). A pasted link: that video. Blocking. */
+    fun searchYouTube(query: String, more: String? = null): Pair<List<Track>, String?> {
+        if (more == null && videoId(query) != null) return listOfNotNull(songFromLink(query)) to null
+        val json = post("search", if (more != null) fields("continuation" to more) else fields("query" to query))
+        return collectEpisodes(json).map { asSong(it) } to nextToken(json)
+    }
+
+    /** A shared or pasted YouTube / YouTube Music link, as a song. Blocking. */
+    fun songFromLink(link: String): Track? = videoFromLink(link)?.let { asSong(it, upload = !link.contains("music.youtube")) }
+
     // MARK: Links
 
     /** A YouTube link (watch, youtu.be, shorts, live, embed, music.youtube) → video ID. */

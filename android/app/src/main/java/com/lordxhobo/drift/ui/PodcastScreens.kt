@@ -190,7 +190,7 @@ fun PodcastsScreen() {
                         "Go to Search, switch to Podcasts and look up a show or channel (or paste a show's feed link). Tap Follow and new episodes show up here. You can also paste a YouTube link there to play any video.",
                         color = DriftColors.muted, fontSize = 14.sp, lineHeight = 20.sp,
                     )
-                    OutlinedButton(onClick = { SearchState.podcasts = true; Nav.tab = Tab.SEARCH }) { Text("Search podcasts", color = DriftColors.text, fontWeight = FontWeight.Bold) }
+                    OutlinedButton(onClick = { SearchState.podcasts = true; SearchState.youtube = false; Nav.tab = Tab.SEARCH }) { Text("Search podcasts", color = DriftColors.text, fontWeight = FontWeight.Bold) }
                 }
             }
         }

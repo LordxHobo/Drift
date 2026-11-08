@@ -8,6 +8,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.lordxhobo.drift.podcasts.YouTubePodcasts
+import com.lordxhobo.drift.social.Jam
 import com.lordxhobo.drift.ui.UiState
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -70,13 +74,32 @@ class MainActivity : ComponentActivity() {
 
     /** A Spotify link shared to Drift (from Spotify's share menu): open the import with it. */
     private fun handleShare(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND) return
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
-        if (!text.contains("spotify", ignoreCase = true) && !text.contains("spoti.fi")) return
-        Nav.tab = Tab.LIBRARY
-        Nav.open(Screen.Import(text))
+        val text = when (intent?.action) {
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+            // A YouTube or YouTube Music link opened with Drift.
+            Intent.ACTION_VIEW -> intent.dataString
+            else -> null
+        } ?: return
         // Handled once (not again after the screen turns).
         intent.action = null
+        if (text.contains("spotify", ignoreCase = true) || text.contains("spoti.fi")) {
+            Nav.tab = Tab.LIBRARY
+            Nav.open(Screen.Import(text))
+            return
+        }
+        // A song shared from YouTube or YouTube Music (or a friend's Drift): play it.
+        if (YouTubePodcasts.videoId(text) != null) {
+            Jam.notice = "Opening the link…"
+            lifecycleScope.launch {
+                val t = withContext(Dispatchers.IO) { runCatching { YouTubePodcasts.songFromLink(text) }.getOrNull() }
+                if (t == null) {
+                    Jam.notice = "Couldn't open that link."
+                    return@launch
+                }
+                Playback.play(listOf(t), 0, "Shared link")
+                UiState.showPlayer = true
+            }
+        }
     }
 
     override fun onPause() {
