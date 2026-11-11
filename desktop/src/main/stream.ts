@@ -3,6 +3,7 @@ import { app, net } from 'electron'
 import { join } from 'node:path'
 import { createReadStream, existsSync, openSync, closeSync, readFileSync, statSync, writeSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
+import { request as httpsRequest } from 'node:https'
 import vm from 'node:vm'
 import { Innertube, Platform, UniversalCache } from 'youtubei.js'
 import type { Types } from 'youtubei.js'
@@ -73,38 +74,74 @@ class NotPlayable extends Error {}
  * unscrambling step. This is the phone's quick path, unchanged.
  */
 /**
- * How Drift talks to YouTube. Chromium's network stack (Electron's net.fetch) first: to YouTube it looks
- * like a real browser, where Node's own fetch can get "confirm you're not a bot" while the phones on the
- * same network play fine. Node's fetch stays as the second try.
+ * A request over IPv4 only. YouTube flags addresses one at a time: when it blocks a computer's IPv6
+ * address ("confirm you're not a bot", in the browser too), its IPv4 address often still works.
  */
-const transports: Array<{ name: string; fetch: typeof fetch }> = [
-  { name: 'chromium', fetch: (input, init) => net.fetch(input as string, init as RequestInit) },
-  { name: 'node', fetch: (input, init) => fetch(input, init) }
+async function ipv4Fetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const req = input instanceof Request ? input : undefined
+  const url = new URL(req ? req.url : String(input))
+  const headers = Object.fromEntries(new Headers(init?.headers ?? req?.headers).entries())
+  const body = init?.body != null ? init.body : req && req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined
+  const signal = init?.signal ?? req?.signal ?? undefined
+  return new Promise<Response>((resolve, reject) => {
+    const r = httpsRequest(url, { method: init?.method ?? req?.method ?? 'GET', headers, family: 4, signal }, (res) => {
+      const out = new Headers()
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v != null) out.set(k, Array.isArray(v) ? v.join(', ') : String(v))
+      }
+      const status = res.statusCode ?? 502
+      const empty = status === 204 || status === 304 || init?.method === 'HEAD'
+      resolve(new Response(empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status, headers: out }))
+    })
+    r.on('error', reject)
+    if (body != null) r.write(typeof body === 'string' ? body : Buffer.from(body as ArrayBuffer))
+    r.end()
+  })
+}
+
+/**
+ * How Drift talks to YouTube, tried in order until one isn't refused:
+ * - Chromium's network stack (Electron's net.fetch), which looks like a real browser to YouTube;
+ * - Node's own fetch;
+ * - IPv4 only, for when YouTube has blocked the computer's IPv6 address. The audio links YouTube gives
+ *   only work from the address that asked, so the songs then load over IPv4 too (`Resolved.ipv4`).
+ */
+const transports: Array<{ name: string; fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response> }> = [
+  { name: 'chromium', fetch: (input, init) => net.fetch(input instanceof URL ? input.toString() : input, init) },
+  { name: 'node', fetch: (input, init) => fetch(input, init) },
+  { name: 'ipv4', fetch: ipv4Fetch }
 ]
 /** The one that worked last (tried first next time). */
 let transport = 0
+/** IPv4 is what works right now (the fallback clients use it too). */
+const onIPv4 = (): boolean => transports[transport].name === 'ipv4'
 
 const isBotCheck = (message: string): boolean => /not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(message)
 
 async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise<Resolved> {
-  let lastError: unknown
+  let firstError: unknown
   for (let n = 0; n < transports.length; n++) {
     const i = (transport + n) % transports.length
     try {
       const r = await quickResolveWith(transports[i].fetch, id, want)
       transport = i
-      return r
+      return { ...r, ipv4: transports[i].name === 'ipv4' }
     } catch (e) {
-      lastError = e
-      // Only worth another way when YouTube didn't like how it was asked.
+      // YouTube's answer is the one worth showing (not, say, "no IPv4 connection").
+      if (firstError === undefined || (e instanceof NotPlayable && !(firstError instanceof NotPlayable))) firstError = e
+      // Only worth another way when YouTube didn't like how it was asked (or couldn't be reached).
       const message = e instanceof Error ? e.message : String(e)
       if (e instanceof NotPlayable && !isBotCheck(message)) throw e
     }
   }
-  throw lastError
+  throw firstError
 }
 
-async function quickResolveWith(send: typeof fetch, id: string, want: Want): Promise<Resolved> {
+async function quickResolveWith(
+  send: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
+  id: string,
+  want: Want
+): Promise<Resolved> {
   loadVisitor()
   const client: Record<string, unknown> = {
     clientName: 'VISIONOS',
@@ -225,8 +262,8 @@ function innertube(): Promise<Innertube> {
   yt ??= Innertube.create({
     retrieve_player: true,
     visitor_data: visitorData,
-    // Through Chromium's network stack too (see transports).
-    fetch: (input, init) => net.fetch(input instanceof URL ? input.toString() : (input as string | Request) as any, init as RequestInit),
+    // The same way as the quick path (see transports).
+    fetch: (input, init) => (onIPv4() ? ipv4Fetch(input, init) : net.fetch(input instanceof URL ? input.toString() : input, init)),
     cache: new UniversalCache(true, join(app.getPath('userData'), 'youtube-cache'))
   }).catch((e) => {
     yt = undefined
@@ -243,6 +280,8 @@ interface Resolved {
   duration?: number
   client: string
   expires: number
+  /** Got over IPv4: the audio has to be fetched over IPv4 too. */
+  ipv4?: boolean
 }
 
 /** Fallback clients, tried in order after the quick path. */
@@ -294,6 +333,7 @@ async function resolveFresh(key: string): Promise<Resolved> {
       if (!url) continue
       const expire = Number(new URL(url).searchParams.get('expire') ?? 0) * 1000
       return {
+        ipv4: onIPv4(),
         url,
         mime: format.mime_type.split(';')[0] || (want.kind === 'video' ? 'video/mp4' : 'audio/mp4'),
         bitrate: format.bitrate,
@@ -628,7 +668,8 @@ function parseRange(h: string | null): [number, number | undefined] {
 async function fetchPiece(id: string, start: number, end: number): Promise<Response> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await resolve(id, attempt > 0)
-    const res = await net.fetch(r.url, { headers: { Range: `bytes=${start}-${end}` } }).catch(() => undefined)
+    const init = { headers: { Range: `bytes=${start}-${end}` } }
+    const res = await (r.ipv4 ? ipv4Fetch(r.url, init) : net.fetch(r.url, init)).catch(() => undefined)
     if (res && (res.status === 206 || res.status === 200)) return res
     // The link expired or was refused: get a fresh one and try once more.
     resolved.delete(id)

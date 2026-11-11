@@ -2,6 +2,19 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 55,
+      "date": "2026-11-11",
+      "title": "Plays when YouTube blocks your address",
+      "notes": [
+        {
+          "text": "When YouTube blocks your computer's IPv6 address (\"confirm you're not a bot\", even in your browser), Drift now switches to your IPv4 address for YouTube by itself, so songs and episodes keep playing. Everything else on your computer stays as it is.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 54,
       "date": "2026-11-11",
       "title": "Fewer bot checks",
