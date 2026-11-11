@@ -72,7 +72,39 @@ class NotPlayable extends Error {}
  * YouTube's visionOS app gets direct audio links in one request, without the web page or the
  * unscrambling step. This is the phone's quick path, unchanged.
  */
+/**
+ * How Drift talks to YouTube. Chromium's network stack (Electron's net.fetch) first: to YouTube it looks
+ * like a real browser, where Node's own fetch can get "confirm you're not a bot" while the phones on the
+ * same network play fine. Node's fetch stays as the second try.
+ */
+const transports: Array<{ name: string; fetch: typeof fetch }> = [
+  { name: 'chromium', fetch: (input, init) => net.fetch(input as string, init as RequestInit) },
+  { name: 'node', fetch: (input, init) => fetch(input, init) }
+]
+/** The one that worked last (tried first next time). */
+let transport = 0
+
+const isBotCheck = (message: string): boolean => /not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(message)
+
 async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise<Resolved> {
+  let lastError: unknown
+  for (let n = 0; n < transports.length; n++) {
+    const i = (transport + n) % transports.length
+    try {
+      const r = await quickResolveWith(transports[i].fetch, id, want)
+      transport = i
+      return r
+    } catch (e) {
+      lastError = e
+      // Only worth another way when YouTube didn't like how it was asked.
+      const message = e instanceof Error ? e.message : String(e)
+      if (e instanceof NotPlayable && !isBotCheck(message)) throw e
+    }
+  }
+  throw lastError
+}
+
+async function quickResolveWith(send: typeof fetch, id: string, want: Want): Promise<Resolved> {
   loadVisitor()
   const client: Record<string, unknown> = {
     clientName: 'VISIONOS',
@@ -100,7 +132,7 @@ async function quickResolve(id: string, want: Want = { kind: 'audio' }): Promise
   const timer = setTimeout(() => controller.abort(), 6000)
   let json: any
   try {
-    const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    const res = await send('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
       method: 'POST',
       headers,
       body: JSON.stringify({ context: { client }, videoId: id, contentCheckOk: true, racyCheckOk: true }),
@@ -193,6 +225,8 @@ function innertube(): Promise<Innertube> {
   yt ??= Innertube.create({
     retrieve_player: true,
     visitor_data: visitorData,
+    // Through Chromium's network stack too (see transports).
+    fetch: (input, init) => net.fetch(input instanceof URL ? input.toString() : (input as string | Request) as any, init as RequestInit),
     cache: new UniversalCache(true, join(app.getPath('userData'), 'youtube-cache'))
   }).catch((e) => {
     yt = undefined
@@ -218,7 +252,7 @@ const resolved = new Map<string, Resolved>()
 const resolving = new Map<string, Promise<Resolved>>()
 
 function friendly(message: string): string {
-  if (/not a bot|sign in to confirm/i.test(message)) {
+  if (isBotCheck(message)) {
     return 'YouTube asked to confirm this isn’t a bot. Wait a minute and try again.'
   }
   return message

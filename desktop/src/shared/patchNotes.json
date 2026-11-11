@@ -2,6 +2,19 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 54,
+      "date": "2026-11-11",
+      "title": "Fewer bot checks",
+      "notes": [
+        {
+          "text": "When YouTube said \"confirm you're not a bot\" on the computer while your phone played fine, songs wouldn't load at all. Drift now asks YouTube the way a browser does, and tries another way if YouTube still refuses.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 53,
       "date": "2026-11-11",
       "title": "Icons and Alt+F4",
