@@ -10,6 +10,14 @@ files:
   - build/icon-music-white.png
   - package.json
 asar: true
+# Windows shortcuts can only show .ico files outside the app archive: these follow the chosen style.
+extraResources:
+  - from: build/icon.ico
+    to: icons/icon.ico
+  - from: build/icon-music.ico
+    to: icons/icon-music.ico
+  - from: build/icon-music-white.ico
+    to: icons/icon-music-white.ico
 win:
   target:
     - target: nsis

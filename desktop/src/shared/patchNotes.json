@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 53,
+      "date": "2026-11-11",
+      "title": "Icons and Alt+F4",
+      "notes": [
+        {
+          "text": "Picking the Apple Music style (or its pink or white icon) now changes Drift's icon: the window, the tray, and on Windows the desktop, Start menu and pinned taskbar shortcuts too.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Alt+F4 now quits Drift completely. Closing the window with the ✕ still keeps it playing in the tray (if that's turned on in Settings).",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 52,
       "date": "2026-11-09",
       "title": "Episode video fixes",

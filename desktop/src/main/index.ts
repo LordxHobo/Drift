@@ -80,6 +80,14 @@ function createWindow(): void {
     }
   })
 
+  // Alt+F4 quits Drift completely (closing the window otherwise keeps it playing in the tray).
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.alt && !input.control && !input.shift && !input.meta && input.key === 'F4') {
+      quitting = true
+      app.quit()
+    }
+  })
+
   // Links open in the browser, never inside Drift.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) void shell.openExternal(url)
