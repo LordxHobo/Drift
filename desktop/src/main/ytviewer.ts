@@ -2,7 +2,9 @@
 // session on this computer only), and reading the signed-in account's feeds: new videos from
 // subscriptions, history, Watch later, liked videos, subscribed channels, search and a video's details.
 // Videos themselves play through the normal player (as episodes with their picture).
-import { BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Session } from 'electron'
 import { Innertube } from 'youtubei.js'
 import type { YTAccount, YTChannel, YTFeedName, YTVideo, YTVideoDetails } from '@shared/types'
@@ -60,7 +62,8 @@ export function signIn(parent?: BrowserWindow): Promise<boolean> {
       height: 720,
       title: 'Sign in to YouTube',
       autoHideMenuBar: true,
-      webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true }
+      // contextIsolation off (only here, only Google's pages): so the passkey blocker runs in the page itself.
+      webPreferences: { partition: PARTITION, contextIsolation: false, nodeIntegration: false, sandbox: true, preload: passkeyBlocker() }
     })
     win.webContents.setUserAgent(BROWSER_UA)
     let done = false
@@ -82,34 +85,34 @@ export function signIn(parent?: BrowserWindow): Promise<boolean> {
     win.on('closed', () => {
       void cookieHeader().then((c) => finish(!!c))
     })
-    void hidePasskeys(win).finally(() => {
-      if (!win.isDestroyed()) void win.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=' + encodeURIComponent('https://www.youtube.com/'))
-    })
+    void win.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=' + encodeURIComponent('https://www.youtube.com/'))
   })
 }
 
 /**
  * Google's sign-in page asks for a passkey the moment it opens, and with no passkey screen of its own
- * this window would get Windows' "insert your security key" box. Hiding passkey support makes Google
- * go straight to email and password (2-step verification still works as usual).
+ * the window would get Windows' "insert your security key" box. A tiny script, run in the page before
+ * Google's own, hides passkey support so Google goes straight to email and password (2-step
+ * verification still works as usual). Written next to Drift's settings so it needs no packaging.
  */
-async function hidePasskeys(win: BrowserWindow): Promise<void> {
-  const source = `(() => {
-    try { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }) } catch (e) {}
-    try {
-      const refuse = () => Promise.reject(new DOMException('Not supported here', 'NotSupportedError'))
-      if (navigator.credentials) {
-        Object.defineProperty(navigator.credentials, 'get', { value: refuse, configurable: true })
-        Object.defineProperty(navigator.credentials, 'create', { value: refuse, configurable: true })
-      }
-    } catch (e) {}
-  })()`
+function passkeyBlocker(): string | undefined {
   try {
-    win.webContents.debugger.attach('1.3')
-    await win.webContents.debugger.sendCommand('Page.enable')
-    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source })
+    const file = join(app.getPath('userData'), 'youtube-signin-preload.js')
+    const source = `(() => {
+  try { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }) } catch (e) {}
+  try {
+    const refuse = () => Promise.reject(new DOMException('Not supported here', 'NotSupportedError'))
+    if (navigator.credentials) {
+      Object.defineProperty(navigator.credentials, 'get', { value: refuse, configurable: true })
+      Object.defineProperty(navigator.credentials, 'create', { value: refuse, configurable: true })
+    }
+  } catch (e) {}
+})()
+`
+    writeFileSync(file, source)
+    return file
   } catch {
-    // couldn't: Google may still ask for a passkey (cancel it, then "Try another way")
+    return undefined
   }
 }
 

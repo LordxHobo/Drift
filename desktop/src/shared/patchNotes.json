@@ -2,6 +2,19 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 58,
+      "date": "2026-11-12",
+      "title": "Signing in to YouTube, fixed",
+      "notes": [
+        {
+          "text": "The YouTube sign-in window no longer stays blank: Google's page opens right away and goes straight to your email and password.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 57,
       "date": "2026-11-12",
       "title": "Signing in to YouTube",
