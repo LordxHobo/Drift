@@ -118,6 +118,7 @@ object Playback {
         withController { c ->
             c.stop()
             c.clearMediaItems()
+            choosePlayer(null)
         }
         original = emptyList()
     }
@@ -203,10 +204,17 @@ object Playback {
         queue = list
         index = at
         withController { c ->
+            choosePlayer(list[at])
             c.setMediaItems(list.map { itemOf(it) }, at, 0)
             c.prepare()
             c.play()
         }
+    }
+
+    /** Videos from the YouTube viewer play in YouTube's own player (like ProTube); everything else in ExoPlayer. */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun choosePlayer(first: Track?) {
+        PlaybackService.instance?.use(first != null && PlaybackService.showsPicture(first))
     }
 
     fun playNext(t: Track) {
@@ -336,6 +344,7 @@ object Playback {
         this.queue = original
         index = 0
         withController { c ->
+            choosePlayer(track)
             c.setMediaItems(original.map { itemOf(it) }, 0, (positionSeconds * 1000).toLong().coerceAtLeast(0))
             c.prepare()
             if (playing) c.play() else c.pause()

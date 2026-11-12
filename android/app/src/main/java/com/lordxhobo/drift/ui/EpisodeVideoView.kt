@@ -47,6 +47,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lordxhobo.drift.data.Track
 import com.lordxhobo.drift.playback.EpisodeVideo
+import com.lordxhobo.drift.playback.Playback
+import com.lordxhobo.drift.playback.YTWeb
 
 /** The episode's video in the player: its picture and a spinner until it's ready, plus quality and full screen. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -76,10 +78,19 @@ fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScr
         Modifier.size(width, height).clip(RoundedCornerShape(if (fullScreen) 0.dp else 10.dp)).background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
-        if (!EpisodeVideo.ready) {
+        // Videos from the YouTube viewer: YouTube's own player shows it.
+        val onWeb = YTWeb.active && Playback.current?.id == t.id
+        val ready = if (onWeb) YTWeb.ready && !YTWeb.ad else EpisodeVideo.ready
+        if (onWeb) YTWebVideo() else AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
+        if (onWeb && YTWeb.ad) {
             Box(Modifier.alpha(0.55f)) { Picture(t.artwork(800), t.id, width, height, RoundedCornerShape(0.dp)) }
-            if (EpisodeVideo.unavailable) {
+            Text(
+                "Skipping ad", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        } else if (!ready) {
+            Box(Modifier.alpha(0.55f)) { Picture(t.artwork(800), t.id, width, height, RoundedCornerShape(0.dp)) }
+            if (EpisodeVideo.unavailable && !onWeb) {
                 Text(
                     "No video for this episode", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 10.dp, vertical = 6.dp),
@@ -89,8 +100,9 @@ fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScr
             }
         }
         Row(Modifier.align(Alignment.TopEnd).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            val h = EpisodeVideo.height
-            if (h != null && EpisodeVideo.heights.size > 1) {
+            val h = if (onWeb) YTWeb.height else EpisodeVideo.height
+            val offered = if (onWeb) YTWeb.heights.ifEmpty { listOf(360, 480, 720, 1080) } else EpisodeVideo.heights
+            if (h != null && offered.size > 1) {
                 var open by remember { mutableStateOf(false) }
                 Box {
                     Text(
@@ -99,10 +111,10 @@ fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScr
                             .clickable { open = true }.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        for (q in EpisodeVideo.heights.reversed()) {
+                        for (q in offered.reversed()) {
                             DropdownMenuItem(
                                 text = { Text("${q}p" + if (q == h) "  ✓" else "") },
-                                onClick = { open = false; EpisodeVideo.choose(q) },
+                                onClick = { open = false; if (onWeb) YTWeb.choose(q) else EpisodeVideo.choose(q) },
                             )
                         }
                     }
@@ -155,4 +167,31 @@ private fun Context.findActivity(): Activity? {
         c = c.baseContext
     }
     return null
+}
+
+/** YouTube's own player's picture (the watch page, the floating video and full screen take it in turns). */
+@Composable
+fun YTWebVideo(modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { ctx ->
+            android.widget.FrameLayout(ctx).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: android.view.View) = YTWeb.show(this@apply)
+                    override fun onViewDetachedFromWindow(v: android.view.View) = YTWeb.hide(this@apply)
+                })
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+        onRelease = { YTWeb.hide(it) },
+    )
+}
+
+/** Where YouTube's player waits, still playing, while no page shows it (out of sight, always there). */
+@Composable
+fun YTWebParking() {
+    AndroidView(
+        factory = { ctx -> android.widget.FrameLayout(ctx).also { YTWeb.parking = it } },
+        modifier = Modifier.size(2.dp).alpha(0.01f),
+    )
 }

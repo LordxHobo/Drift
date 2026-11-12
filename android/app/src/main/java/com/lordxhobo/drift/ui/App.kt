@@ -68,6 +68,7 @@ fun DriftRoot() {
             if (Remote.target != null) RemoteMiniBar() else if (Playback.current != null && !com.lordxhobo.drift.youtube.YTViewer.on) MiniPlayer()
             TabBar()
         }
+        YTWebParking()
         YTPictureInPicture()
         AnimatedVisibility(
             visible = UiState.showPlayer,

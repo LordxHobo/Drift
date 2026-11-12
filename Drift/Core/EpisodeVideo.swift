@@ -95,6 +95,11 @@ final class EpisodeVideo {
     /// Loads the right video (or none) for what's playing and the settings.
     func update() {
         refreshLayers()
+        // YouTube's own player shows it (YTWebVideo): nothing to load here.
+        if Player.shared.webActive {
+            stop()
+            return
+        }
         // The player's own stream has the picture (the YouTube viewer): nothing more to load.
         if Player.shared.showsPicture {
             stop()
@@ -226,17 +231,31 @@ struct EpisodeVideoView: View {
     var fullScreen = false
     var onFullScreen: (() -> Void)?
     private var video: EpisodeVideo { .shared }
+    private var web: YTWebPlayer { .shared }
+    /// Played by YouTube's own player (the YouTube viewer).
+    private var onWeb: Bool { Player.shared.webActive && Player.shared.current?.id == track.id }
+    private var ready: Bool { onWeb ? web.ready && !web.ad : video.ready }
 
     var body: some View {
         ZStack {
             Color.black
-            if fullScreen || video.ready {
+            if onWeb {
+                YTWebVideo()
+            } else if fullScreen || video.ready {
                 EpisodeVideoLayer()
             }
-            if !video.ready {
+            if onWeb && web.ad {
                 EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 800), width: width, corner: 0)
                     .opacity(0.55)
-                if video.unavailable {
+                Label("Skipping ad", systemImage: "forward.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.6), in: Capsule())
+            } else if !ready {
+                EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 800), width: width, corner: 0)
+                    .opacity(0.55)
+                if video.unavailable && !onWeb {
                     Text("No video for this episode")
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 10)
@@ -251,7 +270,7 @@ struct EpisodeVideoView: View {
         .clipShape(RoundedRectangle(cornerRadius: fullScreen ? 0 : 8, style: .continuous))
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 6) {
-                qualityMenu
+                if onWeb { webQualityMenu } else { qualityMenu }
                 if let onFullScreen {
                     Button(action: onFullScreen) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -310,6 +329,29 @@ struct EpisodeVideoView: View {
 
     static func label(_ h: Int) -> String {
         h >= 2160 ? "4K" : "\(h)p"
+    }
+
+    /// YouTube's player: the qualities it offers (Auto picks for the connection).
+    private var webQualityMenu: some View {
+        let offered = web.heights.isEmpty ? [1080, 720, 480, 360] : web.heights
+        return Menu {
+            Section("Quality") {
+                ForEach(offered.reversed(), id: \.self) { h in
+                    Button {
+                        web.choose(h)
+                    } label: {
+                        if h == web.height { Label(Self.label(h), systemImage: "checkmark") } else { Text(Self.label(h)) }
+                    }
+                }
+            }
+        } label: {
+            Text(web.height.map(Self.label) ?? "Auto")
+                .font(.system(size: 12, weight: .bold))
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(.black.opacity(0.55), in: Capsule())
+        }
+        .accessibilityLabel("Video quality")
     }
 }
 

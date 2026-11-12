@@ -79,6 +79,12 @@ object EpisodeVideo {
         update()
     }
 
+    /** A quality picked in YouTube's own player (the YouTube viewer), kept for next time. */
+    fun rememberQuality(h: Int) {
+        quality = h
+        prefs.edit().putInt("videoQuality", h).apply()
+    }
+
     /** Pick a quality (the highest choice means "always the sharpest"). */
     fun choose(h: Int) {
         quality = if (h == heights.lastOrNull()) 4320 else h
@@ -115,6 +121,14 @@ object EpisodeVideo {
     /** Loads the right video (or none) for what's playing and the settings. */
     fun update() {
         val t = Playback.current
+        // YouTube's own player plays it (YTWeb): nothing to load here.
+        if (YTWeb.active && t?.watch == true) {
+            stopOwn()
+            Playback.showPicture(null)
+            key = ""
+            ready = false
+            return
+        }
         // A YouTube viewer video: the player shows its own picture (sound and picture as one, like YouTube's app).
         if (::app.isInitialized && t != null && PlaybackService.showsPicture(t)) {
             stopOwn()

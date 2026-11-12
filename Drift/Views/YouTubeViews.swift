@@ -279,10 +279,7 @@ private struct VideoListView<Header: View>: View {
         .refreshable { await reload() }
         .navigationTitle(title)
         .background(Theme.bg)
-        // The first few get their stream ready now, so they start the moment they're tapped.
-        .task(id: videos?.first?.id) {
-            for v in (videos ?? []).prefix(4) where !v.live { _ = await StreamResolver.shared.watchStream(v.id) }
-        }
+
     }
 }
 
@@ -515,7 +512,7 @@ struct YTWatchView: View {
                     Text(details?.title ?? t?.title ?? "").font(.system(size: 18, weight: .heavy))
                     if t != nil, !player.qualityLabel.isEmpty {
                         // How it's playing (one stream with the picture, or the sound with the picture beside it).
-                        Text(player.showsPicture ? "Playing as one stream" : "Playing: \(player.qualityLabel) + separate picture")
+                        Text(player.webActive ? "Playing in YouTube's player" : player.showsPicture ? "Playing as one stream" : "Playing: \(player.qualityLabel) + separate picture")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.muted)
                     }
@@ -910,6 +907,9 @@ struct YTPictureInPicture: View {
     @State private var pinch: CGFloat = 1
     private var player: Player { .shared }
     private var ui: UIState { .shared }
+    private var pictureReady: Bool {
+        player.webActive ? YTWebPlayer.shared.ready && !YTWebPlayer.shared.ad : EpisodeVideo.shared.ready
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -931,12 +931,12 @@ struct YTPictureInPicture: View {
                 Color.black
                 PiPVideo()
                 // Until the picture is there: its thumbnail and a spinner (not a black box).
-                if !EpisodeVideo.shared.ready || player.isLoading {
+                if !pictureReady || player.isLoading {
                     AsyncImage(url: track.artworkURL) { $0.resizable().scaledToFill() } placeholder: { Color.black }
                         .opacity(0.6)
                         .allowsHitTesting(false)
                 }
-                if player.isBuffering || player.isLoading || !EpisodeVideo.shared.ready { ProgressView().tint(.white) }
+                if player.isBuffering || player.isLoading || !pictureReady { ProgressView().tint(.white) }
             }
             .frame(width: w, height: h)
             .contentShape(Rectangle())
@@ -1012,8 +1012,12 @@ struct YTPictureInPicture: View {
 /// The picture itself (the same player as the watch page, nothing loads twice).
 private struct PiPVideo: View {
     var body: some View {
-        EpisodeVideoLayer()
-            .onAppear { EpisodeVideo.shared.attach() }
-            .onDisappear { EpisodeVideo.shared.detach() }
+        if Player.shared.webActive {
+            YTWebVideo()
+        } else {
+            EpisodeVideoLayer()
+                .onAppear { EpisodeVideo.shared.attach() }
+                .onDisappear { EpisodeVideo.shared.detach() }
+        }
     }
 }

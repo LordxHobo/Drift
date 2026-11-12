@@ -895,7 +895,8 @@ fun YTPictureInPicture() {
         ) {
             PiPVideo()
             // Until the picture is there: its thumbnail (not a black box).
-            if (Playback.isBuffering || !EpisodeVideo.ready) {
+            val web = com.lordxhobo.drift.playback.YTWeb
+            if (Playback.isBuffering || !(if (web.active) web.ready && !web.ad else EpisodeVideo.ready)) {
                 AsyncImage(model = t.artwork(480), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(0.6f))
             }
             if (Playback.isBuffering) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.align(Alignment.Center).size(26.dp))
@@ -936,6 +937,10 @@ fun YTPictureInPicture() {
 /** The picture itself (the same player as the watch page, so nothing loads twice). */
 @Composable
 private fun PiPVideo() {
+    if (com.lordxhobo.drift.playback.YTWeb.active) {
+        YTWebVideo()
+        return
+    }
     val context = LocalContext.current
     val view = remember { android.view.TextureView(context) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle

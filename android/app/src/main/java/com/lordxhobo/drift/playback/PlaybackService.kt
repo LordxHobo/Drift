@@ -46,6 +46,10 @@ class PlaybackService : MediaLibraryService() {
     /** Songs that already got a fresh link after failing (one retry each). */
     private val retried = mutableSetOf<String>()
     private var skips: SkipMonitor? = null
+    private var webSkips: SkipMonitor? = null
+    private lateinit var exo: ExoPlayer
+    /** YouTube's own player, for videos from the YouTube viewer (the session switches to it). */
+    private var web: WebVideoPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -107,6 +111,10 @@ class PlaybackService : MediaLibraryService() {
         })
 
         skips = SkipMonitor(player).also { it.start() }
+        exo = player
+        YTWeb.init(this)
+        web = WebVideoPlayer().also { webSkips = SkipMonitor(it).also { m -> m.start() } }
+        instance = this
 
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -153,7 +161,23 @@ class PlaybackService : MediaLibraryService() {
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) stopSelf()
     }
 
+    /** Plays the next list with YouTube's own player (videos from the viewer) or ExoPlayer (everything else). */
+    fun use(webPlayer: Boolean) {
+        val s = session ?: return
+        val target: Player = (if (webPlayer) web else exo) ?: return
+        if (s.player === target) return
+        val old = s.player
+        old.stop()
+        old.clearMediaItems()
+        s.player = target
+        YTWeb.active = webPlayer
+    }
+
     override fun onDestroy() {
+        instance = null
+        YTWeb.active = false
+        webSkips?.stop()
+        web?.release()
         skips?.stop()
         session?.run {
             player.release()
@@ -165,6 +189,10 @@ class PlaybackService : MediaLibraryService() {
 
     companion object {
         const val SCHEME = "drift"
+
+        /** The running service (the app and the service share one process). */
+        var instance: PlaybackService? = null
+            private set
 
         /** Played with its picture in the player itself (not downloaded: those play their saved sound). */
         fun showsPicture(t: com.lordxhobo.drift.data.Track): Boolean = t.watch == true && Downloads.file(t.id) == null

@@ -2,6 +2,29 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 64,
+      "date": "2026-11-12",
+      "title": "Videos play like ProTube",
+      "notes": [
+        {
+          "text": "Videos in the YouTube viewer now play in YouTube's own player, signed in as you, like ProTube: they start right away and pick their quality by themselves. Drift's controls, timeline, SponsorBlock, queue and floating video all stay.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Ad blocking: ads are taken out before the player sees them, ad servers are blocked, and any ad that still shows is skipped (you'll see \"Skipping ad\").",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The quality menu on a video lists what YouTube offers for it, and remembers your pick.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "If YouTube's player can't play a video, Drift plays it its own way instead.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 63,
       "date": "2026-11-12",
       "title": "Videos start faster",
