@@ -15,6 +15,9 @@ const PARTITION = 'persist:youtube'
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
 
+/** What the sign-in window says it is: Firefox (Google accepts it; it doesn't accept app windows). */
+const SIGNIN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0'
+
 const ytSession = (): Session => session.fromPartition(PARTITION)
 
 let tube: Promise<Innertube> | undefined
@@ -65,7 +68,14 @@ export function signIn(parent?: BrowserWindow): Promise<boolean> {
       // contextIsolation off (only here, only Google's pages): so the passkey blocker runs in the page itself.
       webPreferences: { partition: PARTITION, contextIsolation: false, nodeIntegration: false, sandbox: true, preload: passkeyBlocker() }
     })
-    win.webContents.setUserAgent(BROWSER_UA)
+    // Google refuses sign-in in windows it recognises as an app built on Chromium. Signing in as Firefox
+    // (with the Chromium-only hints hidden, here and in the page) gets the normal sign-in.
+    win.webContents.setUserAgent(SIGNIN_UA)
+    ytSession().webRequest.onBeforeSendHeaders({ urls: ['https://*.google.com/*', 'https://*.youtube.com/*', 'https://*.gstatic.com/*'] }, (details, callback) => {
+      const headers: Record<string, string> = { ...details.requestHeaders, 'User-Agent': SIGNIN_UA }
+      for (const k of Object.keys(headers)) if (/^sec-ch-ua/i.test(k)) delete headers[k]
+      callback({ requestHeaders: headers })
+    })
     let done = false
     const finish = (ok: boolean): void => {
       if (done) return
@@ -99,6 +109,9 @@ function passkeyBlocker(): string | undefined {
   try {
     const file = join(app.getPath('userData'), 'youtube-signin-preload.js')
     const source = `(() => {
+  // Firefox has none of Chromium's hints.
+  try { Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true }) } catch (e) {}
+  try { Object.defineProperty(window, 'chrome', { value: undefined, configurable: true }) } catch (e) {}
   try { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }) } catch (e) {}
   try {
     const refuse = () => Promise.reject(new DOMException('Not supported here', 'NotSupportedError'))

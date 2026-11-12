@@ -2,6 +2,19 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 59,
+      "date": "2026-11-12",
+      "title": "Signing in to YouTube",
+      "notes": [
+        {
+          "text": "Google no longer says \"This browser or app may not be secure\" when you sign in to the YouTube viewer.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 58,
       "date": "2026-11-12",
       "title": "Signing in to YouTube, fixed",
