@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -347,6 +348,16 @@ private fun Spinning() {
 @Composable
 private fun VideoList(title: String?, loaded: Loaded<List<YTVideo>>, empty: String, back: Boolean, header: @Composable () -> Unit = {}, filter: (YTVideo) -> Boolean = { true }) {
     val list = loaded.value?.filter(filter)
+    // The first few get their sound and picture found now, so they start the moment they're tapped.
+    LaunchedEffect(list?.firstOrNull()?.id) {
+        val first = list.orEmpty().filter { !it.live }.take(4)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            first.forEach { v ->
+                runCatching { com.lordxhobo.drift.youtube.YouTube.audio(v.id) }
+                runCatching { com.lordxhobo.drift.youtube.YouTube.video(v.id, EpisodeVideo.quality) }
+            }
+        }
+    }
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         if (back) item { BackBar(title ?: "") } else if (title != null) item { PageTitle(title) }
         item { header() }
@@ -883,6 +894,10 @@ fun YTPictureInPicture() {
                 .pointerInput(t.id) { detectTapGestures(onTap = { Nav.open(Screen.YTWatch(t.id)) }) },
         ) {
             PiPVideo()
+            // Until the picture is there: its thumbnail (not a black box).
+            if (Playback.isBuffering || !EpisodeVideo.ready) {
+                AsyncImage(model = t.artwork(480), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(0.6f))
+            }
             if (Playback.isBuffering) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.align(Alignment.Center).size(26.dp))
             // Drag the corner to make it bigger or smaller.
             Box(

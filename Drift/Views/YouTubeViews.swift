@@ -279,6 +279,10 @@ private struct VideoListView<Header: View>: View {
         .refreshable { await reload() }
         .navigationTitle(title)
         .background(Theme.bg)
+        // The first few get their stream ready now, so they start the moment they're tapped.
+        .task(id: videos?.first?.id) {
+            for v in (videos ?? []).prefix(4) where !v.live { _ = await StreamResolver.shared.watchStream(v.id) }
+        }
     }
 }
 
@@ -509,6 +513,12 @@ struct YTWatchView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(details?.title ?? t?.title ?? "").font(.system(size: 18, weight: .heavy))
+                    if t != nil, !player.qualityLabel.isEmpty {
+                        // How it's playing (one stream with the picture, or the sound with the picture beside it).
+                        Text(player.showsPicture ? "Playing as one stream" : "Playing: \(player.qualityLabel) + separate picture")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.muted)
+                    }
                     if let d = details {
                         Button { more.toggle() } label: {
                             Text([d.views, d.published].filter { !$0.isEmpty }.joined(separator: " · ") + (d.description.isEmpty ? "" : (more ? "  · less" : "  · more")))
@@ -920,7 +930,13 @@ struct YTPictureInPicture: View {
             ZStack {
                 Color.black
                 PiPVideo()
-                if player.isBuffering || player.isLoading { ProgressView().tint(.white) }
+                // Until the picture is there: its thumbnail and a spinner (not a black box).
+                if !EpisodeVideo.shared.ready || player.isLoading {
+                    AsyncImage(url: track.artworkURL) { $0.resizable().scaledToFill() } placeholder: { Color.black }
+                        .opacity(0.6)
+                        .allowsHitTesting(false)
+                }
+                if player.isBuffering || player.isLoading || !EpisodeVideo.shared.ready { ProgressView().tint(.white) }
             }
             .frame(width: w, height: h)
             .contentShape(Rectangle())

@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 63,
+      "date": "2026-11-12",
+      "title": "Videos start faster",
+      "notes": [
+        {
+          "text": "Videos start much sooner: the first few in a list are made ready before you tap them, and a video starts small and sharpens a few seconds in, like YouTube.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Videos start much sooner: the first few in a list are made ready before you tap them, and playback begins after a second of video instead of waiting longer.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "The floating video and the watch page no longer load the video again when you move between them, and show its thumbnail instead of a black box until the picture is there.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 62,
       "date": "2026-11-12",
       "title": "Videos that start, and float",

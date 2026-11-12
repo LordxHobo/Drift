@@ -73,13 +73,24 @@ final class EpisodeVideo {
     /// A video view appeared or went away.
     func attach() {
         viewers += 1
+        lingering?.cancel()
         update()
     }
 
     func detach() {
         viewers = max(0, viewers - 1)
-        if viewers == 0 { stop() }
+        guard viewers == 0 else { return }
+        // Moving between views (the watch page and the floating video): keep it going for a moment,
+        // so the next view shows it at once instead of loading it again.
+        lingering?.cancel()
+        lingering = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, !Task.isCancelled, self.viewers == 0 else { return }
+            self.stop()
+        }
     }
+
+    @ObservationIgnored private var lingering: Task<Void, Never>?
 
     /// Loads the right video (or none) for what's playing and the settings.
     func update() {

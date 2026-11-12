@@ -163,12 +163,41 @@ actor StreamResolver {
     /// nil when YouTube gives none (the sound then plays on its own, with the picture loaded beside it).
     func watchStream(_ videoID: String) async -> (url: URL, heights: [Int], duration: Double?)? {
         if let e = watchCache[videoID], e.until > Date() { return (e.url, e.heights, e.duration) }
-        guard let r = try? await withTimeout(8, { [visitorData] in
-            try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData, client: .iOS)
-        }), r.stream.source == "ios-hls" else { return nil }
-        let heights = await Self.streamHeights(r.stream.url)
-        watchCache[videoID] = (r.stream.url, heights, r.stream.duration, Date().addingTimeInterval(3 * 3600))
-        return (r.stream.url, heights, r.stream.duration)
+        // Shared by the page opening and the player starting (one request, not two).
+        if let pending = watchPending[videoID] { return await pending.value }
+        let task = Task { () -> (url: URL, heights: [Int], duration: Double?)? in
+            if visitorData == nil {
+                warmUp()
+                await warmUpTask?.value
+            }
+            // Two tries: YouTube sometimes turns the first one away.
+            for _ in 0..<2 {
+                if let r = try? await withTimeout(5, { [visitorData] in
+                    try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData, client: .iOS)
+                }), r.stream.source == "ios-hls" {
+                    if let v = r.visitorData { visitorData = v }
+                    // The heights (for the quality menu) are read after it starts: see `watchHeights`.
+                    watchCache[videoID] = (r.stream.url, [], r.stream.duration, Date().addingTimeInterval(3 * 3600))
+                    return (r.stream.url, [], r.stream.duration)
+                }
+            }
+            return nil
+        }
+        watchPending[videoID] = task
+        let found = await task.value
+        watchPending[videoID] = nil
+        return found
+    }
+
+    private var watchPending: [String: Task<(url: URL, heights: [Int], duration: Double?)?, Never>] = [:]
+
+    /// The heights a video's stream comes in (read from it once it's playing; for the quality menu).
+    func watchHeights(_ videoID: String) async -> [Int] {
+        guard let e = watchCache[videoID] else { return [] }
+        if !e.heights.isEmpty { return e.heights }
+        let heights = await Self.streamHeights(e.url)
+        if let now = watchCache[videoID], now.url == e.url { watchCache[videoID] = (now.url, heights, now.duration, now.until) }
+        return heights
     }
 
     /// The video's stream stopped working: fetch a new one next time.

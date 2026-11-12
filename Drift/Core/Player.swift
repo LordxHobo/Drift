@@ -106,7 +106,10 @@ final class Player {
                 guard let self else { return }
                 self.isPlaying = status != .paused
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
-                if status == .playing { self.watchdog?.cancel() }
+                if status == .playing {
+                    self.watchdog?.cancel()
+                    self.liftPictureCap()
+                }
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
                 SocialStore.shared.playerChanged()
@@ -408,7 +411,21 @@ final class Player {
     /// A new quality for the stream with the picture (switches without stopping).
     func pictureQualityChanged() {
         guard showsPicture else { return }
+        pictureStartedSmall = false
         av.currentItem?.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+    }
+
+    /// The video started at its quick-start size: lift that once it's been playing a few seconds.
+    @ObservationIgnored private var pictureStartedSmall = false
+
+    private func liftPictureCap() {
+        guard pictureStartedSmall, showsPicture, let item = av.currentItem else { return }
+        pictureStartedSmall = false
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, item === self.av.currentItem else { return }
+            item.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+        }
     }
 
     private func applyRate() {
@@ -583,8 +600,13 @@ final class Player {
                         self.durationIsExact = true
                         self.duration = d
                     }
-                    self.streamInfo = [("Video", track.id), ("Playing", "Picture and sound in one stream (like YouTube's app)"),
-                                       ("Heights", w.heights.map { "\($0)p" }.joined(separator: ", "))]
+                    self.streamInfo = [("Video", track.id), ("Playing", "Picture and sound in one stream (like YouTube's app)")]
+                    Task { [weak self] in
+                        let hs = await StreamResolver.shared.watchHeights(track.id)
+                        guard let self, self.current?.id == track.id, !hs.isEmpty else { return }
+                        self.pictureHeights = hs
+                        EpisodeVideo.shared.update()
+                    }
                 } else {
                     let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
                         try await StreamResolver.shared.resolve(playID, dataSaver: low)
@@ -612,7 +634,7 @@ final class Player {
                 // Episode opening with an ad: start right after it instead of playing it and jumping.
                 var startAt = resumeAt
                 var skippedEarly: SkipSegment?
-                if track.isEpisode, AppSettings.shared.skipSponsors,
+                if track.isEpisode, track.watch != true, AppSettings.shared.skipSponsors,
                    let early = try? await withTimeout(1.5, { await segsTask.value }),
                    let seg = early.first(where: { $0.range.lowerBound <= startAt + 2 && $0.range.upperBound > startAt + 1 }) {
                     startAt = seg.range.upperBound
@@ -678,8 +700,10 @@ final class Player {
             loader = nil
             item = AVPlayerItem(url: url)
             if current?.watch == true && !url.isFileURL {
-                // Picture too: as sharp as the setting allows (AVPlayer adapts below that by itself).
-                item.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+                // Picture too. Starts small so it's on screen at once (like YouTube), then goes as sharp
+                // as the setting allows a few seconds in (AVPlayer adapts below that by itself).
+                item.preferredMaximumResolution = Self.pictureSize(min(Self.pictureHeight, 360))
+                pictureStartedSmall = true
             } else if !url.isFileURL {
                 item.preferredPeakBitRate = 1_000_000
             }
@@ -690,7 +714,8 @@ final class Player {
             loader = l
             item = AVPlayerItem(asset: l.asset)
         }
-        item.preferredForwardBufferDuration = 30
+        // Videos: AVPlayer decides (starts as soon as it can); everything else keeps 30 s ahead.
+        item.preferredForwardBufferDuration = current?.watch == true ? 0 : 30
         item.audioTimePitchAlgorithm = .spectral
         // Its own stream has the picture: show it (the silent copy beside it isn't needed).
         let picture = current?.watch == true && !url.isFileURL && (url.absoluteString.contains(".m3u8") || url.path.contains("/hls"))
@@ -720,6 +745,11 @@ final class Player {
         silentSince = nil
         startGeneration += 1
         let generation = startGeneration
+        // Videos: no tap (nothing to trim, and waiting for it only delays the start).
+        if picture {
+            begin(item, autoplay: autoplay, at: time)
+            return
+        }
         Task { [weak self] in
             let tracks = Task { try? await item.asset.loadTracks(withMediaType: .audio).first }
             // Never hold a song back long for it: without the tap it just plays plainly.
