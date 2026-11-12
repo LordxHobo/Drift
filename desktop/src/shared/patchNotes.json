@@ -2,6 +2,43 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 60,
+      "date": "2026-11-12",
+      "title": "Watching, improved",
+      "notes": [
+        {
+          "text": "Videos have their own controls now: a timeline (with SponsorBlock's parts on it), play/pause, back and ahead 10 seconds and the time, right on the video.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Click the video to pause it, double-click or press F for full screen, T for theater mode (the video across the whole width), K to play or pause, J and L to jump 10 seconds, M to mute.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Comments under every video: top or newest, more as you scroll, and you can write your own.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Your channel is in the menu under You.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Fixed: clicking the video's picture at the top no longer leaves the video blank, and a video that gets stuck loading tries again (then at a lower quality) instead of spinning forever while the sound plays.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 59,
       "date": "2026-11-12",
       "title": "Signing in to YouTube",

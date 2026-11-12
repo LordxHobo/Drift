@@ -4,11 +4,11 @@
 // SponsorBlock, media keys, downloads and the mini video all work the same.
 import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import type { Track, YTChannel, YTVideo, YTVideoDetails } from '@shared/types'
+import type { Track, YTChannel, YTComment, YTVideo, YTVideoDetails } from '@shared/types'
 import { Icon, Logo } from '../icons'
-import { drift, go, setViewerMode, settingsStore, toast, useRoute, useStore, ytAccountStore, ytSignInStore, Store, refreshYouTubeAccount, accountStore } from '../state'
+import { drift, go, setViewerMode, settingsStore, toast, useRoute, useStore, ytAccountStore, ytSignInStore, Store, refreshYouTubeAccount, accountStore, readLocal, writeLocal } from '../state'
 import type { Route } from '../state'
-import { playList, setSponsorBlock, usePlayer } from '../player'
+import { playList, positionStore, seek, setSponsorBlock, toggle, toggleMute, usePlayer } from '../player'
 import { IconButton, Spinner } from '../ui'
 import { formatTime } from '../util'
 import { VideoSurface } from '../videoView'
@@ -191,6 +191,7 @@ export function YouTubeSidebar(): JSX.Element {
     </button>
   ))
   const you = [
+    ...(yt?.channelId ? [item({ name: 'yt-channel', id: yt.channelId }, 'person', 'Your channel')] : []),
     item({ name: 'yt-feed', feed: 'history' }, 'clock', 'History'),
     item({ name: 'yt-feed', feed: 'watchLater' }, 'clock', 'Watch later'),
     item({ name: 'yt-feed', feed: 'liked' }, 'thumbUp', 'Liked videos'),
@@ -360,12 +361,13 @@ export function YouTubeChannel({ id }: { id: string }): JSX.Element {
   const [subscribed, setSubscribed] = useState<boolean | null>(null)
   const known = useStore(channelsStore).some((c) => c.id === id)
   const isSub = subscribed ?? known
+  const own = useStore(ytAccountStore)?.channelId === id
   return (
     <div className="page yt-page">
       <div className="yt-channel-head">
         {data?.channel.avatar ? <img src={data.channel.avatar} alt="" /> : <span className="yt-chan-blank huge" />}
         <h1 className="page-title">{data?.channel.name ?? ' '}</h1>
-        <SubscribeButton channelId={id} subscribed={isSub} onChange={setSubscribed} />
+        {own ? <span className="yt-own">Your channel</span> : <SubscribeButton channelId={id} subscribed={isSub} onChange={setSubscribed} />}
       </div>
       {error && !data ? <Failed error={error} reload={reload} /> : <Grid list={data?.videos} empty="No videos." />}
     </div>
@@ -416,7 +418,13 @@ export function YouTubeWatch({ id }: { id: string }): JSX.Element {
   const { data } = useYT<YTVideoDetails>(`video:${id}`, () => drift.ytVideo(id))
   const [subscribed, setSubscribed] = useState<boolean | null>(null)
   const [more, setMore] = useState(false)
+  const [theater, setTheater] = useState(() => readLocal('ytTheater', false))
   const started = useRef(false)
+  const toggleTheater = (): void =>
+    setTheater((on) => {
+      writeLocal('ytTheater', !on)
+      return !on
+    })
   // Opened from a link or history while something else plays: start this one.
   useEffect(() => {
     if (started.current || p.current?.id === id || !data) return
@@ -430,6 +438,27 @@ export function YouTubeWatch({ id }: { id: string }): JSX.Element {
     setSubscribed(null)
     setMore(false)
   }, [id])
+  // YouTube's keys: F full screen, T theater, K play/pause, J/L back/ahead 10 s, M mute.
+  useEffect(() => {
+    const key = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement
+      if (e.ctrlKey || e.metaKey || e.altKey || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      const k = e.key.toLowerCase()
+      if (k === 'f') {
+        const el = document.querySelector('.yt-player.video-surface')
+        if (document.fullscreenElement) void document.exitFullscreen()
+        else if (el) void el.requestFullscreen()
+      } else if (k === 't') toggleTheater()
+      else if (k === 'k') toggle()
+      else if (k === 'j') seek(Math.max(0, positionStore.get() - 10))
+      else if (k === 'l') seek(positionStore.get() + 10)
+      else if (k === 'm') toggleMute()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
   const playing = p.current?.id === id
   const t = playing ? p.current : undefined
   const title = data?.title || t?.title || ''
@@ -441,79 +470,191 @@ export function YouTubeWatch({ id }: { id: string }): JSX.Element {
       toast(cleanMessage(e))
     }
   }
+  const player = playing ? (
+    <VideoSurface className="big yt-player" controls theater={theater} onTheater={toggleTheater} />
+  ) : (
+    <div className="yt-player placeholder">
+      <Spinner />
+    </div>
+  )
   return (
-    <div className="yt-watch">
-      <div className="yt-watch-main">
-        {playing ? <VideoSurface className="big yt-player" /> : <div className="yt-player placeholder"><Spinner /></div>}
-        <h1 className="yt-watch-title">{title}</h1>
-        <div className="yt-watch-row">
-          {data?.channel.avatar && <img className="yt-owner" src={data.channel.avatar} alt="" />}
-          <button className="yt-owner-text" onClick={() => data?.channel.id && go({ name: 'yt-channel', id: data.channel.id })}>
-            <span className="yt-owner-name">{data?.channel.name ?? t?.artist}</span>
-            <span className="yt-owner-subs">{data?.subscribers}</span>
-          </button>
-          {data && <SubscribeButton channelId={data.channel.id} subscribed={subscribed ?? data.subscribed} onChange={setSubscribed} />}
-          <span className="spacer" />
-          <button className="btn yt-act" onClick={() => void act(() => drift.ytLike(id), 'Liked')}>
-            <Icon name="thumbUp" size={16} />
-            Like
-          </button>
-          <button className="btn yt-act" onClick={() => void act(() => drift.ytWatchLater(id), 'Saved to Watch later')}>
-            <Icon name="clock" size={16} />
-            Watch later
-          </button>
-          {t && (
-            <button className="btn yt-act" onClick={() => void act(async () => void (await drift.download([t])), 'Downloading')}>
-              <Icon name="download" size={16} />
-              Download
+    <div className={`yt-watch-page ${theater ? 'theater' : ''}`}>
+      {theater && <div className="yt-stage">{player}</div>}
+      <div className="yt-watch">
+        <div className="yt-watch-main">
+          {!theater && player}
+          <h1 className="yt-watch-title">{title}</h1>
+          <div className="yt-watch-row">
+            {data?.channel.avatar && <img className="yt-owner" src={data.channel.avatar} alt="" />}
+            <button className="yt-owner-text" onClick={() => data?.channel.id && go({ name: 'yt-channel', id: data.channel.id })}>
+              <span className="yt-owner-name">{data?.channel.name ?? t?.artist}</span>
+              <span className="yt-owner-subs">{data?.subscribers}</span>
             </button>
-          )}
-          {t && linked && (
-            <button className="btn yt-act" onClick={() => openSend(t)}>
-              <Icon name="send" size={16} />
-              Send
+            {data && <SubscribeButton channelId={data.channel.id} subscribed={subscribed ?? data.subscribed} onChange={setSubscribed} />}
+            <span className="spacer" />
+            <button className="btn yt-act" onClick={() => void act(() => drift.ytLike(id), 'Liked')}>
+              <Icon name="thumbUp" size={16} />
+              Like
             </button>
-          )}
-          <button
-            className={`btn yt-act ${settings.skipSponsors ? 'on' : ''}`}
-            aria-pressed={settings.skipSponsors}
-            title="Skip sponsors, self-promotion and subscribe reminders the SponsorBlock community marked (and show them on the progress bar)"
-            onClick={() => setSponsorBlock(!settings.skipSponsors)}
-          >
-            <span className="sb-dot" aria-hidden="true" />
-            SponsorBlock {settings.skipSponsors ? 'on' : 'off'}
-          </button>
-        </div>
-        {data && (data.description || data.views) && (
-          <div className={`yt-desc ${more ? 'open' : ''}`}>
-            <b>{[data.views, data.published].filter(Boolean).join(' · ')}</b>
-            <p>{data.description}</p>
-            {data.description.length > 200 && (
-              <button className="link" onClick={() => setMore(!more)}>
-                {more ? 'Show less' : 'Show more'}
+            <button className="btn yt-act" onClick={() => void act(() => drift.ytWatchLater(id), 'Saved to Watch later')}>
+              <Icon name="clock" size={16} />
+              Watch later
+            </button>
+            {t && (
+              <button className="btn yt-act" onClick={() => void act(async () => void (await drift.download([t])), 'Downloading')}>
+                <Icon name="download" size={16} />
+                Download
               </button>
             )}
+            {t && linked && (
+              <button className="btn yt-act" onClick={() => openSend(t)}>
+                <Icon name="send" size={16} />
+                Send
+              </button>
+            )}
+            <button
+              className={`btn yt-act ${settings.skipSponsors ? 'on' : ''}`}
+              aria-pressed={settings.skipSponsors}
+              title="Skip sponsors, self-promotion and subscribe reminders the SponsorBlock community marked (and show them on the timeline)"
+              onClick={() => setSponsorBlock(!settings.skipSponsors)}
+            >
+              <span className="sb-dot" aria-hidden="true" />
+              SponsorBlock {settings.skipSponsors ? 'on' : 'off'}
+            </button>
           </div>
-        )}
+          {data && (data.description || data.views) && (
+            <div className={`yt-desc ${more ? 'open' : ''}`}>
+              <b>{[data.views, data.published].filter(Boolean).join(' · ')}</b>
+              <p>{data.description}</p>
+              {data.description.length > 200 && (
+                <button className="link" onClick={() => setMore(!more)}>
+                  {more ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
+          )}
+          <CommentSection key={id} videoId={id} />
+        </div>
+        <aside className="yt-next">
+          <div className="yt-next-head">Up next</div>
+          {!data && <Spinner />}
+          {data?.related.slice(0, 20).map((v, i) => (
+            <button key={v.id} className="yt-next-row" onClick={() => playVideo(v, data.related.slice(i + 1))}>
+              <span className="yt-thumb small">
+                <img src={v.thumbnail} alt="" loading="lazy" />
+                {v.duration ? <span className="yt-len">{formatTime(v.duration)}</span> : null}
+              </span>
+              <span className="yt-card-text">
+                <span className="yt-card-title">{v.title}</span>
+                <span className="yt-card-meta">{v.channel}</span>
+                <span className="yt-card-meta">{[v.views, v.published].filter(Boolean).join(' · ')}</span>
+              </span>
+            </button>
+          ))}
+        </aside>
       </div>
-      <aside className="yt-next">
-        <div className="yt-next-head">Up next</div>
-        {!data && <Spinner />}
-        {data?.related.slice(0, 20).map((v, i) => (
-          <button key={v.id} className="yt-next-row" onClick={() => playVideo(v, data.related.slice(i + 1))}>
-            <span className="yt-thumb small">
-              <img src={v.thumbnail} alt="" loading="lazy" />
-              {v.duration ? <span className="yt-len">{formatTime(v.duration)}</span> : null}
-            </span>
-            <span className="yt-card-text">
-              <span className="yt-card-title">{v.title}</span>
-              <span className="yt-card-meta">{v.channel}</span>
-              <span className="yt-card-meta">{[v.views, v.published].filter(Boolean).join(' · ')}</span>
-            </span>
-          </button>
-        ))}
-      </aside>
     </div>
+  )
+}
+
+/** Comments under the video: top or newest, more as you ask, and writing your own. */
+function CommentSection({ videoId }: { videoId: string }): JSX.Element {
+  const yt = useStore(ytAccountStore)
+  const [sort, setSort] = useState<'top' | 'newest'>('top')
+  const [list, setList] = useState<YTComment[] | null>(null)
+  const [next, setNext] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [posting, setPosting] = useState(false)
+  const load = async (more?: string): Promise<void> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await drift.ytComments(videoId, sort, more)
+      setList((old) => (more ? [...(old ?? []), ...r.comments] : r.comments))
+      setNext(r.more)
+    } catch (e) {
+      setError(cleanMessage(e))
+      if (!more) setList([])
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => {
+    setList(null)
+    void load()
+  }, [sort])
+  const post = async (): Promise<void> => {
+    const text = draft.trim()
+    if (!text) return
+    setPosting(true)
+    try {
+      await drift.ytPostComment(videoId, text)
+      setList((old) => [{ id: `mine-${Date.now()}`, author: yt?.handle || yt?.name || 'You', authorAvatar: yt?.avatar ?? null, authorChannelId: yt?.channelId ?? null, text, published: 'just now', likes: '', replies: 0, pinned: false, byCreator: false }, ...(old ?? [])])
+      setDraft('')
+    } catch (e) {
+      toast(cleanMessage(e))
+    } finally {
+      setPosting(false)
+    }
+  }
+  return (
+    <section className="yt-comments" aria-label="Comments">
+      <div className="yt-comments-head">
+        <h2>Comments</h2>
+        <div className="yt-chips">
+          <button className={`yt-chip ${sort === 'top' ? 'on' : ''}`} aria-pressed={sort === 'top'} onClick={() => setSort('top')}>Top</button>
+          <button className={`yt-chip ${sort === 'newest' ? 'on' : ''}`} aria-pressed={sort === 'newest'} onClick={() => setSort('newest')}>Newest</button>
+        </div>
+      </div>
+      <form
+        className="yt-comment-new"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void post()
+        }}
+      >
+        {yt?.avatar ? <img className="yt-avatar" src={yt.avatar} alt="" /> : <span className="yt-avatar blank" />}
+        <input placeholder="Add a comment…" aria-label="Add a comment" value={draft} maxLength={10000} onChange={(e) => setDraft(e.target.value)} />
+        {draft.trim() && (
+          <button className="btn primary" disabled={posting}>
+            {posting ? 'Posting…' : 'Comment'}
+          </button>
+        )}
+      </form>
+      {list === null && <Spinner />}
+      {error && list?.length === 0 && <div className="empty small">{error}</div>}
+      {list?.length === 0 && !error && <div className="empty small">No comments.</div>}
+      {list?.map((c) => (
+        <article key={c.id} className="yt-comment">
+          {c.authorAvatar ? <img className="yt-avatar" src={c.authorAvatar} alt="" /> : <span className="yt-avatar blank" />}
+          <div className="yt-comment-body">
+            <div className="yt-comment-meta">
+              {c.pinned && <span className="yt-pinned">Pinned</span>}
+              <button
+                className={`yt-comment-author ${c.byCreator ? 'creator' : ''}`}
+                onClick={() => c.authorChannelId && go({ name: 'yt-channel', id: c.authorChannelId })}
+              >
+                {c.author}
+              </button>
+              <span>{c.published}</span>
+            </div>
+            <p>{c.text}</p>
+            <div className="yt-comment-foot">
+              <Icon name="thumbUp" size={13} />
+              <span>{c.likes || ''}</span>
+              {c.replies > 0 && <span>{c.replies === 1 ? '1 reply' : `${c.replies} replies`}</span>}
+            </div>
+          </div>
+        </article>
+      ))}
+      {next && (
+        <button className="btn yt-more" disabled={loading} onClick={() => void load(next)}>
+          {loading ? <Spinner size={14} /> : 'More comments'}
+        </button>
+      )}
+    </section>
   )
 }
 

@@ -344,18 +344,20 @@ export function DriftPlayerBar(): JSX.Element {
       <div className="pb-left">
         {t && (
           <>
-            <button className="pb-art" onClick={() => go({ name: 'song', track: t })} title="Song details">
+            <button className="pb-art" onClick={() => go(t.watch ? { name: 'yt-watch', id: t.id } : { name: 'song', track: t })} title={t.watch ? 'Open video' : 'Song details'}>
               <TrackArt track={t} size={56} radius={6} />
             </button>
             <div className="pb-text">
-              <button className="pb-title link" onClick={() => go({ name: 'song', track: t })} onContextMenu={(e) => openMenu(e, trackMenu(t))}>
+              <button className="pb-title link" onClick={() => go(t.watch ? { name: 'yt-watch', id: t.id } : { name: 'song', track: t })} onContextMenu={(e) => openMenu(e, trackMenu(t))}>
                 {t.title}
               </button>
-              <button className="pb-artist link" onClick={() => void goToArtist(t.artist)}>{t.artist}</button>
+              <button className="pb-artist link" onClick={() => (t.watch ? t.channelID && go({ name: 'yt-channel', id: t.channelID }) : void goToArtist(t.artist))}>{t.artist}</button>
             </div>
-            <button className={`like-btn ${isLiked(t.id) ? 'on' : ''}`} aria-label="Like" title={isLiked(t.id) ? 'Remove from Liked songs' : 'Save to Liked songs'} onClick={() => toggleLike(t)}>
-              <Icon name={isLiked(t.id) ? 'heartFill' : 'heart'} size={18} />
-            </button>
+            {!t.watch && (
+              <button className={`like-btn ${isLiked(t.id) ? 'on' : ''}`} aria-label="Like" title={isLiked(t.id) ? 'Remove from Liked songs' : 'Save to Liked songs'} onClick={() => toggleLike(t)}>
+                <Icon name={isLiked(t.id) ? 'heartFill' : 'heart'} size={18} />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -636,13 +638,17 @@ export function MusicTopPlayer(): JSX.Element {
       <div className="m-lcd" onContextMenu={(e) => t && openMenu(e, trackMenu(t))}>
         {t ? (
           <>
-            <button className="m-lcd-art" onClick={() => fullPlayerStore.set(true)} title="Open player">
+            <button
+              className="m-lcd-art"
+              onClick={() => (t.watch ? go({ name: 'yt-watch', id: t.id }) : fullPlayerStore.set(true))}
+              title={t.watch ? 'Open video' : 'Open player'}
+            >
               <TrackArt track={t} size={44} radius={0} />
             </button>
             <div className="m-lcd-text">
               <div className="m-lcd-title">{t.title}</div>
               <div className="m-lcd-sub">
-                <button className="link" onClick={() => void goToArtist(t.artist)}>{t.artist}</button>
+                <button className="link" onClick={() => (t.watch ? t.channelID && go({ name: 'yt-channel', id: t.channelID }) : void goToArtist(t.artist))}>{t.artist}</button>
                 {t.album ? ` — ${t.album}` : ''}
               </div>
               <Progress className="m-lcd-progress" />

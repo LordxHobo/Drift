@@ -280,6 +280,8 @@ const api: DriftApi = {
   ytSubscribe: (id, on) => ytviewer.ytSubscribe(id, on),
   ytLike: (id) => ytviewer.ytLike(id),
   ytWatchLater: (id) => ytviewer.ytWatchLater(id),
+  ytComments: (id, sort, more) => ytviewer.ytComments(id, sort, more),
+  ytPostComment: (id, text) => ytviewer.ytPostComment(id, text),
 
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),

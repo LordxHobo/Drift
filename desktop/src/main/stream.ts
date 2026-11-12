@@ -688,6 +688,8 @@ async function fetchPiece(id: string, start: number, end: number): Promise<Respo
   throw new Error('YouTube refused the audio')
 }
 
+const freshTokens = new Set<string>()
+
 export async function handleStream(request: Request): Promise<Response> {
   const u = new URL(request.url)
   const videoId = u.pathname.replace(/^\/+/, '')
@@ -696,6 +698,12 @@ export async function handleStream(request: Request): Promise<Response> {
   // ?v=720: the video picture (podcasts with video on), up to that height.
   const height = Number(u.searchParams.get('v'))
   const id = height > 0 ? `${videoId}#v${Math.min(2160, Math.max(144, height))}` : videoId
+  // &fresh=<token>: the picture didn't load, so get a new link (once per token; the player asks many times).
+  const fresh = u.searchParams.get('fresh')
+  if (fresh && !freshTokens.has(fresh)) {
+    freshTokens.add(fresh)
+    resolved.delete(id)
+  }
   const local = height > 0 ? undefined : localLookup(videoId)
   if (local) return serveFile(local, request.headers.get('range'))
   const feed = feedAudio.get(videoId)

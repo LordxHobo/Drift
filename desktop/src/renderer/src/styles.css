@@ -5545,3 +5545,225 @@ a.btn.disabled {
   height: 38px;
   font-size: 14px;
 }
+
+/* Controls on the video (YouTube-style): show while the pointer is over it, or when paused. */
+.video-surface.with-controls {
+  cursor: pointer;
+}
+.video-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 28px 14px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s;
+  cursor: default;
+}
+.video-surface.with-controls:hover .video-controls,
+.video-surface.with-controls:focus-within .video-controls {
+  opacity: 1;
+}
+.video-controls .progress.video-timeline {
+  width: 100%;
+}
+.video-timeline .slider-track {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.3);
+}
+.video-timeline .slider-fill {
+  background: var(--yt);
+}
+.video-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.video-controls-row .spacer {
+  flex: 1;
+}
+.video-controls .icon-btn {
+  color: #fff;
+}
+.video-skip {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.video-skip:hover,
+.video-theater:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.video-time {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+.video-theater {
+  width: 34px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-theater span {
+  width: 20px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+}
+.video-theater.on span {
+  width: 16px;
+  height: 10px;
+}
+.video-failed {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 13px;
+}
+
+/* Theater mode: the video across the whole width, everything else below. */
+.yt-watch-page.theater .yt-stage {
+  background: #000;
+  padding-top: 64px;
+}
+.app.music .yt-watch-page.theater .yt-stage {
+  padding-top: 0;
+}
+.yt-watch-page.theater .yt-stage .yt-player {
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  border-radius: 0;
+  margin: 0 auto;
+}
+.yt-watch-page.theater .yt-watch {
+  padding-top: 18px;
+}
+.yt-watch-page.theater .yt-watch-title {
+  margin-top: 0;
+}
+.yt-own {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Comments */
+.yt-comments {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.yt-comments-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.yt-comments-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+.yt-comments-head .yt-chips {
+  margin: 0;
+}
+.yt-comment-new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.yt-comment-new input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.yt-comment-new input:focus {
+  border-bottom-color: var(--text);
+}
+.yt-comment {
+  display: flex;
+  gap: 12px;
+}
+.yt-comment .yt-avatar,
+.yt-comment-new .yt-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  flex-shrink: 0;
+}
+.yt-comment-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.yt-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.yt-comment-author {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.yt-comment-author.creator {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--surface2);
+}
+.yt-pinned {
+  font-weight: 700;
+}
+.yt-comment p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.yt-comment-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.btn.yt-more {
+  align-self: flex-start;
+}
+.video-controls .progress.video-timeline {
+  max-width: none;
+}
+.m-profile .yt-avatar,
+.yt-account .yt-avatar {
+  flex: 0 0 26px !important;
+  width: 26px !important;
+  min-width: 0;
+}

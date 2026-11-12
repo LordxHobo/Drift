@@ -202,6 +202,23 @@ export interface YTAccount {
   name: string
   handle: string
   avatar: string | null
+  /** Your own channel (none when the account has no channel). */
+  channelId: string | null
+}
+
+/** A comment under a video (with how many replies it has). */
+export interface YTComment {
+  id: string
+  author: string
+  authorAvatar: string | null
+  authorChannelId: string | null
+  text: string
+  published: string
+  likes: string
+  replies: number
+  pinned: boolean
+  /** Written by the video's own channel. */
+  byCreator: boolean
 }
 
 export interface YTChannel {
@@ -680,6 +697,9 @@ export interface DriftApi {
   ytSubscribe(channelId: string, on: boolean): Promise<void>
   ytLike(videoId: string): Promise<void>
   ytWatchLater(videoId: string): Promise<void>
+  /** A video's comments, a page at a time (`more`: the token for the next page). */
+  ytComments(videoId: string, sort: 'top' | 'newest', more?: string): Promise<{ comments: YTComment[]; more: string | null }>
+  ytPostComment(videoId: string, text: string): Promise<void>
 
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
@@ -701,7 +721,7 @@ export const apiMethods: (keyof DriftApi)[] = [
   'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'sendSong', 'inbox', 'refreshInbox', 'inboxSeen', 'inboxClear', 'setAllowSongs', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
   'videoFromLink', 'skipSegments',
-  'ytSignIn', 'ytSignOut', 'ytAccount', 'ytFeed', 'ytChannels', 'ytSearch', 'ytChannelVideos', 'ytVideo', 'ytSubscribe', 'ytLike', 'ytWatchLater'
+  'ytSignIn', 'ytSignOut', 'ytAccount', 'ytFeed', 'ytChannels', 'ytSearch', 'ytChannelVideos', 'ytVideo', 'ytSubscribe', 'ytLike', 'ytWatchLater', 'ytComments', 'ytPostComment'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */

@@ -7,7 +7,9 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Session } from 'electron'
 import { Innertube } from 'youtubei.js'
-import type { YTAccount, YTChannel, YTFeedName, YTVideo, YTVideoDetails } from '@shared/types'
+import type { YTAccount, YTChannel, YTComment, YTFeedName, YTVideo, YTVideoDetails } from '@shared/types'
+import type { YT } from 'youtubei.js'
+type Comments = YT.Comments
 import { emit } from './store'
 
 const PARTITION = 'persist:youtube'
@@ -144,15 +146,28 @@ export async function ytAccount(): Promise<YTAccount | null> {
   try {
     const data = await raw('/account/account_menu', {})
     const header = find(data, 'activeAccountHeaderRenderer')
+    const handle = text(header?.channelHandle) || ''
     account = {
       name: text(header?.accountName) || 'YouTube',
-      handle: text(header?.channelHandle) || '',
-      avatar: lastThumb(header?.accountPhoto) || null
+      handle,
+      avatar: lastThumb(header?.accountPhoto) || null,
+      channelId: handle ? await channelFromHandle(handle) : null
     }
   } catch {
-    account = { name: 'YouTube', handle: '', avatar: null }
+    account = { name: 'YouTube', handle: '', avatar: null, channelId: null }
   }
   return account
+}
+
+/** "@name" → the channel's id. */
+async function channelFromHandle(handle: string): Promise<string | null> {
+  try {
+    const data = await raw('/navigation/resolve_url', { url: `https://www.youtube.com/${handle.startsWith('@') ? handle : '@' + handle}` })
+    const id = find(data, 'browseEndpoint')?.browseId
+    return typeof id === 'string' && id.startsWith('UC') ? id : null
+  } catch {
+    return null
+  }
 }
 
 // MARK: Reading YouTube's answers
@@ -351,4 +366,58 @@ export async function ytLike(videoId: string): Promise<void> {
 export async function ytWatchLater(videoId: string): Promise<void> {
   const t = await signedInTube()
   await t.playlist.addVideos('WL', [videoId])
+}
+
+// MARK: Comments
+
+/** Pages still to load, by token (YouTube's next page needs the page before it). */
+const commentPages = new Map<string, Comments>()
+
+function commentsFrom(page: Comments): YTComment[] {
+  const out: YTComment[] = []
+  for (const thread of page.contents ?? []) {
+    const c = thread.comment
+    if (!c) continue
+    out.push({
+      id: c.comment_id,
+      author: c.author?.name ?? '',
+      authorAvatar: c.author?.thumbnails?.[0]?.url ?? c.author?.avatar_thumbnail_url ?? null,
+      authorChannelId: c.author?.id ?? null,
+      text: c.content?.toString() ?? '',
+      published: c.published_time ?? '',
+      likes: c.like_count ?? '',
+      replies: Number(String(c.reply_count ?? '0').replace(/[^\d]/g, '')) || 0,
+      pinned: !!c.is_pinned,
+      byCreator: !!c.author_is_channel_owner
+    })
+  }
+  return out
+}
+
+function keep(page: Comments): string | null {
+  if (!page.has_continuation) return null
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  commentPages.set(token, page)
+  // Only the latest few are kept around.
+  if (commentPages.size > 20) commentPages.delete(commentPages.keys().next().value as string)
+  return token
+}
+
+export async function ytComments(videoId: string, sort: 'top' | 'newest', more?: string): Promise<{ comments: YTComment[]; more: string | null }> {
+  let page: Comments
+  if (more && commentPages.has(more)) {
+    page = await commentPages.get(more)!.getContinuation()
+    commentPages.delete(more)
+  } else {
+    const t = await signedInTube()
+    page = await t.getComments(videoId, sort === 'newest' ? 'NEWEST_FIRST' : 'TOP_COMMENTS')
+  }
+  return { comments: commentsFrom(page), more: keep(page) }
+}
+
+/** Posts a comment as the signed-in account. */
+export async function ytPostComment(videoId: string, text: string): Promise<void> {
+  const t = await signedInTube()
+  const page = await t.getComments(videoId)
+  await page.createComment(text)
 }

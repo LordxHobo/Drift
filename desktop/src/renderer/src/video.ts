@@ -15,8 +15,15 @@ videoEl.className = 'episode-video'
 /** Has a picture to show (the current episode's video has loaded). */
 export const videoReadyStore = new Store(false)
 export const useVideoReady = (): boolean => useStore(videoReadyStore)
+/** The picture gave up loading (after trying again and at a lower quality). */
+export const videoFailedStore = new Store(false)
+export const useVideoFailed = (): boolean => useStore(videoFailedStore)
 
 let currentKey = ''
+/** Tries for the current video: 0 = as chosen, 1 = a fresh link, 2 = 480p, then give up. */
+let attempt = 0
+let watchdog: number | undefined
+let lastSeek = 0
 
 function wanted(): string {
   const p = playerStore.get()
@@ -27,22 +34,60 @@ function wanted(): string {
   return `drift://stream/${id}?v=${s.videoQuality || 720}`
 }
 
+function load(src: string): void {
+  videoEl.src = src
+  videoEl.currentTime = audioElement.currentTime
+  window.clearTimeout(watchdog)
+  // Stuck (the sound plays but no picture comes): try again rather than spin forever.
+  watchdog = window.setTimeout(() => {
+    if (!videoReadyStore.get() && currentKey) stuck()
+  }, 12_000)
+}
+
 function update(): void {
   const key = wanted()
   if (key === currentKey) return
   currentKey = key
+  attempt = 0
   videoReadyStore.set(false)
+  videoFailedStore.set(false)
+  window.clearTimeout(watchdog)
   if (key) {
-    videoEl.src = key
-    videoEl.currentTime = audioElement.currentTime
+    load(key)
   } else {
     videoEl.removeAttribute('src')
     videoEl.load()
   }
 }
 
-videoEl.addEventListener('loadeddata', () => videoReadyStore.set(true))
-videoEl.addEventListener('error', () => videoReadyStore.set(false))
+/** Didn't load: a fresh link first, then a lower quality, then show that it didn't work. */
+function stuck(): void {
+  if (!currentKey) return
+  attempt++
+  const id = playerStore.get().info?.playId
+  if (attempt === 1) return load(`${currentKey}&fresh=${Date.now()}`)
+  if (attempt === 2 && id) return load(`drift://stream/${id}?v=480&fresh=${Date.now()}`)
+  window.clearTimeout(watchdog)
+  videoFailedStore.set(true)
+}
+
+/** "Try again" on a picture that didn't load. */
+export function retryVideo(): void {
+  if (!currentKey) return
+  attempt = 0
+  videoFailedStore.set(false)
+  load(`${currentKey}&fresh=${Date.now()}`)
+}
+
+videoEl.addEventListener('loadeddata', () => {
+  window.clearTimeout(watchdog)
+  videoReadyStore.set(true)
+  videoFailedStore.set(false)
+})
+videoEl.addEventListener('error', () => {
+  videoReadyStore.set(false)
+  if (currentKey) stuck()
+})
 
 /** Keeps the picture in step with the sound (and costs nothing while it isn't on screen). */
 function sync(): void {
@@ -50,7 +95,12 @@ function sync(): void {
   const audio = audioElement
   if (videoEl.playbackRate !== audio.playbackRate) videoEl.playbackRate = audio.playbackRate
   const drift = videoEl.currentTime - audio.currentTime
-  if (Math.abs(drift) > 0.35) videoEl.currentTime = audio.currentTime
+  // Not while it's still fetching: jumping again would restart the fetch (and it would never catch up).
+  // A little ahead of the sound, so it lands in step once the jump has loaded.
+  if (Math.abs(drift) > 0.5 && !videoEl.seeking && Date.now() - lastSeek > 2000) {
+    lastSeek = Date.now()
+    videoEl.currentTime = audio.currentTime + (audio.paused ? 0 : 0.3)
+  }
   if (audio.paused && !videoEl.paused) videoEl.pause()
   if (!audio.paused && videoEl.paused) void videoEl.play().catch(() => undefined)
 }
