@@ -103,6 +103,36 @@ object Playback {
     var naturalEndAt = 0L
         private set
 
+    /** The view showing the player's own picture (YouTube viewer videos), or none. */
+    private var pictureView: android.view.TextureView? = null
+
+    fun showPicture(view: android.view.TextureView?) {
+        val old = pictureView
+        if (old === view) return
+        pictureView = view
+        withController { c -> if (view != null) c.setVideoTextureView(view) else if (old != null) c.clearVideoTextureView(old) }
+    }
+
+    /** Stops and forgets what was playing (the floating video's X). */
+    fun close() {
+        withController { c ->
+            c.stop()
+            c.clearMediaItems()
+        }
+        original = emptyList()
+    }
+
+    /** A new quality for the video playing: its picture again at that height, from where it is. */
+    fun reloadPicture() {
+        val c = controller ?: return
+        val t = current ?: return
+        if (!PlaybackService.showsPicture(t)) return
+        val at = c.currentPosition
+        val i = c.currentMediaItemIndex
+        c.replaceMediaItem(i, itemOf(t))
+        c.seekTo(i, at)
+    }
+
     /** Where the song is right now (ms), not just as of the last read. */
     fun exactPosition(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: position
 

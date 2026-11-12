@@ -9,7 +9,22 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lordxhobo.drift.playback.EpisodeVideo
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -525,10 +540,21 @@ fun YTWatchScreen(id: String) {
     var more by remember(id) { mutableStateOf(false) }
     var started by remember(id) { mutableStateOf(false) }
     // Opened from a link, history or the mini player while something else plays: start this one.
-    LaunchedEffect(d) {
-        if (d != null && !started && Playback.current?.id != id) {
+    // (Even when its details didn't load.)
+    LaunchedEffect(d, loaded.error) {
+        if ((d != null || loaded.error != null) && !started && Playback.current?.id != id) {
             started = true
-            playVideo(YTVideo(id, d.title, d.channel.name, d.channel.id, "https://i.ytimg.com/vi/$id/hqdefault.jpg", null, d.views, d.published, false), d.related)
+            playVideo(
+                YTVideo(id, d?.title ?: "YouTube video", d?.channel?.name.orEmpty(), d?.channel?.id, "https://i.ytimg.com/vi/$id/hqdefault.jpg", null, d?.views.orEmpty(), d?.published.orEmpty(), false),
+                d?.related.orEmpty(),
+            )
+        }
+    }
+    // This one ended and the next video started by itself: follow it, like YouTube.
+    val now = Playback.current
+    LaunchedEffect(now?.id) {
+        if (now != null && now.id != id && now.watch == true && System.currentTimeMillis() - Playback.naturalEndAt < 3000 && Nav.top == Screen.YTWatch(id)) {
+            Nav.open(Screen.YTWatch(now.id))
         }
     }
     val say: (String?) -> Unit = { com.lordxhobo.drift.social.Jam.notice = it }
@@ -612,6 +638,13 @@ private fun YTPlayer(t: Track) {
         // Below the quality and full-screen buttons, which stay tappable.
         Box(
             Modifier.fillMaxWidth().aspectRatio(16f / 9f).padding(top = 48.dp).pointerInput(t.id) {
+                // Swipe down: back to browsing, with the video floating over the app.
+                var pulled = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { pulled = 0f },
+                    onDragEnd = { if (pulled > 120.dp.toPx() && Nav.top is Screen.YTWatch) Nav.back() },
+                ) { _, dy -> pulled += dy }
+            }.pointerInput(t.id) {
                 detectTapGestures(
                     onTap = { controls = !controls },
                     onDoubleTap = { o ->
@@ -796,4 +829,115 @@ private fun CommentRow(c: YTComment) {
             }
         }
     }
+}
+
+// The floating video
+
+/**
+ * The video playing, floating over the app while its watch page isn't open (swiped down, or another page
+ * opened over it), like YouTube's mini player: drag it anywhere, pinch it or drag its corner to resize (from
+ * half the screen's width to all of it), tap it to go back to the video, X to stop it.
+ */
+@Composable
+fun YTPictureInPicture() {
+    val t = Playback.current
+    if (!YTViewer.on || t == null || t.watch != true || UiState.showPlayer || Nav.top == Screen.YTWatch(t.id)) return
+    BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = 64.dp)) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val margin = with(density) { 10.dp.toPx() }
+        val screenW = with(density) { maxWidth.toPx() }
+        val screenH = with(density) { maxHeight.toPx() }
+        val minW = screenW * 0.5f
+        val maxW = screenW - margin * 2
+        var w by remember { mutableStateOf(screenW * 0.62f) }
+        val h = w * 9f / 16f
+        // Its top-left corner (starts at the bottom right).
+        var x by remember { mutableStateOf(Float.NaN) }
+        var y by remember { mutableStateOf(Float.NaN) }
+        fun clamp() {
+            w = w.coerceIn(minW, maxW)
+            val hh = w * 9f / 16f
+            if (x.isNaN()) x = screenW - margin - w
+            if (y.isNaN()) y = screenH - margin - hh
+            x = x.coerceIn(margin, (screenW - margin - w).coerceAtLeast(margin))
+            y = y.coerceIn(margin, (screenH - margin - hh).coerceAtLeast(margin))
+        }
+        clamp()
+        Box(
+            Modifier
+                .offset { IntOffset(x.toInt(), y.toInt()) }
+                .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+                .shadow(14.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black)
+                .pointerInput(Unit) {
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val oldW = w
+                        w = (w * zoom).coerceIn(minW, maxW)
+                        // Grow around the fingers.
+                        x += pan.x - (w - oldW) * (centroid.x / oldW)
+                        y += pan.y - (w - oldW) * 9f / 16f * (centroid.y / (oldW * 9f / 16f))
+                        clamp()
+                    }
+                }
+                .pointerInput(t.id) { detectTapGestures(onTap = { Nav.open(Screen.YTWatch(t.id)) }) },
+        ) {
+            PiPVideo()
+            if (Playback.isBuffering) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.align(Alignment.Center).size(26.dp))
+            // Drag the corner to make it bigger or smaller.
+            Box(
+                Modifier.align(Alignment.TopStart).padding(6.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, drag ->
+                            change.consume()
+                            val oldW = w
+                            w = (w - (drag.x + drag.y) / 2f).coerceIn(minW, maxW)
+                            // The other corner stays put.
+                            x -= w - oldW
+                            y -= (w - oldW) * 9f / 16f
+                            clamp()
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.OpenInFull, "Resize", tint = Color.White, modifier = Modifier.size(16.dp)) }
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { Playback.close() },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Close, "Close video", tint = Color.White, modifier = Modifier.size(18.dp)) }
+            Box(
+                Modifier.align(Alignment.BottomStart).padding(6.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { Playback.toggle() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(if (Playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (Playback.isPlaying) "Pause" else "Play", tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+            val progress = if (Playback.duration > 0) (Playback.position.toFloat() / Playback.duration).coerceIn(0f, 1f) else 0f
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(progress).height(2.dp).background(YTRed))
+        }
+    }
+}
+
+/** The picture itself (the same player as the watch page, so nothing loads twice). */
+@Composable
+private fun PiPVideo() {
+    val context = LocalContext.current
+    val view = remember { android.view.TextureView(context) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(view, lifecycle) {
+        val watcher = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_START -> EpisodeVideo.attach(view)
+                Lifecycle.Event.ON_STOP -> EpisodeVideo.detach(view)
+                else -> {}
+            }
+        }
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) EpisodeVideo.attach(view)
+        lifecycle.addObserver(watcher)
+        onDispose {
+            lifecycle.removeObserver(watcher)
+            EpisodeVideo.detach(view)
+        }
+    }
+    AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
 }

@@ -6,10 +6,11 @@ extension Color {
     static let ytRed = Color(red: 1, green: 0, blue: 0.2)
 }
 
-/// Plays a video (then the ones after it, like YouTube's autoplay).
-@MainActor func playVideo(_ v: YTVideo, after: [YTVideo] = []) {
+/// Plays a video (then the ones after it, like YouTube's autoplay) and opens its watch page.
+@MainActor func playVideo(_ v: YTVideo, after: [YTVideo] = [], open: Bool = true) {
     let list = [v] + after.filter { $0.id != v.id && !$0.live }
     Player.shared.play(list.map(\.track), startAt: 0, from: v.channel.isEmpty ? "YouTube" : v.channel)
+    if open { UIState.shared.openVideo = v.id }
 }
 
 private func timeText(_ s: Double) -> String {
@@ -158,7 +159,8 @@ private struct VideoCard: View {
     let list: [YTVideo]
 
     var body: some View {
-        NavigationLink(value: Route.ytWatch(video.id)) {
+        // One tap: start it and open its page (a link plus a separate tap didn't always start it).
+        Button { playVideo(video, after: Array(list.drop { $0.id != video.id }.dropFirst())) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 Thumb(video: video)
                 VStack(alignment: .leading, spacing: 3) {
@@ -177,7 +179,6 @@ private struct VideoCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(TapGesture().onEnded { playVideo(video, after: Array(list.drop { $0.id != video.id }.dropFirst())) })
     }
 }
 
@@ -489,6 +490,8 @@ struct YTWatchView: View {
     @State private var more = false
     @State private var fullScreen = false
     @State private var notice: String?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.stackName) private var stack
     private var player: Player { .shared }
     private var settings: AppSettings { .shared }
 
@@ -497,7 +500,7 @@ struct YTWatchView: View {
         VStack(spacing: 0) {
             GeometryReader { geo in
                 if let t {
-                    YTPlayerView(track: t, width: geo.size.width) { fullScreen = true }
+                    YTPlayerView(track: t, width: geo.size.width, onFullScreen: { fullScreen = true }, onSwipeDown: { dismiss() })
                 } else {
                     ZStack { Color.black; ProgressView().tint(.white) }
                 }
@@ -555,8 +558,7 @@ struct YTWatchView: View {
                     Text("Up next").font(.system(size: 16, weight: .heavy)).padding(.top, 6)
                     ForEach(details?.related.prefix(20).map { $0 } ?? []) { v in
                         Button {
-                            if let rel = details?.related { playVideo(v, after: Array(rel.drop { $0.id != v.id }.dropFirst())) }
-                            UIState.shared.openVideo = v.id
+                            playVideo(v, after: Array((details?.related ?? []).drop { $0.id != v.id }.dropFirst()))
                         } label: { SmallVideoRow(video: v) }
                         .buttonStyle(.plain)
                     }
@@ -584,14 +586,23 @@ struct YTWatchView: View {
         .fullScreenCover(isPresented: $fullScreen) {
             if let t = player.current { EpisodeVideoFullScreen(track: t) }
         }
+        .onAppear { UIState.shared.watchPages.insert("\(stack)#\(id)") }
+        .onDisappear { UIState.shared.watchPages.remove("\(stack)#\(id)") }
+        .onChange(of: player.current?.id) { old, new in
+            // This one ended and the next video started (autoplay): follow it, like YouTube.
+            guard old == id, let new, new != id, player.current?.watch == true,
+                  let ended = player.lastNaturalEnd, Date().timeIntervalSince(ended) < 3 else { return }
+            UIState.shared.openVideo = new
+        }
         .task(id: id) {
             details = try? await YTViewer.shared.video(id)
-            // Opened from a link, history or the mini player while something else plays: start this one.
-            if let d = details, player.current?.id != id {
-                playVideo(YTVideo(id: id, title: d.title, channel: d.channel.name, channelId: d.channel.id,
-                                  thumbnail: URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg"), duration: nil,
-                                  views: d.views, published: d.published, live: false), after: d.related)
-            }
+            // Opened some other way while something else plays: start this one (even if its details didn't load).
+            guard player.current?.id != id else { return }
+            let d = details
+            playVideo(YTVideo(id: id, title: d?.title ?? "YouTube video", channel: d?.channel.name ?? "", channelId: d?.channel.id,
+                              thumbnail: URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg"), duration: nil,
+                              views: d?.views ?? "", published: d?.published ?? "", live: false),
+                      after: d?.related ?? [], open: false)
         }
     }
 
@@ -621,6 +632,8 @@ private struct YTPlayerView: View {
     let track: Track
     let width: CGFloat
     var onFullScreen: () -> Void
+    /// Swiped down on the video: back to browsing, with the video floating over the app.
+    var onSwipeDown: () -> Void = {}
     @State private var controls = true
     @State private var drag: Double?
     private var player: Player { .shared }
@@ -636,6 +649,11 @@ private struct YTPlayerView: View {
                     player.seek(to: p.x < width / 2 ? max(0, player.currentTime - 10) : player.currentTime + 10)
                 }
                 .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { controls.toggle() } }
+                .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
+                    if v.translation.height > 70 || v.predictedEndTranslation.height > 200, abs(v.translation.width) < v.translation.height {
+                        onSwipeDown()
+                    }
+                })
             if controls {
                 HStack(spacing: 32) {
                     roundButton("gobackward.10", 44) { player.seek(to: max(0, player.currentTime - 10)) }
@@ -853,5 +871,133 @@ private struct CommentRow: View {
                 .foregroundStyle(Theme.muted)
             }
         }
+    }
+}
+
+
+// MARK: The floating video
+
+private struct StackNameKey: EnvironmentKey { static let defaultValue = "" }
+
+extension EnvironmentValues {
+    /// Which tab's pages these are (the watch page tells the app it's on screen, per tab).
+    var stackName: String {
+        get { self[StackNameKey.self] }
+        set { self[StackNameKey.self] = newValue }
+    }
+}
+
+/// The video playing, floating over the app while browsing (like YouTube's mini player): drag it anywhere,
+/// pinch it or drag its corner to resize (from half the screen's width to all of it), tap it to go back to
+/// the video, X to stop it.
+struct YTPictureInPicture: View {
+    let track: Track
+    var open: () -> Void
+    @State private var center: CGPoint?
+    @State private var drag: CGSize = .zero
+    @State private var width: CGFloat?
+    @State private var resize: CGFloat = 0
+    @State private var pinch: CGFloat = 1
+    private var player: Player { .shared }
+    private var ui: UIState { .shared }
+
+    var body: some View {
+        GeometryReader { geo in
+            let margin: CGFloat = 10
+            let minW = geo.size.width * 0.5
+            let maxW = geo.size.width - margin * 2
+            let base = width ?? geo.size.width * 0.62
+            let w = min(maxW, max(minW, (base - resize) * pinch))
+            let h = w * 9 / 16
+            let top = margin + h / 2
+            let bottom = geo.size.height - ui.bottomInset - margin - h / 2
+            let home = center ?? CGPoint(x: geo.size.width - margin - w / 2, y: bottom)
+            let clamp = { (p: CGPoint) in
+                CGPoint(x: min(geo.size.width - margin - w / 2, max(margin + w / 2, p.x)), y: min(bottom, max(top, p.y)))
+            }
+            let at = clamp(CGPoint(x: home.x + drag.width, y: home.y + drag.height))
+
+            ZStack {
+                Color.black
+                PiPVideo()
+                if player.isBuffering || player.isLoading { ProgressView().tint(.white) }
+            }
+            .frame(width: w, height: h)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: open)
+            .overlay(alignment: .topTrailing) {
+                Button { withAnimation(.easeOut(duration: 0.2)) { player.close() } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(.black.opacity(0.6), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .accessibilityLabel("Close video")
+            }
+            .overlay(alignment: .bottomLeading) {
+                Button { player.togglePlay() } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.black.opacity(0.6), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            }
+            .overlay(alignment: .topLeading) {
+                // Drag the corner to make it bigger or smaller.
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(.black.opacity(0.6), in: Circle())
+                    .padding(6)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(coordinateSpace: .global)
+                        .onChanged { v in resize = (v.translation.width + v.translation.height) / 2 }
+                        .onEnded { _ in
+                            width = w
+                            resize = 0
+                        })
+                    .accessibilityLabel("Resize")
+            }
+            .overlay(alignment: .bottom) {
+                GeometryReader { bar in
+                    Rectangle().fill(Color.ytRed)
+                        .frame(width: bar.size.width * min(1, max(0, player.currentTime / max(player.duration, 1))))
+                }
+                .frame(height: 2)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: .black.opacity(0.5), radius: 14, y: 6)
+            .gesture(DragGesture()
+                .onChanged { v in drag = v.translation }
+                .onEnded { v in
+                    center = clamp(CGPoint(x: home.x + v.translation.width, y: home.y + v.translation.height))
+                    drag = .zero
+                })
+            .simultaneousGesture(MagnifyGesture()
+                .onChanged { v in pinch = v.magnification }
+                .onEnded { _ in
+                    width = w
+                    pinch = 1
+                })
+            .position(at)
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+}
+
+/// The picture itself (the same player as the watch page, nothing loads twice).
+private struct PiPVideo: View {
+    var body: some View {
+        EpisodeVideoLayer()
+            .onAppear { EpisodeVideo.shared.attach() }
+            .onDisappear { EpisodeVideo.shared.detach() }
     }
 }

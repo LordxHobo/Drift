@@ -15,6 +15,8 @@ final class UIState {
     var openInbox = false
     /// A video to open on its watch page (the YouTube viewer).
     var openVideo: String?
+    /// Watch pages on screen ("<tab>#<video id>"): while the one playing isn't, it floats over the app.
+    var watchPages: Set<String> = []
     /// Song being shared (link or picture).
     var shareTrack: Track?
     /// Song being swapped for another YouTube version (from a playlist or Liked songs).

@@ -26,23 +26,48 @@ final class EpisodeVideo {
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var seeking = false
+    /// The views showing a video, so they can let go of it in the background (iOS stops a player that's
+    /// still on a view there, and the sound should go on).
+    @ObservationIgnored private let layers = NSHashTable<AVPlayerLayer>.weakObjects()
+    @ObservationIgnored private var inBackground = false
 
     private init() {
         av.isMuted = true
         av.allowsExternalPlayback = false
         _ = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.stop() }
+            MainActor.assumeIsolated {
+                self?.inBackground = true
+                self?.refreshLayers()
+                self?.stop()
+            }
         }
         _ = NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.update() }
+            MainActor.assumeIsolated {
+                self?.inBackground = false
+                self?.update()
+            }
         }
     }
 
     /// The highest height to use: the setting, or 360p with Data saver on.
-    private var maxHeight: Int {
-        AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality
+    private var maxHeight: Int { Player.pictureHeight }
+
+    /// The player the views show: the music player itself when its stream has the picture, else the silent copy.
+    var shownPlayer: AVPlayer? {
+        if inBackground { return nil }
+        return Player.shared.picturePlayer ?? av
+    }
+
+    func register(_ layer: AVPlayerLayer) {
+        layers.add(layer)
+        layer.player = shownPlayer
+    }
+
+    private func refreshLayers() {
+        let p = shownPlayer
+        for l in layers.allObjects where l.player !== p { l.player = p }
     }
 
     /// A video view appeared or went away.
@@ -58,6 +83,17 @@ final class EpisodeVideo {
 
     /// Loads the right video (or none) for what's playing and the settings.
     func update() {
+        refreshLayers()
+        // The player's own stream has the picture (the YouTube viewer): nothing more to load.
+        if Player.shared.showsPicture {
+            stop()
+            let hs = Player.shared.pictureHeights
+            heights = hs
+            height = hs.last(where: { $0 <= maxHeight }) ?? hs.first
+            unavailable = false
+            ready = true
+            return
+        }
         // Episodes: when video is on. Videos from the YouTube viewer: always.
         guard viewers > 0, let t = Player.shared.current, AppSettings.shared.podcastVideo || t.watch == true,
               t.isEpisode, !t.isFeedEpisode,
@@ -122,6 +158,8 @@ final class EpisodeVideo {
     /// Pick a quality (the highest choice means "always the sharpest").
     func choose(_ h: Int) {
         AppSettings.shared.videoQuality = h == heights.last ? 4320 : h
+        Player.shared.pictureQualityChanged()
+        if Player.shared.showsPicture { height = h }
         update()
     }
 
@@ -134,7 +172,7 @@ final class EpisodeVideo {
 
     /// Keeps the picture in step with the sound.
     private func sync(force: Bool = false) {
-        guard ready, Player.shared.current?.isEpisode == true else { return }
+        guard ready, !Player.shared.showsPicture, Player.shared.current?.isEpisode == true else { return }
         let clock = Player.shared.audioClock
         let videoTime = av.currentTime().seconds
         if !seeking, force || !videoTime.isFinite || abs(videoTime - clock.time) > 0.35 {
@@ -161,7 +199,7 @@ struct EpisodeVideoLayer: UIViewRepresentable {
 
     func makeUIView(context: Context) -> LayerView {
         let v = LayerView()
-        v.playerLayer.player = EpisodeVideo.shared.av
+        EpisodeVideo.shared.register(v.playerLayer)
         v.playerLayer.videoGravity = .resizeAspect
         v.backgroundColor = .black
         return v

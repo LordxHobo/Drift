@@ -156,6 +156,26 @@ actor StreamResolver {
 
     /// The iPhone app's stream for an episode (picture with sound, played muted), and its heights.
     private var hlsVideoCache: [String: (URL, [Int], Date)] = [:]
+    private var watchCache: [String: (url: URL, heights: [Int], duration: Double?, until: Date)] = [:]
+
+    /// A video from the YouTube viewer, played the way YouTube's own iPhone app (and ProTube) plays it:
+    /// one stream with picture and sound together, which AVPlayer adapts to the connection by itself.
+    /// nil when YouTube gives none (the sound then plays on its own, with the picture loaded beside it).
+    func watchStream(_ videoID: String) async -> (url: URL, heights: [Int], duration: Double?)? {
+        if let e = watchCache[videoID], e.until > Date() { return (e.url, e.heights, e.duration) }
+        guard let r = try? await withTimeout(8, { [visitorData] in
+            try await Self.quickResolve(videoID, dataSaver: false, visitorData: visitorData, client: .iOS)
+        }), r.stream.source == "ios-hls" else { return nil }
+        let heights = await Self.streamHeights(r.stream.url)
+        watchCache[videoID] = (r.stream.url, heights, r.stream.duration, Date().addingTimeInterval(3 * 3600))
+        return (r.stream.url, heights, r.stream.duration)
+    }
+
+    /// The video's stream stopped working: fetch a new one next time.
+    func invalidateWatch(_ videoID: String) {
+        watchCache[videoID] = nil
+    }
+
 
     /// The picture for an episode (no sound): the sharpest H.264 version up to `maxHeight`, and every
     /// height it comes in. Tries, in order: the quick links, the full extraction, then the iPhone app's

@@ -99,6 +99,7 @@ object YouTube {
 
     fun forget(id: String) {
         audioCache.remove(id)
+        videoCache.remove(id)
     }
 
     /** YouTube's visitor ID from the last answer, sent along so links keep working. */

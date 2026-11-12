@@ -65,6 +65,13 @@ final class Player {
     @ObservationIgnored private var segments: [SkipSegment] = []
     /// What's playing now: its SponsorBlock parts (drawn on the YouTube viewer's timeline).
     private(set) var shownSegments: [SkipSegment] = []
+    /// The stream playing has the picture too (a video from the YouTube viewer, played like YouTube's
+    /// own app): the video views show this player instead of loading a silent copy beside it.
+    private(set) var showsPicture = false
+    /// The heights that stream comes in.
+    private(set) var pictureHeights: [Int] = []
+    /// The player the video views show while `showsPicture`.
+    var picturePlayer: AVPlayer? { showsPicture ? av : nil }
     @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var lastChapterIndex: Int?
     @ObservationIgnored private var watchdog: Task<Void, Never>?
@@ -371,6 +378,39 @@ final class Player {
         return (t.isFinite ? t : 0, av.rate)
     }
 
+    /// Stops and forgets what was playing (the floating video's X).
+    func close() {
+        loadTask?.cancel()
+        detachItem()
+        queue = []
+        originalQueue = []
+        index = 0
+        isPlaying = false
+        isBuffering = false
+        isLoading = false
+        showsPicture = false
+        pictureHeights = []
+        currentTime = 0
+        duration = 0
+        segments = []
+        shownSegments = []
+        chapters = []
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        try? FileManager.default.removeItem(at: Self.sessionURL)
+        EpisodeVideo.shared.update()
+        SocialStore.shared.playerChanged()
+    }
+
+    /// The highest height for videos: the setting, or 360p with Data saver on.
+    static var pictureHeight: Int { AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality }
+    static func pictureSize(_ h: Int) -> CGSize { CGSize(width: h * 16 / 9, height: h) }
+
+    /// A new quality for the stream with the picture (switches without stopping).
+    func pictureQualityChanged() {
+        guard showsPicture else { return }
+        av.currentItem?.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+    }
+
     private func applyRate() {
         av.defaultRate = effectiveRate
         if av.timeControlStatus != .paused { av.rate = effectiveRate }
@@ -446,6 +486,8 @@ final class Player {
         streamInfo = [("Song", track.id)]
         segments = []
         shownSegments = []
+        showsPicture = false
+        pictureHeights = []
         retried = false
         isBuffering = true
         isLoading = true
@@ -531,6 +573,18 @@ final class Player {
                         ("File", audio.absoluteString),
                         ("Listed length", track.duration.map { formatTime($0) } ?? "–"),
                     ]
+                } else if track.watch == true, let w = await StreamResolver.shared.watchStream(track.id) {
+                    // The YouTube viewer: one stream with picture and sound, like YouTube's own app.
+                    url = w.url
+                    self.pictureHeights = w.heights
+                    self.qualityLabel = "Video"
+                    if let d = w.duration, d > 0 {
+                        self.knownDuration = d
+                        self.durationIsExact = true
+                        self.duration = d
+                    }
+                    self.streamInfo = [("Video", track.id), ("Playing", "Picture and sound in one stream (like YouTube's app)"),
+                                       ("Heights", w.heights.map { "\($0)p" }.joined(separator: ", "))]
                 } else {
                     let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
                         try await StreamResolver.shared.resolve(playID, dataSaver: low)
@@ -623,7 +677,12 @@ final class Player {
             // Downloaded file, or an HLS stream (AVPlayer streams those itself).
             loader = nil
             item = AVPlayerItem(url: url)
-            if !url.isFileURL { item.preferredPeakBitRate = 1_000_000 }
+            if current?.watch == true && !url.isFileURL {
+                // Picture too: as sharp as the setting allows (AVPlayer adapts below that by itself).
+                item.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+            } else if !url.isFileURL {
+                item.preferredPeakBitRate = 1_000_000
+            }
         } else {
             // Songs are kept in the song cache as they stream (not episodes or videos).
             let key = current.flatMap { $0.isEpisode ? nil : $0.id }
@@ -633,6 +692,10 @@ final class Player {
         }
         item.preferredForwardBufferDuration = 30
         item.audioTimePitchAlgorithm = .spectral
+        // Its own stream has the picture: show it (the silent copy beside it isn't needed).
+        let picture = current?.watch == true && !url.isFileURL && (url.absoluteString.contains(".m3u8") || url.path.contains("/hls"))
+        if picture != showsPicture { showsPicture = picture }
+        EpisodeVideo.shared.update()
         itemObservers.append(item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             Task { @MainActor in self?.itemStatusChanged(item, status: status) }
@@ -754,6 +817,15 @@ final class Player {
         loadTask = Task { [weak self] in
             guard let self else { return }
             let playID = self.playID ?? track.id
+            if track.watch == true {
+                await StreamResolver.shared.invalidateWatch(track.id)
+                if let w = await StreamResolver.shared.watchStream(track.id) {
+                    guard !Task.isCancelled, self.current?.id == track.id else { return }
+                    self.pictureHeights = w.heights
+                    self.start(w.url, autoplay: wasPlaying, at: resumeAt)
+                    return
+                }
+            }
             await StreamResolver.shared.invalidate(playID)
             do {
                 let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
@@ -812,6 +884,11 @@ final class Player {
             Task.detached(priority: .utility) {
                 // Already in the song cache: nothing to get ready.
                 if await PlayCache.shared.file(for: track.id) != nil { return }
+                // Videos: just find their stream (AVPlayer reads it itself).
+                if track.watch == true {
+                    _ = await StreamResolver.shared.watchStream(track.id)
+                    return
+                }
                 let playID = await AudioVersion.shared.preferred(track)
                 if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)

@@ -64,9 +64,11 @@ fun DriftRoot() {
                 val screen = Nav.top
                 key(Nav.tab, Nav.stack.size, screen) { Page(screen) }
             }
-            if (Remote.target != null) RemoteMiniBar() else if (Playback.current != null) MiniPlayer()
+            // (The YouTube viewer has no bar: its video floats over the pages instead.)
+            if (Remote.target != null) RemoteMiniBar() else if (Playback.current != null && !com.lordxhobo.drift.youtube.YTViewer.on) MiniPlayer()
             TabBar()
         }
+        YTPictureInPicture()
         AnimatedVisibility(
             visible = UiState.showPlayer,
             enter = slideInVertically { it },

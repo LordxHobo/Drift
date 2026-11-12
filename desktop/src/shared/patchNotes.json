@@ -2,6 +2,29 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 62,
+      "date": "2026-11-12",
+      "title": "Videos that start, and float",
+      "notes": [
+        {
+          "text": "Videos in the YouTube viewer now play like YouTube's own app: picture and sound come together in one stream, so they start right away instead of getting stuck.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Swipe down on a video to keep browsing: it floats over the app. Drag it anywhere, pinch it or drag its corner to resize it (down to half the screen), tap it to go back, or X to stop it.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The bar showing what's playing is gone in the YouTube viewer (the floating video takes its place).",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "When a video ends and the next one starts, its page follows along.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 61,
       "date": "2026-11-12",
       "title": "The YouTube viewer, on your phone",

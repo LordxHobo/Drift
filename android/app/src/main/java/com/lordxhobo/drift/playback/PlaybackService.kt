@@ -13,12 +13,16 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -47,7 +51,17 @@ class PlaybackService : MediaLibraryService() {
         val upstream = YouTubeDataSource.Factory(HttpDownloader.shared.client)
         val resolving = ResolvingDataSource.Factory(upstream) { spec ->
             val uri = spec.uri
-            if (uri.scheme == SCHEME) {
+            if (uri.scheme == SCHEME && uri.host == "picture") {
+                // A YouTube viewer video's picture (its sound is the song's audio, played beside it).
+                val id = uri.lastPathSegment ?: throw IOException("No video")
+                val height = uri.getQueryParameter("h")?.toIntOrNull() ?: 720
+                val url = try {
+                    YouTube.video(id, height)?.url
+                } catch (e: Exception) {
+                    null
+                } ?: throw IOException("Couldn't find this video's picture")
+                spec.withUri(Uri.parse(url))
+            } else if (uri.scheme == SCHEME) {
                 val id = uri.lastPathSegment ?: throw IOException("No song")
                 // An episode from a show's own feed: its audio file, as it is.
                 val feedAudio = uri.getQueryParameter("audio")
@@ -74,7 +88,7 @@ class PlaybackService : MediaLibraryService() {
                     .build()
         }
         val player = ExoPlayer.Builder(this, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(sources))
+            .setMediaSourceFactory(WatchSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(sources), resolving))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 true
@@ -149,14 +163,44 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         const val SCHEME = "drift"
 
+        /** Played with its picture in the player itself (not downloaded: those play their saved sound). */
+        fun showsPicture(t: com.lordxhobo.drift.data.Track): Boolean = t.watch == true && Downloads.file(t.id) == null
+
         /** Where a song's sound comes from: `drift://song/<id>` (found when it loads), with a feed episode's file. */
         fun songItem(item: MediaItem): MediaItem {
             val track = item.mediaMetadata.extras?.getString(Playback.TRACK_KEY)?.let {
                 runCatching { com.lordxhobo.drift.data.Library.json.decodeFromString(com.lordxhobo.drift.data.Track.serializer(), it) }.getOrNull()
             }
+            // A video from the YouTube viewer: picture and sound together in this player, like YouTube's app.
+            if (track != null && showsPicture(track)) {
+                val watch = Uri.parse("$SCHEME://watch/${item.mediaId}").buildUpon()
+                    .appendQueryParameter("h", EpisodeVideo.quality.toString())
+                return item.buildUpon().setUri(watch.build()).build()
+            }
             val uri = Uri.parse("$SCHEME://song/${item.mediaId}").buildUpon()
             track?.audioURL?.let { uri.appendQueryParameter("audio", it) }
             return item.buildUpon().setUri(uri.build()).build()
         }
+    }
+}
+
+/**
+ * `drift://watch/<id>` (a YouTube viewer video): its sound and its picture as two streams played as one,
+ * the way NewPipe and YouTube's own apps do. Everything else as usual.
+ */
+@UnstableApi
+private class WatchSourceFactory(
+    private val base: MediaSource.Factory,
+    private val streams: DataSource.Factory,
+) : MediaSource.Factory by base {
+    override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+        val uri = mediaItem.localConfiguration?.uri
+        if (uri?.scheme != PlaybackService.SCHEME || uri.host != "watch") return base.createMediaSource(mediaItem)
+        val id = uri.lastPathSegment.orEmpty()
+        val height = uri.getQueryParameter("h") ?: "720"
+        val progressive = ProgressiveMediaSource.Factory(streams)
+        val sound = progressive.createMediaSource(mediaItem.buildUpon().setUri(Uri.parse("${PlaybackService.SCHEME}://song/$id")).build())
+        val picture = progressive.createMediaSource(MediaItem.fromUri(Uri.parse("${PlaybackService.SCHEME}://picture/$id?h=$height")))
+        return MergingMediaSource(true, true, sound, picture)
     }
 }

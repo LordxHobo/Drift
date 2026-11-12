@@ -83,6 +83,11 @@ object EpisodeVideo {
     fun choose(h: Int) {
         quality = if (h == heights.lastOrNull()) 4320 else h
         prefs.edit().putInt("videoQuality", quality).apply()
+        if (Playback.current?.let { PlaybackService.showsPicture(it) } == true) {
+            key = ""
+            height = h
+            Playback.reloadPicture()
+        }
         update()
     }
 
@@ -94,18 +99,42 @@ object EpisodeVideo {
         update()
     }
 
+    /** The player plays this one's picture itself (a YouTube viewer video): it goes on the front view. */
+    private val inPlayer: Boolean get() = Playback.current?.let { PlaybackService.showsPicture(it) } == true
+
     /** …or went away. */
     fun detach(view: TextureView) {
         val wasShowing = surface === view
         if (!views.remove(view)) return
         if (wasShowing) player?.clearVideoTextureView(view)
         val next = surface
+        if (inPlayer) Playback.showPicture(next)
         if (next == null) stop() else if (wasShowing) player?.setVideoTextureView(next)
     }
 
     /** Loads the right video (or none) for what's playing and the settings. */
     fun update() {
         val t = Playback.current
+        // A YouTube viewer video: the player shows its own picture (sound and picture as one, like YouTube's app).
+        if (::app.isInitialized && t != null && PlaybackService.showsPicture(t)) {
+            stopOwn()
+            Playback.showPicture(surface)
+            unavailable = false
+            ready = surface != null
+            val k = "${t.id}#in-player"
+            if (key != k) {
+                key = k
+                scope.launch {
+                    val found = withContext(Dispatchers.IO) { runCatching { YouTube.video(t.id, quality) }.getOrNull() }
+                    if (key != k || found == null) return@launch
+                    height = found.height
+                    heights = found.heights
+                }
+            }
+            return
+        }
+        Playback.showPicture(null)
+        if (key.endsWith("#in-player")) key = ""
         // Episodes: when video is on. Videos from the YouTube viewer: always.
         if (!::app.isInitialized || !(on || t?.watch == true) || surface == null || !canShow(t) || t == null) {
             stop()
@@ -157,10 +186,16 @@ object EpisodeVideo {
             }
 
     fun stop() {
-        load?.cancel()
-        follow?.cancel()
+        stopOwn()
         key = ""
         ready = false
+        Playback.showPicture(null)
+    }
+
+    /** Lets go of the silent copy (the picture of episodes). */
+    private fun stopOwn() {
+        load?.cancel()
+        follow?.cancel()
         player?.release()
         player = null
     }

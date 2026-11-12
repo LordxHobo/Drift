@@ -30,29 +30,37 @@ struct RootView: View {
     var body: some View {
         ZStack {
                 NavigationStack(path: $homePath) { HomeView().withRoutes() }
+                    .environment(\.stackName, "home")
                     .opacity(tab == .home ? 1 : 0)
                     .allowsHitTesting(tab == .home)
                 NavigationStack(path: $searchPath) { SearchView().withRoutes() }
+                    .environment(\.stackName, "search")
                     .opacity(tab == .search ? 1 : 0)
                     .allowsHitTesting(tab == .search)
                 NavigationStack(path: $podcastsPath) { PodcastsView().withRoutes() }
+                    .environment(\.stackName, "podcasts")
                     .opacity(tab == .podcasts ? 1 : 0)
                     .allowsHitTesting(tab == .podcasts)
                 NavigationStack(path: $libraryPath) { LibraryView().withRoutes() }
+                    .environment(\.stackName, "library")
                     .opacity(tab == .library ? 1 : 0)
                     .allowsHitTesting(tab == .library)
                 // The YouTube viewer's tabs (only built once it's been turned on).
                 if yt.on || tab == .ytHome || tab == .ytSubs || tab == .ytLibrary || tab == .ytSearch {
                     NavigationStack(path: $ytHomePath) { YTHomeView().withRoutes() }
+                    .environment(\.stackName, "ytHome")
                         .opacity(tab == .ytHome ? 1 : 0)
                         .allowsHitTesting(tab == .ytHome)
                     NavigationStack(path: $ytSubsPath) { YTSubscriptionsView().withRoutes() }
+                    .environment(\.stackName, "ytSubs")
                         .opacity(tab == .ytSubs ? 1 : 0)
                         .allowsHitTesting(tab == .ytSubs)
                     NavigationStack(path: $ytLibraryPath) { YTLibraryView().withRoutes() }
+                    .environment(\.stackName, "ytLibrary")
                         .opacity(tab == .ytLibrary ? 1 : 0)
                         .allowsHitTesting(tab == .ytLibrary)
                     NavigationStack(path: $ytSearchPath) { YTSearchView().withRoutes() }
+                    .environment(\.stackName, "ytSearch")
                         .opacity(tab == .ytSearch ? 1 : 0)
                         .allowsHitTesting(tab == .ytSearch)
                 }
@@ -82,6 +90,7 @@ struct RootView: View {
             .fullScreenCover(isPresented: $social.showOnboarding) {
                 OnboardingView()
             }
+        .overlay { pictureInPicture }
         .overlay {
             ProfileDrawer(isOpen: $ui.showDrawer, open: openFromDrawer)
         }
@@ -168,7 +177,8 @@ extension RootView {
                     .padding(.horizontal, floating ? 14 : 8)
                     .padding(.top, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if player.current != nil {
+            } else if player.current != nil && !yt.on {
+                // (The YouTube viewer has no bar: its video floats instead, see `pictureInPicture`.)
                 Group {
                     if Theme.isMusic {
                         MusicMiniPlayer { openPlayer() }
@@ -187,6 +197,16 @@ extension RootView {
         }
         .background {
             if !floating { Theme.bg.ignoresSafeArea(edges: .bottom) }
+        }
+    }
+
+    /// The YouTube viewer: the video playing floats over the pages while its watch page isn't on screen
+    /// (swiped down, or another page opened over it). Tap it to go back to the video, X to stop it.
+    @ViewBuilder var pictureInPicture: some View {
+        if yt.on, let t = player.current, t.watch == true, !ui.watchPages.contains("\(tab)#\(t.id)"), !ui.showPlayer {
+            YTPictureInPicture(track: t) { openFromDrawer(.ytWatch(t.id)) }
+                .id(t.id)
+                .transition(.opacity)
         }
     }
 
