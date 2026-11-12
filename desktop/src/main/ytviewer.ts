@@ -82,8 +82,35 @@ export function signIn(parent?: BrowserWindow): Promise<boolean> {
     win.on('closed', () => {
       void cookieHeader().then((c) => finish(!!c))
     })
-    void win.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=' + encodeURIComponent('https://www.youtube.com/'))
+    void hidePasskeys(win).finally(() => {
+      if (!win.isDestroyed()) void win.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=' + encodeURIComponent('https://www.youtube.com/'))
+    })
   })
+}
+
+/**
+ * Google's sign-in page asks for a passkey the moment it opens, and with no passkey screen of its own
+ * this window would get Windows' "insert your security key" box. Hiding passkey support makes Google
+ * go straight to email and password (2-step verification still works as usual).
+ */
+async function hidePasskeys(win: BrowserWindow): Promise<void> {
+  const source = `(() => {
+    try { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }) } catch (e) {}
+    try {
+      const refuse = () => Promise.reject(new DOMException('Not supported here', 'NotSupportedError'))
+      if (navigator.credentials) {
+        Object.defineProperty(navigator.credentials, 'get', { value: refuse, configurable: true })
+        Object.defineProperty(navigator.credentials, 'create', { value: refuse, configurable: true })
+      }
+    } catch (e) {}
+  })()`
+  try {
+    win.webContents.debugger.attach('1.3')
+    await win.webContents.debugger.sendCommand('Page.enable')
+    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source })
+  } catch {
+    // couldn't: Google may still ask for a passkey (cancel it, then "Try another way")
+  }
 }
 
 export async function signOut(): Promise<void> {
