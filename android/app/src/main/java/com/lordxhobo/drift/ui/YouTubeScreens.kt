@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.draw.shadow
@@ -633,58 +637,156 @@ private fun Action(icon: androidx.compose.ui.graphics.vector.ImageVector, label:
 }
 
 /** The video with YouTube-style controls: tap to show them, double-tap a side to jump 10 s, the timeline with SponsorBlock's parts. */
+/**
+ * The video with YouTube-style controls: tap to show them (and the timeline), double-tap a side to jump 10 s
+ * (keep tapping that side for 20, 30, …), back and ahead 10 s buttons, quality and full screen. All of it hides
+ * again after a few seconds of playing. Full screen uses the same, with X at the top right.
+ */
 @Composable
-private fun YTPlayer(t: Track) {
+private fun YTPlayer(t: Track, fullScreen: Boolean = false, onClose: (() -> Unit)? = null) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var controls by remember { mutableStateOf(true) }
-    LaunchedEffect(controls, Playback.isPlaying) {
+    // Bumped by anything done on the controls, so they stay up a while longer.
+    var poke by remember { mutableStateOf(0) }
+    LaunchedEffect(controls, Playback.isPlaying, poke) {
         if (controls && Playback.isPlaying) {
             kotlinx.coroutines.delay(3500)
             controls = false
         }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().background(Color.Black)) {
-        val w = maxWidth
-        EpisodeVideoView(t, w, fullScreen = false) { openVideoFullScreen(context) }
-        // Below the quality and full-screen buttons, which stay tappable.
+    // Double-tap jumps: the tap before, and a run of jumps on one side.
+    var lastTapAt by remember { mutableStateOf(0L) }
+    var lastTapRight by remember { mutableStateOf(false) }
+    var streakRight by remember { mutableStateOf<Boolean?>(null) }
+    var streakTotal by remember { mutableStateOf(0) }
+    var streakBase by remember { mutableStateOf(0L) }
+    var streakUntil by remember { mutableStateOf(0L) }
+    var pending by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun step() {
+        streakTotal += 10
+        streakUntil = System.currentTimeMillis() + 800
+        val by = streakTotal * 1000L
+        Playback.seek(if (streakRight == true) streakBase + by else (streakBase - by).coerceAtLeast(0))
+        val total = streakTotal
+        scope.launch {
+            kotlinx.coroutines.delay(850)
+            if (streakTotal == total) streakRight = null
+        }
+    }
+    fun jump(by: Long) {
+        Playback.seek((Playback.exactPosition() + by).coerceAtLeast(0))
+        poke++
+    }
+    BoxWithConstraints(
+        (if (fullScreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f)).background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        val w = if (fullScreen) minOf(maxWidth, maxHeight * 16f / 9f) else maxWidth
+        EpisodeVideoView(t, w, fullScreen = fullScreen, buttons = false) {}
+        // Taps and swipes anywhere on it.
         Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f).padding(top = 48.dp).pointerInput(t.id) {
-                // Swipe down: back to browsing, with the video floating over the app.
+            Modifier.fillMaxSize().pointerInput(t.id) {
+                // Swipe down: back to browsing (the video floats over the app), or out of full screen.
                 var pulled = 0f
                 detectVerticalDragGestures(
                     onDragStart = { pulled = 0f },
-                    onDragEnd = { if (pulled > 120.dp.toPx() && Nav.top is Screen.YTWatch) Nav.back() },
+                    onDragEnd = {
+                        if (pulled > 120.dp.toPx()) {
+                            if (onClose != null) onClose() else if (Nav.top is Screen.YTWatch) Nav.back()
+                        }
+                    },
                 ) { _, dy -> pulled += dy }
             }.pointerInput(t.id) {
-                detectTapGestures(
-                    onTap = { controls = !controls },
-                    onDoubleTap = { o ->
-                        val now = Playback.exactPosition()
-                        Playback.seek(if (o.x < size.width / 2) (now - 10_000).coerceAtLeast(0) else now + 10_000)
-                    },
-                )
+                detectTapGestures(onTap = { o ->
+                    val right = o.x > size.width / 2
+                    val now = System.currentTimeMillis()
+                    if (streakRight == right && now < streakUntil) {
+                        step()
+                    } else if (lastTapRight == right && now - lastTapAt < 300) {
+                        // Two quick taps on one side: jump 10 s that way (the first tap does nothing).
+                        pending?.cancel()
+                        lastTapAt = 0
+                        streakRight = right
+                        streakTotal = 0
+                        streakBase = Playback.exactPosition()
+                        step()
+                    } else {
+                        lastTapAt = now
+                        lastTapRight = right
+                        pending?.cancel()
+                        pending = scope.launch {
+                            kotlinx.coroutines.delay(300)
+                            controls = !controls
+                        }
+                    }
+                })
             },
         )
+        streakRight?.let { right ->
+            // "+30 s" on the side being tapped.
+            Box(Modifier.fillMaxSize(), contentAlignment = if (right) Alignment.CenterEnd else Alignment.CenterStart) {
+                Column(
+                    Modifier.fillMaxHeight().fillMaxWidth(0.32f).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(if (right) Icons.Filled.FastForward else Icons.Filled.FastRewind, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Text((if (right) "+" else "−") + streakTotal + " s", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         if (controls) {
-            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                RoundIcon(Icons.Filled.Replay10, "Back 10 seconds", 44.dp) { Playback.seek((Playback.exactPosition() - 10_000).coerceAtLeast(0)) }
-                RoundIcon(if (Playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (Playback.isPlaying) "Pause" else "Play", 56.dp) { Playback.toggle() }
-                RoundIcon(Icons.Filled.Forward10, "Ahead 10 seconds", 44.dp) { Playback.seek(Playback.exactPosition() + 10_000) }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            val big = if (fullScreen) 54.dp else 44.dp
+            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullScreen) 56.dp else 28.dp)) {
+                RoundIcon(Icons.Filled.Replay10, "Back 10 seconds", big) { jump(-10_000) }
+                RoundIcon(if (Playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (Playback.isPlaying) "Pause" else "Play", big + 12.dp) {
+                    Playback.toggle()
+                    poke++
+                }
+                RoundIcon(Icons.Filled.Forward10, "Ahead 10 seconds", big) { jump(10_000) }
+            }
+            Row(
+                Modifier.align(Alignment.TopEnd).padding(horizontal = if (fullScreen) 20.dp else 8.dp, vertical = if (fullScreen) 16.dp else 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                VideoQualityButton(t)
+                if (onClose != null) {
+                    RoundIcon(Icons.Filled.Close, "Close full screen", 40.dp) { onClose() }
+                } else {
+                    RoundIcon(Icons.Filled.Fullscreen, "Full screen", 34.dp) { openVideoFullScreen(context) }
+                }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))).padding(horizontal = 12.dp, vertical = 6.dp),
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                    .padding(horizontal = if (fullScreen) 28.dp else 12.dp, vertical = if (fullScreen) 14.dp else 6.dp),
             ) {
                 Text(
                     "${formatSeconds(Playback.position / 1000.0)} / ${formatSeconds(Playback.duration / 1000.0)}",
-                    color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    color = Color.White, fontSize = if (fullScreen) 14.sp else 12.sp, fontWeight = FontWeight.SemiBold,
                 )
-                Timeline()
+                Timeline(onUse = { poke++ })
             }
         } else {
             // A thin line along the bottom while the controls are hidden.
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)) { Timeline(thin = true) }
         }
+    }
+}
+
+/** Full screen for videos from the YouTube viewer: the same controls, sideways, X at the top right. */
+@Composable
+fun YTFullScreen(t: Track) {
+    val context = LocalContext.current
+    val onClose = { closeVideoFullScreen(context) }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        YTPlayer(t, fullScreen = true, onClose = onClose)
     }
 }
 
@@ -708,7 +810,7 @@ fun segmentColor(category: String): Color = when (category) {
 
 /** The timeline: played part, SponsorBlock's parts on top, drag or tap to jump. */
 @Composable
-private fun Timeline(thin: Boolean = false) {
+private fun Timeline(thin: Boolean = false, onUse: () -> Unit = {}) {
     val duration = Playback.duration.coerceAtLeast(1)
     var drag by remember { mutableStateOf<Float?>(null) }
     val fraction = drag ?: (Playback.position.toFloat() / duration).coerceIn(0f, 1f)
@@ -716,11 +818,11 @@ private fun Timeline(thin: Boolean = false) {
     Canvas(
         Modifier.fillMaxWidth().height(if (thin) 3.dp else 22.dp).then(
             if (thin) Modifier else Modifier
-                .pointerInput(duration) { detectTapGestures { o -> Playback.seek((o.x / size.width * duration).toLong()) } }
+                .pointerInput(duration) { detectTapGestures { o -> Playback.seek((o.x / size.width * duration).toLong()); onUse() } }
                 .pointerInput(duration) {
                     detectHorizontalDragGestures(
-                        onDragStart = { o -> drag = (o.x / size.width).coerceIn(0f, 1f) },
-                        onDragEnd = { drag?.let { Playback.seek((it * duration).toLong()) }; drag = null },
+                        onDragStart = { o -> drag = (o.x / size.width).coerceIn(0f, 1f); onUse() },
+                        onDragEnd = { drag?.let { Playback.seek((it * duration).toLong()) }; drag = null; onUse() },
                         onDragCancel = { drag = null },
                     ) { change, _ -> drag = (change.position.x / size.width).coerceIn(0f, 1f) }
                 },

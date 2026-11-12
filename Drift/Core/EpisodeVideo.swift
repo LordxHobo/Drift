@@ -230,6 +230,8 @@ struct EpisodeVideoView: View {
     var width: CGFloat
     var fullScreen = false
     var onFullScreen: (() -> Void)?
+    /// Its own quality and full-screen buttons (off when the YouTube viewer's controls draw them).
+    var buttons = true
     private var video: EpisodeVideo { .shared }
     private var web: YTWebPlayer { .shared }
     /// Played by YouTube's own player (the YouTube viewer).
@@ -269,8 +271,9 @@ struct EpisodeVideoView: View {
         .frame(width: width, height: width * 9 / 16)
         .clipShape(RoundedRectangle(cornerRadius: fullScreen ? 0 : 8, style: .continuous))
         .overlay(alignment: .topTrailing) {
+            if buttons {
             HStack(spacing: 6) {
-                if onWeb { webQualityMenu } else { qualityMenu }
+                VideoQualityMenu(track: track)
                 if let onFullScreen {
                     Button(action: onFullScreen) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -283,10 +286,27 @@ struct EpisodeVideoView: View {
             }
             .foregroundStyle(.white)
             .padding(8)
+            }
         }
         .onAppear { video.attach() }
         .onDisappear { video.detach() }
         .onChange(of: track.id) { _, _ in video.update() }
+    }
+
+    static func label(_ h: Int) -> String {
+        h >= 2160 ? "4K" : "\(h)p"
+    }
+}
+
+/// The quality menu for a video (Drift's own picture, or YouTube's player's qualities).
+struct VideoQualityMenu: View {
+    let track: Track
+    private var video: EpisodeVideo { .shared }
+    private var web: YTWebPlayer { .shared }
+    private var onWeb: Bool { Player.shared.webActive && Player.shared.current?.id == track.id }
+
+    var body: some View {
+        if onWeb { webQualityMenu } else { qualityMenu }
     }
 
     private var qualityMenu: some View {
@@ -297,9 +317,9 @@ struct EpisodeVideoView: View {
                         video.choose(h)
                     } label: {
                         if h == video.height {
-                            Label(Self.label(h), systemImage: "checkmark")
+                            Label(EpisodeVideoView.label(h), systemImage: "checkmark")
                         } else {
-                            Text(Self.label(h))
+                            Text(EpisodeVideoView.label(h))
                         }
                     }
                 }
@@ -309,7 +329,7 @@ struct EpisodeVideoView: View {
             }
         } label: {
             HStack(spacing: 3) {
-                Text(video.height.map(Self.label) ?? "Video")
+                Text(video.height.map(EpisodeVideoView.label) ?? "Video")
                     .font(.system(size: 12, weight: .bold))
                 if let h = video.height, h >= 720 {
                     Text("HD")
@@ -324,11 +344,7 @@ struct EpisodeVideoView: View {
             .frame(height: 32)
             .background(.black.opacity(0.55), in: Capsule())
         }
-        .accessibilityLabel("Video quality \(video.height.map(Self.label) ?? "")")
-    }
-
-    static func label(_ h: Int) -> String {
-        h >= 2160 ? "4K" : "\(h)p"
+        .accessibilityLabel("Video quality \(video.height.map(EpisodeVideoView.label) ?? "")")
     }
 
     /// YouTube's player: the qualities it offers (Auto picks for the connection).
@@ -340,12 +356,12 @@ struct EpisodeVideoView: View {
                     Button {
                         web.choose(h)
                     } label: {
-                        if h == web.height { Label(Self.label(h), systemImage: "checkmark") } else { Text(Self.label(h)) }
+                        if h == web.height { Label(EpisodeVideoView.label(h), systemImage: "checkmark") } else { Text(EpisodeVideoView.label(h)) }
                     }
                 }
             }
         } label: {
-            Text(web.height.map(Self.label) ?? "Auto")
+            Text(web.height.map(EpisodeVideoView.label) ?? "Auto")
                 .font(.system(size: 12, weight: .bold))
                 .padding(.horizontal, 10)
                 .frame(height: 32)

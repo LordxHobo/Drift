@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 65,
+      "date": "2026-11-12",
+      "title": "Better video controls",
+      "notes": [
+        {
+          "text": "Double-tap the right or left side of a video to jump 10 seconds ahead or back, and keep tapping that side to go further (20, 30, 40 seconds…), with a bubble showing how far.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Full screen now has the same controls as the watch page: back and ahead 10 seconds, play/pause, the timeline with SponsorBlock's parts, quality, and X at the top right.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Tap a video to show its controls and timeline; all of them (quality and full screen too) hide again after a few seconds of playing.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 64,
       "date": "2026-11-12",
       "title": "Videos play like ProTube",

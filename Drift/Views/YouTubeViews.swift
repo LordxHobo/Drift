@@ -502,6 +502,7 @@ struct YTWatchView: View {
             GeometryReader { geo in
                 if let t {
                     YTPlayerView(track: t, width: geo.size.width, onFullScreen: { fullScreen = true }, onSwipeDown: { dismiss() })
+                        .id(t.id)
                 } else {
                     ZStack { Color.black; ProgressView().tint(.white) }
                 }
@@ -591,7 +592,7 @@ struct YTWatchView: View {
             }
         }
         .fullScreenCover(isPresented: $fullScreen) {
-            if let t = player.current { EpisodeVideoFullScreen(track: t) }
+            if let t = player.current { YTFullScreen(track: t) }
         }
         .onAppear { UIState.shared.watchPages.insert("\(stack)#\(id)") }
         .onDisappear { UIState.shared.watchPages.remove("\(stack)#\(id)") }
@@ -633,65 +634,163 @@ struct YTWatchView: View {
     }
 }
 
-/// The video with YouTube-style controls: tap to show them, double-tap a side to jump 10 s, and a timeline
-/// with SponsorBlock's parts on it.
+/// The video with YouTube-style controls: tap to show them (and the timeline), double-tap a side to jump 10 s
+/// (keep tapping that side for 20, 30, …), back and ahead 10 s buttons, quality and full screen. All of it
+/// hides again after a few seconds of playing. Full screen uses the same, sideways, with X at the top right.
 private struct YTPlayerView: View {
     let track: Track
     let width: CGFloat
     var onFullScreen: () -> Void
     /// Swiped down on the video: back to browsing, with the video floating over the app.
     var onSwipeDown: () -> Void = {}
+    /// Full screen: the area to fill (the video sits in the middle of it), and how to close it.
+    var area: CGSize? = nil
+    var onClose: (() -> Void)? = nil
     @State private var controls = true
     @State private var drag: Double?
+    /// Bumped by anything done on the controls, so they stay up a while longer.
+    @State private var poke = 0
+    // Double-tap jumps: the tap before, and a run of jumps on one side.
+    @State private var lastTap: (time: Date, right: Bool)?
+    @State private var streak: (right: Bool, total: Int, base: Double, until: Date)?
+    @State private var pendingToggle: Task<Void, Never>?
     private var player: Player { .shared }
+    private var fullScreen: Bool { area != nil }
 
     var body: some View {
+        let size = area ?? CGSize(width: width, height: width * 9 / 16)
         ZStack {
-            EpisodeVideoView(track: track, width: width, onFullScreen: onFullScreen)
-            // Taps (below the quality and full-screen buttons, which stay tappable).
+            Color.black
+            EpisodeVideoView(track: track, width: width, fullScreen: fullScreen, buttons: false)
+            // Taps and swipes anywhere on it.
             Color.clear
                 .contentShape(Rectangle())
-                .padding(.top, 48)
-                .onTapGesture(count: 2, coordinateSpace: .local) { p in
-                    player.seek(to: p.x < width / 2 ? max(0, player.currentTime - 10) : player.currentTime + 10)
-                }
-                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { controls.toggle() } }
+                .onTapGesture(coordinateSpace: .local) { p in tapped(at: p, width: size.width) }
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
                     if v.translation.height > 70 || v.predictedEndTranslation.height > 200, abs(v.translation.width) < v.translation.height {
-                        onSwipeDown()
+                        if let onClose { onClose() } else { onSwipeDown() }
                     }
                 })
+            if let s = streak {
+                jumpBubble(right: s.right, seconds: s.total, size: size)
+            }
             if controls {
-                HStack(spacing: 32) {
-                    roundButton("gobackward.10", 44) { player.seek(to: max(0, player.currentTime - 10)) }
-                    roundButton(player.isPlaying ? "pause.fill" : "play.fill", 58) { player.togglePlay() }
-                    roundButton("goforward.10", 44) { player.seek(to: player.currentTime + 10) }
+                Color.black.opacity(0.25).allowsHitTesting(false)
+                HStack(spacing: fullScreen ? 64 : 32) {
+                    roundButton("gobackward.10", fullScreen ? 54 : 44) { jump(-10) }
+                        .accessibilityLabel("Back 10 seconds")
+                    roundButton(player.isPlaying ? "pause.fill" : "play.fill", fullScreen ? 68 : 58) {
+                        player.togglePlay()
+                        poke += 1
+                    }
+                    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                    roundButton("goforward.10", fullScreen ? 54 : 44) { jump(10) }
+                        .accessibilityLabel("Ahead 10 seconds")
                 }
-                VStack(spacing: 2) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        VideoQualityMenu(track: track)
+                            .simultaneousGesture(TapGesture().onEnded { poke += 1 })
+                        if let onClose {
+                            roundButton("xmark", 40) { onClose() }
+                                .accessibilityLabel("Close full screen")
+                        } else {
+                            roundButton("arrow.up.left.and.arrow.down.right", 34) { onFullScreen() }
+                                .accessibilityLabel("Full screen")
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, fullScreen ? 20 : 8)
+                    .padding(.top, fullScreen ? 16 : 8)
                     Spacer()
                     HStack {
                         Text("\(timeText(drag ?? player.currentTime)) / \(timeText(player.duration))")
-                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .font(.system(size: fullScreen ? 14 : 12, weight: .semibold).monospacedDigit())
                             .foregroundStyle(.white)
                         Spacer()
                     }
                     timeline(thin: false)
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
-                .background(alignment: .bottom) {
-                    LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom).frame(height: 70)
-                }
+                .padding(.horizontal, fullScreen ? 28 : 12)
+                .padding(.bottom, fullScreen ? 14 : 4)
+                .transition(.opacity)
             } else {
                 VStack { Spacer(); timeline(thin: true) }
             }
         }
-        .frame(width: width, height: width * 9 / 16)
-        .task(id: controls && player.isPlaying) {
-            guard controls, player.isPlaying else { return }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+        .task(id: "\(controls)|\(player.isPlaying)|\(poke)|\(drag == nil)") {
+            guard controls, player.isPlaying, drag == nil else { return }
             try? await Task.sleep(for: .seconds(3.5))
-            withAnimation { controls = false }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.25)) { controls = false }
         }
+    }
+
+    /// One tap: the controls (a moment later, in case it's a double tap). Two quick taps on one side: jump
+    /// 10 s that way; each tap on that side right after jumps 10 s more.
+    private func tapped(at p: CGPoint, width: CGFloat) {
+        let right = p.x > width / 2
+        let now = Date()
+        if let s = streak, s.right == right, now < s.until {
+            step()
+            return
+        }
+        if let l = lastTap, l.right == right, now.timeIntervalSince(l.time) < 0.3 {
+            pendingToggle?.cancel()
+            lastTap = nil
+            streak = (right, 0, player.currentTime, now)
+            step()
+            return
+        }
+        lastTap = (now, right)
+        pendingToggle?.cancel()
+        pendingToggle = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { controls.toggle() }
+        }
+    }
+
+    private func step() {
+        guard var s = streak else { return }
+        s.total += 10
+        s.until = Date().addingTimeInterval(0.8)
+        streak = s
+        let target = s.right ? s.base + Double(s.total) : max(0, s.base - Double(s.total))
+        player.seek(to: target, precise: false)
+        let total = s.total
+        Task {
+            try? await Task.sleep(for: .seconds(0.85))
+            if streak?.total == total { withAnimation(.easeOut(duration: 0.2)) { streak = nil } }
+        }
+    }
+
+    private func jump(_ by: Double) {
+        player.seek(to: max(0, player.currentTime + by), precise: false)
+        poke += 1
+    }
+
+    /// "+30 s" on the side being tapped.
+    private func jumpBubble(right: Bool, seconds: Int, size: CGSize) -> some View {
+        HStack {
+            if right { Spacer() }
+            VStack(spacing: 4) {
+                Image(systemName: right ? "forward.fill" : "backward.fill")
+                    .font(.system(size: 18, weight: .bold))
+                Text("\(right ? "+" : "−")\(seconds) s")
+                    .font(.system(size: 14, weight: .bold).monospacedDigit())
+            }
+            .foregroundStyle(.white)
+            .frame(width: size.width * 0.32, height: size.height)
+            .background(.white.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: size.height / 2))
+            if !right { Spacer() }
+        }
+        .allowsHitTesting(false)
+        .transition(.opacity)
     }
 
     private func roundButton(_ icon: String, _ size: CGFloat, _ run: @escaping () -> Void) -> some View {
@@ -745,6 +844,7 @@ private struct YTPlayerView: View {
                 .onEnded { v in
                     player.seek(to: min(d, max(0, v.location.x / w * d)))
                     drag = nil
+                    poke += 1
                 })
         }
         .frame(height: thin ? 3 : 22)
@@ -1019,5 +1119,29 @@ private struct PiPVideo: View {
                 .onAppear { EpisodeVideo.shared.attach() }
                 .onDisappear { EpisodeVideo.shared.detach() }
         }
+    }
+}
+
+/// Full screen: the video and its controls turned sideways to fill the phone (X at the top right).
+private struct YTFullScreen: View {
+    let track: Track
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        GeometryReader { geo in
+            let portrait = geo.size.height > geo.size.width
+            let long = max(geo.size.width, geo.size.height)
+            let short = min(geo.size.width, geo.size.height)
+            ZStack {
+                Color.black
+                YTPlayerView(track: track, width: min(long, short * 16 / 9), onFullScreen: {},
+                             area: CGSize(width: long, height: short), onClose: { dismiss() })
+                    .rotationEffect(portrait ? .degrees(90) : .zero)
+                    .frame(width: geo.size.width, height: geo.size.height)
+            }
+        }
+        .ignoresSafeArea()
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
     }
 }

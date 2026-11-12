@@ -85,7 +85,7 @@ fun DriftRoot() {
         if (videoFullScreen) {
             val ep = Playback.current?.takeIf { (com.lordxhobo.drift.playback.EpisodeVideo.on || it.watch == true) && com.lordxhobo.drift.playback.EpisodeVideo.canShow(it) }
             val context = androidx.compose.ui.platform.LocalContext.current
-            if (ep != null) EpisodeVideoFullScreen(ep) else LaunchedEffect(Unit) { closeVideoFullScreen(context) }
+            if (ep?.watch == true) YTFullScreen(ep) else if (ep != null) EpisodeVideoFullScreen(ep) else LaunchedEffect(Unit) { closeVideoFullScreen(context) }
         }
         IncomingInvite()
         NoticeBar()

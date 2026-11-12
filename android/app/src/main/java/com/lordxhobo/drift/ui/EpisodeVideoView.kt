@@ -53,7 +53,7 @@ import com.lordxhobo.drift.playback.YTWeb
 /** The episode's video in the player: its picture and a spinner until it's ready, plus quality and full screen. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScreen: () -> Unit) {
+fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, buttons: Boolean = true, onFullScreen: () -> Unit) {
     val context = LocalContext.current
     val view = remember { TextureView(context) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -99,27 +99,8 @@ fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScr
                 CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
         }
-        Row(Modifier.align(Alignment.TopEnd).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            val h = if (onWeb) YTWeb.height else EpisodeVideo.height
-            val offered = if (onWeb) YTWeb.heights.ifEmpty { listOf(360, 480, 720, 1080) } else EpisodeVideo.heights
-            if (h != null && offered.size > 1) {
-                var open by remember { mutableStateOf(false) }
-                Box {
-                    Text(
-                        "${h}p", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.6f))
-                            .clickable { open = true }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        for (q in offered.reversed()) {
-                            DropdownMenuItem(
-                                text = { Text("${q}p" + if (q == h) "  ✓" else "") },
-                                onClick = { open = false; if (onWeb) YTWeb.choose(q) else EpisodeVideo.choose(q) },
-                            )
-                        }
-                    }
-                }
-            }
+        if (buttons) Row(Modifier.align(Alignment.TopEnd).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            VideoQualityButton(t)
             Box(
                 Modifier.padding(start = 6.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onFullScreen),
                 contentAlignment = Alignment.Center,
@@ -128,6 +109,33 @@ fun EpisodeVideoView(t: Track, width: Dp, fullScreen: Boolean = false, onFullScr
                     if (fullScreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                     contentDescription = if (fullScreen) "Exit full screen" else "Full screen", tint = Color.White, modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+}
+
+/** The quality menu for a video (Drift's own picture, or YouTube's player's qualities). */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+fun VideoQualityButton(t: Track) {
+    val onWeb = YTWeb.active && Playback.current?.id == t.id
+    val h = if (onWeb) YTWeb.height else EpisodeVideo.height
+    val offered = if (onWeb) YTWeb.heights.ifEmpty { listOf(360, 480, 720, 1080) } else EpisodeVideo.heights
+    if (h != null && offered.size > 1) {
+        var open by remember { mutableStateOf(false) }
+        Box {
+            Text(
+                "${h}p", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { open = true }.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                for (q in offered.reversed()) {
+                    DropdownMenuItem(
+                        text = { Text("${q}p" + if (q == h) "  ✓" else "") },
+                        onClick = { open = false; if (onWeb) YTWeb.choose(q) else EpisodeVideo.choose(q) },
+                    )
+                }
             }
         }
     }
