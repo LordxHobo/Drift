@@ -58,8 +58,9 @@ final class EpisodeVideo {
 
     /// Loads the right video (or none) for what's playing and the settings.
     func update() {
-        guard viewers > 0, AppSettings.shared.podcastVideo,
-              let t = Player.shared.current, t.isEpisode, !t.isFeedEpisode,
+        // Episodes: when video is on. Videos from the YouTube viewer: always.
+        guard viewers > 0, let t = Player.shared.current, AppSettings.shared.podcastVideo || t.watch == true,
+              t.isEpisode, !t.isFeedEpisode,
               UIApplication.shared.applicationState != .background else {
             stop()
             return

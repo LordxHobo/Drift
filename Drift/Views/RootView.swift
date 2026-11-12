@@ -2,6 +2,8 @@ import SwiftUI
 
 enum AppTab: Hashable {
     case home, search, podcasts, library
+    // The YouTube viewer
+    case ytHome, ytSubs, ytLibrary, ytSearch
 }
 
 struct RootView: View {
@@ -11,6 +13,11 @@ struct RootView: View {
     @State private var searchPath = NavigationPath()
     @State private var podcastsPath = NavigationPath()
     @State private var libraryPath = NavigationPath()
+    @State private var ytHomePath = NavigationPath()
+    @State private var ytSubsPath = NavigationPath()
+    @State private var ytLibraryPath = NavigationPath()
+    @State private var ytSearchPath = NavigationPath()
+    @State private var yt = YTViewer.shared
     @State private var ui = UIState.shared
     /// What's new since the last update (shown once).
     @State private var patchNotes = PatchNotes.unseen()
@@ -34,6 +41,21 @@ struct RootView: View {
                 NavigationStack(path: $libraryPath) { LibraryView().withRoutes() }
                     .opacity(tab == .library ? 1 : 0)
                     .allowsHitTesting(tab == .library)
+                // The YouTube viewer's tabs (only built once it's been turned on).
+                if yt.on || tab == .ytHome || tab == .ytSubs || tab == .ytLibrary || tab == .ytSearch {
+                    NavigationStack(path: $ytHomePath) { YTHomeView().withRoutes() }
+                        .opacity(tab == .ytHome ? 1 : 0)
+                        .allowsHitTesting(tab == .ytHome)
+                    NavigationStack(path: $ytSubsPath) { YTSubscriptionsView().withRoutes() }
+                        .opacity(tab == .ytSubs ? 1 : 0)
+                        .allowsHitTesting(tab == .ytSubs)
+                    NavigationStack(path: $ytLibraryPath) { YTLibraryView().withRoutes() }
+                        .opacity(tab == .ytLibrary ? 1 : 0)
+                        .allowsHitTesting(tab == .ytLibrary)
+                    NavigationStack(path: $ytSearchPath) { YTSearchView().withRoutes() }
+                        .opacity(tab == .ytSearch ? 1 : 0)
+                        .allowsHitTesting(tab == .ytSearch)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .leading) {
@@ -73,6 +95,16 @@ struct RootView: View {
                 .preferredColorScheme(.dark)
         }
         .songSheets()
+        .sheet(isPresented: $yt.signingIn) { YTSignInSheet() }
+        // Into the viewer or back to music: each starts on its Home.
+        .onChange(of: yt.on) { _, on in tab = on ? .ytHome : .home }
+        .onAppear { if yt.on { tab = .ytHome } }
+        .onChange(of: ui.openVideo) { _, id in
+            // A video from the viewer opens its watch page (not the music player).
+            guard let id else { return }
+            ui.openVideo = nil
+            openFromDrawer(.ytWatch(id))
+        }
         .sheet(isPresented: $ui.showRemote) { RemotePlayerSheet() }
         .sheet(isPresented: Binding(get: { !patchNotes.isEmpty && !social.showOnboarding },
                                     set: { if !$0 { patchNotes = [] } })) {
@@ -139,10 +171,10 @@ extension RootView {
             } else if player.current != nil {
                 Group {
                     if Theme.isMusic {
-                        MusicMiniPlayer { ui.showPlayer = true }
+                        MusicMiniPlayer { openPlayer() }
                             .foregroundStyle(Theme.text)
                     } else {
-                        MiniPlayer { ui.showPlayer = true }
+                        MiniPlayer { openPlayer() }
                             .foregroundStyle(Theme.text)
                             .environment(\.colorScheme, .dark)
                     }
@@ -164,7 +196,16 @@ extension RootView {
         case .search: searchPath.isEmpty
         case .podcasts: podcastsPath.isEmpty
         case .library: libraryPath.isEmpty
+        case .ytHome: ytHomePath.isEmpty
+        case .ytSubs: ytSubsPath.isEmpty
+        case .ytLibrary: ytLibraryPath.isEmpty
+        case .ytSearch: ytSearchPath.isEmpty
         }
+    }
+
+    /// The mini player: a video from the viewer opens its watch page; anything else, the player.
+    func openPlayer() {
+        if let t = player.current, t.watch == true { openFromDrawer(.ytWatch(t.id)) } else { ui.showPlayer = true }
     }
 
     /// Pages picked in the drawer open in the tab you're on.
@@ -175,6 +216,10 @@ extension RootView {
         case .search: searchPath.append(route)
         case .podcasts: podcastsPath.append(route)
         case .library: libraryPath.append(route)
+        case .ytHome: ytHomePath.append(route)
+        case .ytSubs: ytSubsPath.append(route)
+        case .ytLibrary: ytLibraryPath.append(route)
+        case .ytSearch: ytSearchPath.append(route)
         }
     }
 
@@ -185,6 +230,10 @@ extension RootView {
         case .search: searchPath = NavigationPath()
         case .podcasts: podcastsPath = NavigationPath()
         case .library: libraryPath = NavigationPath()
+        case .ytHome: ytHomePath = NavigationPath()
+        case .ytSubs: ytSubsPath = NavigationPath()
+        case .ytLibrary: ytLibraryPath = NavigationPath()
+        case .ytSearch: ytSearchPath = NavigationPath()
         }
     }
 }
@@ -195,10 +244,17 @@ struct TabBar: View {
 
     var body: some View {
         let items = HStack {
-            item(.home, "Home", "house", "house.fill")
-            item(.search, "Search", "magnifyingglass", "magnifyingglass")
-            item(.podcasts, "Podcasts", "mic", "mic.fill")
-            item(.library, "Library", "books.vertical", "books.vertical.fill")
+            if YTViewer.shared.on {
+                item(.ytHome, "Home", "house", "house.fill")
+                item(.ytSubs, "Subscriptions", "play.rectangle.on.rectangle", "play.rectangle.on.rectangle.fill")
+                item(.ytLibrary, "Library", "rectangle.stack", "rectangle.stack.fill")
+                item(.ytSearch, "Search", "magnifyingglass", "magnifyingglass")
+            } else {
+                item(.home, "Home", "house", "house.fill")
+                item(.search, "Search", "magnifyingglass", "magnifyingglass")
+                item(.podcasts, "Podcasts", "mic", "mic.fill")
+                item(.library, "Library", "books.vertical", "books.vertical.fill")
+            }
         }
         if DriftGlass.isOn {
             // Floating glass capsule.
@@ -237,7 +293,7 @@ struct TabBar: View {
                     .frame(height: 24)
                 Text(title).font(.system(size: 11, weight: selected ? .bold : .medium))
             }
-            .foregroundStyle(selected ? (DriftGlass.isOn || Theme.isMusic ? AppSettings.shared.accent : Theme.text)
+            .foregroundStyle(selected ? (YTViewer.shared.on ? Color.ytRed : DriftGlass.isOn || Theme.isMusic ? AppSettings.shared.accent : Theme.text)
                                       : (DriftGlass.isOn || Theme.isMusic ? Theme.text2 : Theme.muted))
             .frame(maxWidth: .infinity, minHeight: 48)
             .contentShape(Rectangle())

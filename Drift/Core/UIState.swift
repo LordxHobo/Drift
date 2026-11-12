@@ -13,6 +13,8 @@ final class UIState {
     var sendTrack: Track?
     /// A notification about a song from a friend was tapped: open Friends on the inbox.
     var openInbox = false
+    /// A video to open on its watch page (the YouTube viewer).
+    var openVideo: String?
     /// Song being shared (link or picture).
     var shareTrack: Track?
     /// Song being swapped for another YouTube version (from a playlist or Liked songs).

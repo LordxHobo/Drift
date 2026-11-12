@@ -106,7 +106,8 @@ object EpisodeVideo {
     /** Loads the right video (or none) for what's playing and the settings. */
     fun update() {
         val t = Playback.current
-        if (!::app.isInitialized || !on || surface == null || !canShow(t) || t == null) {
+        // Episodes: when video is on. Videos from the YouTube viewer: always.
+        if (!::app.isInitialized || !(on || t?.watch == true) || surface == null || !canShow(t) || t == null) {
             stop()
             return
         }

@@ -71,7 +71,10 @@ struct ProfileDrawer: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.top, 20)
-                .padding(.bottom, 18)
+                .padding(.bottom, 14)
+            // Music or the YouTube viewer.
+            YTDrawerToggle { close() }
+                .padding(.bottom, 14)
             Divider().overlay(Theme.line.opacity(0.5))
 
             if social.me != nil {

@@ -153,7 +153,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun PageTitle(text: String) {
+internal fun PageTitle(text: String) {
     Text(
         text, color = DriftColors.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
@@ -197,6 +197,8 @@ fun SettingsScreen() {
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item { BackBar() }
         item { PageTitle("Settings") }
+        // The switch between music and the YouTube viewer.
+        item { YTViewerSwitch() }
         // Your profile on top, like on the iPhone; it opens Profile & devices.
         item {
             Row(

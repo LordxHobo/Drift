@@ -2,6 +2,33 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 61,
+      "date": "2026-11-12",
+      "title": "The YouTube viewer, on your phone",
+      "notes": [
+        {
+          "text": "The YouTube viewer is on iPhone: turn it on in the drawer (tap your picture), sign in, and Drift swaps to Home, Subscriptions, Library and Search for videos.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "The YouTube viewer is on Android: turn it on at the top of Settings, sign in, and Drift swaps to Home, Subscriptions, Library and Search for videos.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Watching a video: tap it for the controls, double-tap a side to jump 10 seconds, and drag the timeline, with SponsorBlock's parts marked in their colors. SponsorBlock can be turned on or off right under the video.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Under the video: like, Watch later, download, subscribe, the description, comments (top or newest, and you can post your own) and Up next, which plays after it.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Library has your channel, history, Watch later and liked videos, and channels open with their videos.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 60,
       "date": "2026-11-12",
       "title": "Watching, improved",

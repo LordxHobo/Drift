@@ -63,6 +63,8 @@ final class Player {
     @ObservationIgnored private var playerObservers: [NSKeyValueObservation] = []
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var segments: [SkipSegment] = []
+    /// What's playing now: its SponsorBlock parts (drawn on the YouTube viewer's timeline).
+    private(set) var shownSegments: [SkipSegment] = []
     @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var lastChapterIndex: Int?
     @ObservationIgnored private var watchdog: Task<Void, Never>?
@@ -443,6 +445,7 @@ final class Player {
         playID = nil
         streamInfo = [("Song", track.id)]
         segments = []
+        shownSegments = []
         retried = false
         isBuffering = true
         isLoading = true
@@ -581,6 +584,7 @@ final class Player {
                 let segs = await segsTask.value
                 if self.current?.id == track.id {
                     self.segments = segs.filter { $0 != skippedEarly && $0.range.upperBound > startAt + 0.5 }
+                    self.shownSegments = segs
                 }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }

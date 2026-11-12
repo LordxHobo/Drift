@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,11 +51,11 @@ import com.lordxhobo.drift.social.Remote
 /** The whole app: the current tab's page, the mini player, the tab bar, and what opens over them. */
 @Composable
 fun DriftRoot() {
-    BackHandler(enabled = UiState.showPlayer || Nav.stack.size > 1 || Nav.tab != Tab.HOME) {
+    BackHandler(enabled = UiState.showPlayer || Nav.stack.size > 1 || Nav.tab != Nav.homeTab) {
         when {
             UiState.showPlayer && UiState.showLyrics -> UiState.showLyrics = false
             UiState.showPlayer -> UiState.showPlayer = false
-            !Nav.back() -> Nav.tab = Tab.HOME
+            !Nav.back() -> Nav.tab = Nav.homeTab
         }
     }
     Box(Modifier.fillMaxSize().background(DriftColors.bg)) {
@@ -78,7 +80,7 @@ fun DriftRoot() {
         InviteSheet()
         SendSongSheet()
         if (videoFullScreen) {
-            val ep = Playback.current?.takeIf { com.lordxhobo.drift.playback.EpisodeVideo.on && com.lordxhobo.drift.playback.EpisodeVideo.canShow(it) }
+            val ep = Playback.current?.takeIf { (com.lordxhobo.drift.playback.EpisodeVideo.on || it.watch == true) && com.lordxhobo.drift.playback.EpisodeVideo.canShow(it) }
             val context = androidx.compose.ui.platform.LocalContext.current
             if (ep != null) EpisodeVideoFullScreen(ep) else LaunchedEffect(Unit) { closeVideoFullScreen(context) }
         }
@@ -119,6 +121,14 @@ private fun Page(screen: Screen) {
         Screen.Equalizer -> EqualizerScreen()
         is Screen.User -> UserScreen(screen.id)
         is Screen.SharedList -> SharedListScreen(screen.ownerId, screen.id, screen.name, screen.ownerName)
+        Screen.YTSignIn -> YTSignInScreen()
+        Screen.YTHome -> YTHomeScreen()
+        Screen.YTSubscriptions -> YTSubscriptionsScreen()
+        Screen.YTLibrary -> YTLibraryScreen()
+        Screen.YTSearch -> YTSearchScreen()
+        is Screen.YTFeed -> YTFeedScreen(screen.feed)
+        is Screen.YTChannel -> YTChannelScreen(screen.id)
+        is Screen.YTWatch -> YTWatchScreen(screen.id)
     }
 }
 
@@ -143,22 +153,30 @@ private fun TabBar() {
             .height(60.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TabItem(Tab.HOME, "Home", Icons.Filled.Home, Modifier.weight(1f))
-        TabItem(Tab.SEARCH, "Search", Icons.Filled.Search, Modifier.weight(1f))
-        TabItem(Tab.PODCASTS, "Podcasts", Icons.Filled.Podcasts, Modifier.weight(1f))
-        TabItem(Tab.LIBRARY, "Your Library", Icons.Filled.LibraryMusic, Modifier.weight(1f))
+        if (com.lordxhobo.drift.youtube.YTViewer.on) {
+            TabItem(Tab.YT_HOME, "Home", Icons.Filled.Home, Modifier.weight(1f), youTube = true)
+            TabItem(Tab.YT_SUBS, "Subscriptions", Icons.Filled.Subscriptions, Modifier.weight(1f), youTube = true)
+            TabItem(Tab.YT_LIBRARY, "Library", Icons.Filled.VideoLibrary, Modifier.weight(1f), youTube = true)
+            TabItem(Tab.YT_SEARCH, "Search", Icons.Filled.Search, Modifier.weight(1f), youTube = true)
+        } else {
+            TabItem(Tab.HOME, "Home", Icons.Filled.Home, Modifier.weight(1f))
+            TabItem(Tab.SEARCH, "Search", Icons.Filled.Search, Modifier.weight(1f))
+            TabItem(Tab.PODCASTS, "Podcasts", Icons.Filled.Podcasts, Modifier.weight(1f))
+            TabItem(Tab.LIBRARY, "Your Library", Icons.Filled.LibraryMusic, Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
-private fun TabItem(tab: Tab, label: String, icon: ImageVector, modifier: Modifier) {
+private fun TabItem(tab: Tab, label: String, icon: ImageVector, modifier: Modifier, youTube: Boolean = false) {
     val on = Nav.tab == tab
+    val color = if (on) (if (youTube) YTRed else DriftColors.text) else DriftColors.muted
     Column(
         modifier.clickable { Nav.select(tab) }.padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = null, tint = if (on) DriftColors.text else DriftColors.muted, modifier = Modifier.size(24.dp))
-        Text(label, color = if (on) DriftColors.text else DriftColors.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+        Text(label, color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -172,7 +190,13 @@ private fun MiniPlayer() {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(DriftColors.miniPlayer)
-                .clickable { UiState.showPlayer = true },
+                .clickable {
+                    // A video from the YouTube viewer opens its watch page; anything else, the player.
+                    val now = Playback.current
+                    if (now?.watch == true) {
+                        if (Nav.top != Screen.YTWatch(now.id)) Nav.open(Screen.YTWatch(now.id))
+                    } else UiState.showPlayer = true
+                },
         ) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(t.artwork(120), t.id, 44.dp, RoundedCornerShape(5.dp))

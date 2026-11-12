@@ -92,7 +92,8 @@ object Playback {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) naturalEndAt = System.currentTimeMillis()
-            mediaItem?.let { trackOf(it) }?.let { Library.addRecent(it) }
+            // Videos from the YouTube viewer stay out of the music's Recently played.
+            mediaItem?.let { trackOf(it) }?.takeIf { it.watch != true }?.let { Library.addRecent(it) }
         }
     }
 

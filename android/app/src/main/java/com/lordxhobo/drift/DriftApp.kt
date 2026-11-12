@@ -36,6 +36,9 @@ class DriftApp : Application(), ImageLoaderFactory {
         Downloads.init(this)
         Skipping.init(this)
         com.lordxhobo.drift.playback.EpisodeVideo.init(this)
+        com.lordxhobo.drift.youtube.YTViewer.init(this)
+        // Opened in the YouTube viewer last time: start there.
+        if (com.lordxhobo.drift.youtube.YTViewer.on) com.lordxhobo.drift.ui.Nav.tab = com.lordxhobo.drift.ui.Tab.YT_HOME
         Equalizer.init(this)
         LibrarySync.init(this)
         PlaylistSharing.init()

@@ -54,6 +54,9 @@ object Skipping {
     var podcastSpeed by mutableStateOf(1f)
         private set
     val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+    /** What's playing now: its SponsorBlock parts (drawn on the timeline, like the browser extension). */
+    var shown by mutableStateOf<List<SkipSegment>>(emptyList())
+        internal set
     private lateinit var prefs: SharedPreferences
 
     fun init(context: Context) {
@@ -205,6 +208,7 @@ class SkipMonitor(private val player: Player) {
             saveEpisode(force = true)
             songId = id
             segments = emptyList()
+            Skipping.shown = emptyList()
             skipped.clear()
             silentSince = 0
             heard = false
@@ -218,11 +222,17 @@ class SkipMonitor(private val player: Player) {
             val speed = if (episode != null) Skipping.podcastSpeed else 1f
             if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
             val podcast = episode != null
-            // SponsorBlock knows YouTube videos (not a show's own audio files).
-            if (id != null && !id.startsWith("rss-") && (if (podcast) Skipping.sponsors else Skipping.nonMusic)) {
+            // SponsorBlock knows YouTube videos (not a show's own audio files). Episodes and videos always
+            // get theirs (so turning it on mid-video works); skipping follows the setting.
+            if (id != null && !id.startsWith("rss-") && (podcast || Skipping.nonMusic)) {
                 thread(isDaemon = true) {
                     val list = Skipping.segments(id, podcast)
-                    main.post { if (songId == id) segments = list }
+                    main.post {
+                        if (songId == id) {
+                            segments = list
+                            Skipping.shown = list
+                        }
+                    }
                 }
             }
         }
@@ -291,6 +301,8 @@ class SkipMonitor(private val player: Player) {
 
     private fun saveEpisode(force: Boolean) {
         val e = episode ?: return
+        // Videos from the YouTube viewer aren't episodes: no place kept in Podcasts.
+        if (e.watch == true) return
         if (episodeDur <= 0 || episodePos <= 0) return
         lastProgress = SystemClock.elapsedRealtime()
         com.lordxhobo.drift.podcasts.PodcastStore.update(e, episodePos, episodeDur, force)

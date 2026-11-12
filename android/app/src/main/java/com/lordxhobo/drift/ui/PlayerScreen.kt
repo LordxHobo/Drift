@@ -113,7 +113,7 @@ fun NowPlayingScreen() {
                     // An episode's picture is a video still (16:9), or its video.
                     val w = minOf(maxWidth, maxHeight * 16f / 9f)
                     val context = androidx.compose.ui.platform.LocalContext.current
-                    if (com.lordxhobo.drift.playback.EpisodeVideo.on && com.lordxhobo.drift.playback.EpisodeVideo.canShow(t)) {
+                    if ((com.lordxhobo.drift.playback.EpisodeVideo.on || t.watch == true) && com.lordxhobo.drift.playback.EpisodeVideo.canShow(t)) {
                         EpisodeVideoView(t, w) { openVideoFullScreen(context) }
                     } else {
                         Picture(t.artwork(800), t.id, w, w * 9f / 16f, RoundedCornerShape(10.dp))
