@@ -8,7 +8,7 @@ import { connectAudio, peakLevel } from './audioGraph'
 export type Repeat = 'off' | 'all' | 'one'
 
 export interface PlayContext {
-  kind: 'playlist' | 'album' | 'artist' | 'liked' | 'search' | 'radio' | 'queue' | 'song'
+  kind: 'playlist' | 'album' | 'artist' | 'liked' | 'search' | 'radio' | 'queue' | 'song' | 'youtube'
   id?: string
   name: string
 }
@@ -188,6 +188,7 @@ export function jumpTo(i: number): void {
 
 /** Where to start an episode: a few seconds before where it was left. */
 function resumePosition(t: Track): number {
+  if (t.watch) return 0
   const p = podcastsStore.get().progress[t.id]
   if (!p || p.finished || p.position < 30) return 0
   return Math.max(p.position - 3, 0)
@@ -197,6 +198,9 @@ function resumePosition(t: Track): number {
 
 let segments: SkipSegment[] = []
 const skipped = new Set<number>()
+/** The current song's or video's SponsorBlock parts (shown on the progress bar). */
+export const segmentsStore = new Store<SkipSegment[]>([])
+export const useSegments = (): SkipSegment[] => useStore(segmentsStore)
 
 function segmentLabel(s: SkipSegment, duration: number): string {
   switch (s.category) {
@@ -214,11 +218,21 @@ function segmentLabel(s: SkipSegment, duration: number): string {
 function loadSegments(t: Track, playId: string, token: number): void {
   const st = settingsStore.get()
   segments = []
+  segmentsStore.set([])
   skipped.clear()
   if (!playId || (t.podcast ? !st.skipSponsors : !st.skipNonMusic)) return
   void drift.skipSegments(playId, !!t.podcast).then((list) => {
-    if (token === loadToken) segments = list
+    if (token !== loadToken) return
+    segments = list
+    segmentsStore.set(list)
   })
+}
+
+/** SponsorBlock was turned on or off: the current video's parts follow at once. */
+export function setSponsorBlock(on: boolean): void {
+  setSettings({ skipSponsors: on })
+  const p = playerStore.get()
+  if (p.current?.podcast && p.info) loadSegments(p.current, p.info.segmentsId ?? p.info.playId, loadToken)
 }
 
 function checkSkip(time: number): void {
@@ -269,7 +283,8 @@ async function load(t: Track, autoplay: boolean, at = 0): Promise<void> {
     patch({ info, duration: info.duration || t.duration || 0 })
     if (autoplay) {
       await audio.play()
-      void drift.played(t)
+      // Videos from the YouTube viewer stay out of the music's Recently played.
+      if (!t.watch) void drift.played(t)
       // Get the next few songs ready (which version to play, and the next one's audio).
       const s = playerStore.get()
       const upcoming = s.queue.slice(s.index + 1, s.index + 4).filter((x) => !x.podcast)
@@ -457,7 +472,8 @@ let lastProgressSave = 0
 function saveEpisodeProgress(force = true): void {
   const s = playerStore.get()
   const t = s.current
-  if (!t?.podcast || !audio.src) return
+  // Videos from the YouTube viewer aren't episodes: no place kept in Podcasts.
+  if (!t?.podcast || t.watch || !audio.src) return
   const d = s.duration || audio.duration
   if (!Number.isFinite(d) || d <= 0 || audio.currentTime < 1) return
   if (!force && Date.now() - lastProgressSave < 5000) return

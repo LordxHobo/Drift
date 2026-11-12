@@ -2,6 +2,37 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 56,
+      "date": "2026-11-12",
+      "title": "The YouTube viewer",
+      "notes": [
+        {
+          "text": "New: a switch next to Drift at the top turns Drift into a YouTube viewer. Sign in with your YouTube account the first time (Google's own page opens; use an account you don't mind Drift using), and flip it back to return to your music.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Home shows new videos from your subscriptions, plus History, Watch later, Liked videos, your channels and search. Watching: like, subscribe, save to Watch later, download or send a video to a friend; the next videos play after it, like on YouTube.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "No ads, and SponsorBlock skips sponsors, self-promotion and subscribe reminders in videos too. The parts it skips show on the progress bar in SponsorBlock's colors, and you can turn it on or off right on the video (or in Settings → Playback).",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Signed in, Drift also asks YouTube for songs as your account when YouTube is being strict, so \"confirm you're not a bot\" should come up a lot less.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 55,
       "date": "2026-11-11",
       "title": "Plays when YouTube blocks your address",

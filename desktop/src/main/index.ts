@@ -17,6 +17,7 @@ import * as jam from './jam'
 import * as invites from './invites'
 import * as inbox from './inbox'
 import * as podcastSync from './podcastSync'
+import * as ytviewer from './ytviewer'
 import * as social from './social'
 import * as podcasts from './podcasts'
 import * as presence from './presence'
@@ -268,6 +269,17 @@ const api: DriftApi = {
   markPlayed: async (t, played) => podcasts.markPlayed(t, played),
   videoFromLink: (link) => videoFromLink(link),
   skipSegments: async (id, podcast) => (id.startsWith('rss-') ? [] : podcasts.skipSegments(id, podcast)),
+  ytSignIn: () => ytviewer.signIn(BrowserWindow.getAllWindows().find((w) => !w.getParentWindow())),
+  ytSignOut: () => ytviewer.signOut(),
+  ytAccount: () => ytviewer.ytAccount(),
+  ytFeed: (feed) => ytviewer.ytFeed(feed),
+  ytChannels: () => ytviewer.ytChannels(),
+  ytSearch: (q) => ytviewer.ytSearch(q),
+  ytChannelVideos: (id) => ytviewer.ytChannelVideos(id),
+  ytVideo: (id) => ytviewer.ytVideo(id),
+  ytSubscribe: (id, on) => ytviewer.ytSubscribe(id, on),
+  ytLike: (id) => ytviewer.ytLike(id),
+  ytWatchLater: (id) => ytviewer.ytWatchLater(id),
 
   updateState: async () => getUpdateState(),
   checkForUpdates: () => checkForUpdates(),

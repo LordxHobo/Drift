@@ -30,6 +30,8 @@ export interface Track {
   audioURL?: string | null
   /** …and the feed it's from (to open its show). */
   feedURL?: string | null
+  /** A video from the YouTube viewer: always shows its picture. */
+  watch?: boolean | null
   [extra: string]: unknown
 }
 
@@ -191,7 +193,52 @@ export interface Settings {
   /** The equalizer (this computer only): on or off, and each band's gain in dB. */
   eqEnabled: boolean
   eqGains: number[]
+  /** Music, or the YouTube viewer (the switch in the title bar). */
+  viewerMode: 'music' | 'youtube'
 }
+
+/** The YouTube account signed in to the viewer (on this computer). */
+export interface YTAccount {
+  name: string
+  handle: string
+  avatar: string | null
+}
+
+export interface YTChannel {
+  id: string
+  name: string
+  avatar: string | null
+  /** Has videos you haven't seen (YouTube's dot). */
+  fresh: boolean
+}
+
+export interface YTVideo {
+  id: string
+  title: string
+  channel: string
+  channelId: string | null
+  thumbnail: string
+  /** Seconds (none for live streams). */
+  duration: number | null
+  /** As YouTube writes them: "412K views", "2 days ago". */
+  views: string
+  published: string
+  live: boolean
+}
+
+export interface YTVideoDetails {
+  id: string
+  title: string
+  views: string
+  published: string
+  description: string
+  channel: YTChannel
+  subscribers: string
+  subscribed: boolean
+  related: YTVideo[]
+}
+
+export type YTFeedName = 'subscriptions' | 'history' | 'watchLater' | 'liked'
 
 /** What the player is doing, for friends, Orbit, Discord and the tray. */
 export interface PlayerPresence {
@@ -622,12 +669,24 @@ export interface DriftApi {
   videoFromLink(link: string): Promise<Track | null>
   skipSegments(id: string, podcast: boolean): Promise<SkipSegment[]>
 
+  ytSignIn(): Promise<boolean>
+  ytSignOut(): Promise<void>
+  ytAccount(): Promise<YTAccount | null>
+  ytFeed(feed: YTFeedName): Promise<YTVideo[]>
+  ytChannels(): Promise<YTChannel[]>
+  ytSearch(query: string): Promise<YTVideo[]>
+  ytChannelVideos(id: string): Promise<{ channel: YTChannel; videos: YTVideo[] }>
+  ytVideo(id: string): Promise<YTVideoDetails>
+  ytSubscribe(channelId: string, on: boolean): Promise<void>
+  ytLike(videoId: string): Promise<void>
+  ytWatchLater(videoId: string): Promise<void>
+
   updateState(): Promise<UpdateState>
   checkForUpdates(): Promise<void>
   installUpdate(): Promise<void>
 }
 
-export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite' | 'remoteCommand' | 'inbox' | 'openInbox'
+export type DriftEvent = 'library' | 'settings' | 'account' | 'pairing' | 'media' | 'update' | 'import' | 'downloads' | 'me' | 'podcasts' | 'connections' | 'notifications' | 'openNotice' | 'jam' | 'jamEnded' | 'jamInvite' | 'remoteCommand' | 'inbox' | 'openInbox' | 'youtube'
 
 export const apiMethods: (keyof DriftApi)[] = [
   'appInfo', 'search', 'suggestions', 'artist', 'findArtist', 'album', 'findAlbum', 'discography', 'radio',
@@ -641,7 +700,8 @@ export const apiMethods: (keyof DriftApi)[] = [
   'me', 'friends', 'users', 'followers', 'user', 'searchUsers', 'followUser', 'sharedPlaylists', 'sharedPlaylistTracks',
   'setShareActivity', 'setAllowInvites', 'jamInvite', 'jamInviteAnswered', 'sendSong', 'inbox', 'refreshInbox', 'inboxSeen', 'inboxClear', 'setAllowSongs', 'usernameAvailable', 'updateProfile', 'setPrivateSession', 'playerState', 'connections', 'setOrbitToken', 'testOrbit',
   'podcasts', 'searchPodcasts', 'searchShows', 'channelPodcasts', 'channelEpisodes', 'followChannel', 'refreshPodcasts', 'episodeProgress', 'markPlayed',
-  'videoFromLink', 'skipSegments'
+  'videoFromLink', 'skipSegments',
+  'ytSignIn', 'ytSignOut', 'ytAccount', 'ytFeed', 'ytChannels', 'ytSearch', 'ytChannelVideos', 'ytVideo', 'ytSubscribe', 'ytLike', 'ytWatchLater'
 ]
 
 /** The phone stores dates as seconds since 2001-01-01. */

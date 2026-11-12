@@ -1,6 +1,6 @@
 // Small shared stores for the window: library, settings, account, navigation and pop-ups.
 import { useSyncExternalStore } from 'react'
-import type { Account, AppNotice, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState, InboxItem } from '@shared/types'
+import type { YTAccount, Account, AppNotice, AlbumRef, ArtistRef, ConnectionsStatus, DownloadsState, PodcastChannel, PodcastsState, SharedPlaylist, UserProfile, ImportState, Library, PairingState, Settings, Track, UpdateState, InboxItem } from '@shared/types'
 
 export class Store<T> {
   private listeners = new Set<() => void>()
@@ -29,7 +29,8 @@ export const libraryStore = new Store<Library>({ liked: [], playlists: [], artis
 export const settingsStore = new Store<Settings>({
   style: 'drift', musicIcon: 'pink', appearance: 'device', accent: 0, preferOfficialAudio: true, preferExplicit: true, volume: 0.8, openAtLogin: false, openMinimized: false,
   skipNonMusic: true, skipSponsors: true, podcastSpeed: 1, orbitEnabled: false, orbitUrl: '', discordEnabled: false,
-  discordAppId: '', closeToTray: true, podcastVideo: false, videoQuality: 720, eqEnabled: false, eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  discordAppId: '', closeToTray: true, podcastVideo: false, videoQuality: 720, eqEnabled: false, eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  viewerMode: 'music'
 })
 export const accountStore = new Store<Account>({ linked: false, syncing: false })
 export const pairingStore = new Store<PairingState>({ phase: 'idle' })
@@ -66,6 +67,8 @@ export async function loadAll(): Promise<void> {
   inboxStore.set(await drift.inbox())
   drift.on('inbox', (v) => inboxStore.set(v))
   drift.on('openInbox', () => panelStore.set('inbox'))
+  drift.on('youtube', () => void refreshYouTubeAccount())
+  void refreshYouTubeAccount()
   podcastsStore.set(await drift.podcasts())
   drift.on('podcasts', (v) => podcastsStore.set(v))
   downloadsStore.set(await drift.downloads())
@@ -74,6 +77,8 @@ export async function loadAll(): Promise<void> {
   drift.on('import', (v) => importStore.set(v))
   libraryStore.set(lib)
   settingsStore.set(settings)
+  // Opened in the YouTube viewer last time: start there.
+  if (settings.viewerMode === 'youtube') navStore.set({ stack: [{ name: 'yt-home' }], index: 0 })
   accountStore.set(account)
   pairingStore.set(pairing)
   platformStore.set(info.platform)
@@ -114,6 +119,13 @@ export type Route =
   | { name: 'channel'; channel: PodcastChannel }
   | { name: 'user'; id: string; hint?: UserProfile }
   | { name: 'shared'; playlist: SharedPlaylist }
+  // The YouTube viewer
+  | { name: 'yt-home' }
+  | { name: 'yt-feed'; feed: 'history' | 'watchLater' | 'liked' }
+  | { name: 'yt-channels' }
+  | { name: 'yt-channel'; id: string }
+  | { name: 'yt-search'; q: string }
+  | { name: 'yt-watch'; id: string }
 
 interface Nav {
   stack: Route[]
@@ -223,4 +235,27 @@ export function writeLocal(key: string, value: unknown): void {
   } catch {
     // storage full or unavailable
   }
+}
+
+// MARK: The YouTube viewer
+
+/** Who's signed in to YouTube on this computer (undefined: not known yet, null: nobody). */
+export const ytAccountStore = new Store<YTAccount | null | undefined>(undefined)
+
+export async function refreshYouTubeAccount(): Promise<void> {
+  ytAccountStore.set(await drift.ytAccount().catch(() => null))
+}
+
+/** Asking to sign in before the viewer opens. */
+export const ytSignInStore = new Store(false)
+
+/** The switch: into the viewer (after signing in) or back to music, each starting on its home page. */
+export function setViewerMode(mode: 'music' | 'youtube'): void {
+  if (mode === 'youtube' && !ytAccountStore.get()) {
+    ytSignInStore.set(true)
+    return
+  }
+  setSettings({ viewerMode: mode })
+  navStore.set({ stack: [{ name: mode === 'youtube' ? 'yt-home' : 'home' }], index: 0 })
+  fullPlayerStore.set(false)
 }

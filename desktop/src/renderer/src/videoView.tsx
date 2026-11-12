@@ -122,7 +122,7 @@ export function VideoSurface({ className, onExpand }: { className?: string; onEx
 export function useVideoOn(): boolean {
   const p = usePlayer()
   const s = useStore(settingsStore)
-  return !!p.current?.podcast && !p.current.audioURL && s.podcastVideo
+  return !!p.current?.podcast && !p.current.audioURL && (s.podcastVideo || !!p.current.watch)
 }
 
 /** Drift style: the video filling the main area. */
@@ -183,10 +183,14 @@ export function MiniVideo(): JSX.Element | null {
   const music = useStore(settingsStore).style === 'music'
   const p = usePlayer()
   const [hiddenFor, setHiddenFor] = useState<string | null>(null)
-  if (!on || route.name === 'video' || full || hiddenFor === p.current?.id) return null
+  if (!on || route.name === 'video' || route.name === 'yt-watch' || full || hiddenFor === p.current?.id) return null
   return (
     <div className={`mini-video ${music ? 'music' : ''}`}>
-      <VideoSurface onExpand={() => (music ? fullPlayerStore.set(true) : go({ name: 'video' }))} />
+      <VideoSurface
+        onExpand={() =>
+          p.current?.watch ? go({ name: 'yt-watch', id: p.current.id }) : music ? fullPlayerStore.set(true) : go({ name: 'video' })
+        }
+      />
       <button className="mini-video-close" aria-label="Hide video" title="Hide (keeps playing)" onClick={() => setHiddenFor(p.current?.id ?? null)}>
         <Icon name="close" size={14} />
       </button>
@@ -200,7 +204,8 @@ export function VideoButton(): JSX.Element | null {
   const s = useStore(settingsStore)
   const route = useRoute()
   // Episodes from a show's feed are audio only.
-  if (!p.current?.podcast || p.current.audioURL) return null
+  // Episodes from a show's feed are audio only; videos from the YouTube viewer always show.
+  if (!p.current?.podcast || p.current.audioURL || p.current.watch) return null
   return (
     <IconButton
       icon="video"

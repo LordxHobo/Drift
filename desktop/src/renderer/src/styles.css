@@ -5005,3 +5005,543 @@ a.btn.disabled {
 .m-panel .seg .tab-count {
   margin-left: 4px;
 }
+
+/* SponsorBlock parts on the progress bar (the extension's colors). */
+.slider-track {
+  position: relative;
+}
+.slider-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* MARK: The YouTube viewer */
+:root {
+  --yt: #ff0033;
+}
+
+/* The switch in the title bar: Music ↔ YouTube. */
+.titlebar {
+  display: flex;
+  align-items: center;
+}
+.mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  height: 100%;
+}
+:root[data-platform='darwin'] .mode-switch {
+  padding-left: 84px;
+}
+.mode-brand {
+  font-size: 11px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.mode-toggle {
+  width: 44px;
+  height: 20px;
+  border-radius: 10px;
+  padding: 0 2px;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+.mode-toggle.on {
+  background: var(--yt);
+  justify-content: flex-end;
+}
+.mode-knob {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: #fff;
+  color: #3a3a3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mode-toggle.on .mode-knob {
+  color: var(--yt);
+}
+.mode-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mode-label.on {
+  color: var(--text);
+}
+
+/* Signing in */
+.dialog.yt-signin {
+  width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.yt-signin h3 {
+  margin: 0;
+  font-size: 21px;
+}
+.yt-signin p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text2);
+}
+.yt-signin-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--yt);
+  color: #fff;
+  --yt-play: var(--yt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.yt-signin-note {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface2);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text2);
+}
+.yt-signin-note svg {
+  flex-shrink: 0;
+  color: #ffd60a;
+}
+.btn.yt-google {
+  justify-content: center;
+  height: 44px;
+  border-radius: 22px;
+  background: #fff;
+  color: #111;
+  font-size: 15px;
+}
+.g-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0);
+}
+.yt-signin .btn.ghost {
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+}
+.yt-signin-fine {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Side menu */
+.yt-mode .yt-icon,
+.yt-mode .m-item .m-icon {
+  color: var(--yt);
+}
+.yt-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--yt);
+  color: #fff;
+}
+.yt-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 6px 0 4px;
+  padding: 0 12px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.yt-search-box input,
+.yt-mode .m-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.yt-lib {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 8px;
+  gap: 2px;
+}
+.yt-section {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 12px 10px 6px;
+}
+.yt-chans {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.yt-chan {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  text-align: left;
+}
+.yt-chan:hover,
+.yt-chan.on {
+  background: var(--hover);
+  color: var(--text);
+}
+.yt-chan img,
+.yt-chan-blank {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface2);
+}
+.yt-chan-blank.big {
+  width: 96px;
+  height: 96px;
+  border-radius: 48px;
+}
+.yt-chan-blank.huge {
+  width: 80px;
+  height: 80px;
+  border-radius: 40px;
+}
+.yt-chan-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yt-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--yt);
+  flex-shrink: 0;
+}
+.yt-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text2);
+}
+.yt-account span {
+  flex: 1;
+  text-align: left;
+}
+.yt-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  object-fit: cover;
+  background: var(--surface2);
+}
+.yt-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+/* Pages */
+.yt-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 20px;
+}
+.yt-chip {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--surface2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.yt-chip.on {
+  background: var(--text);
+  color: var(--window);
+}
+.yt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 26px 18px;
+}
+.yt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  min-width: 0;
+}
+.yt-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface2);
+}
+.yt-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s;
+}
+.yt-card:hover .yt-thumb img,
+.yt-next-row:hover .yt-thumb img {
+  transform: scale(1.03);
+}
+.yt-thumb.small {
+  width: 168px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.yt-len {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.yt-len.live {
+  background: var(--yt);
+}
+.yt-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.yt-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.yt-card-channel {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  align-self: flex-start;
+}
+.yt-card-channel:hover {
+  color: var(--text);
+}
+.yt-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.yt-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 22px;
+}
+.yt-channel-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.yt-channel-tile img {
+  width: 96px;
+  height: 96px;
+  border-radius: 48px;
+  object-fit: cover;
+}
+.yt-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.yt-channel-head img {
+  width: 80px;
+  height: 80px;
+  border-radius: 40px;
+  object-fit: cover;
+}
+.yt-channel-head .page-title {
+  margin: 0;
+}
+.btn.yt-sub {
+  background: var(--text);
+  color: var(--window);
+}
+.btn.yt-sub.on {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* Watching */
+.yt-watch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  padding: 72px 24px 32px;
+  align-items: start;
+}
+.app.music .yt-watch {
+  padding-top: 24px;
+}
+@media (max-width: 1100px) {
+  .yt-watch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.yt-player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+.yt-player.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.yt-watch-title {
+  margin: 14px 0 10px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.yt-watch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.yt-watch-row .spacer {
+  flex: 1;
+}
+.yt-owner {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  object-fit: cover;
+}
+.yt-owner-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  margin-right: 8px;
+}
+.yt-owner-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+.yt-owner-subs {
+  font-size: 12px;
+  color: var(--muted);
+}
+.btn.yt-act.on {
+  background: color-mix(in srgb, #00d400 22%, var(--surface2));
+}
+.sb-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: #00d400;
+}
+.btn.yt-act:not(.on) .sb-dot {
+  background: var(--muted);
+}
+.yt-desc {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text2);
+}
+.yt-desc p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  max-height: 4.5em;
+  overflow: hidden;
+}
+.yt-desc.open p {
+  max-height: none;
+}
+.yt-desc .link {
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--text);
+}
+.yt-next {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.yt-next-head {
+  font-size: 15px;
+  font-weight: 800;
+}
+.yt-next-row {
+  display: flex;
+  gap: 10px;
+  text-align: left;
+  min-width: 0;
+}
+.yt-account .yt-avatar,
+.m-profile .yt-avatar {
+  flex: 0 0 26px;
+  width: 26px;
+}
+.yt-lib .nav-item {
+  height: 38px;
+  font-size: 14px;
+}

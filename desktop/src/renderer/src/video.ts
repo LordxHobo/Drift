@@ -22,7 +22,8 @@ function wanted(): string {
   const p = playerStore.get()
   const s = settingsStore.get()
   const id = p.info?.playId
-  if (!p.current?.podcast || p.current.audioURL || !s.podcastVideo || !id) return ''
+  // Episodes: when video is on. Videos from the YouTube viewer: always.
+  if (!p.current?.podcast || p.current.audioURL || !(s.podcastVideo || p.current.watch) || !id) return ''
   return `drift://stream/${id}?v=${s.videoQuality || 720}`
 }
 
