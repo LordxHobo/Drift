@@ -460,6 +460,18 @@ final class Player {
         }
     }
 
+    /// Set while the song playing is loaded again in the other player (not a new play).
+    @ObservationIgnored private var samePlayAgain = false
+
+    /// The equalizer was turned on: a song in YouTube's player moves to Drift's own player (where the
+    /// equalizer works), from where it is.
+    func equalizerChanged() {
+        guard AppSettings.shared.eqEnabled, webActive, let t = current, t.watch != true else { return }
+        pendingResume = (t.id, currentTime)
+        samePlayAgain = true
+        load(autoplay: isPlaying || isBuffering)
+    }
+
     /// YouTube's player has the song or video playing now loaded.
     private var webLoaded: Bool {
         webActive && YTWebPlayer.shared.videoID != nil && YTWebPlayer.shared.videoID == (playID ?? current?.id)
@@ -614,8 +626,12 @@ final class Player {
         lastChapterIndex = nil
         updateCommands()
         lastProgressReport = -10
-        if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
-        PlayHistory.shared.started(track)
+        // (The same song again in the other player isn't another play.)
+        if !samePlayAgain {
+            if autoplay && !track.isEpisode { Library.shared.addRecent(track) }
+            PlayHistory.shared.started(track)
+        }
+        samePlayAgain = false
         var resumeAt = track.isEpisode ? PodcastStore.shared.resumePosition(track.id) : 0
         if let p = pendingResume, p.id == track.id { resumeAt = p.time }
         pendingResume = nil
@@ -625,7 +641,8 @@ final class Player {
 
         // The YouTube viewer, and songs that stream (unless turned off): YouTube's own player plays them (like
         // ProTube), with Drift's controls on top. Downloaded songs and podcasts: Drift's own player.
-        let streamedSong = AppSettings.shared.musicInYouTubePlayer && !track.isEpisode && track.audioURL == nil
+        // (Not while the equalizer is on: iOS doesn't let it reach YouTube's player, so Drift's own player then.)
+        let streamedSong = AppSettings.shared.musicInYouTubePlayer && !AppSettings.shared.eqEnabled && !track.isEpisode && track.audioURL == nil
         let useWeb = (track.watch == true || streamedSong) && !Library.shared.isDownloaded(track.id) && !webFailed.contains(track.id)
         if useWeb != webActive { webActive = useWeb }
         if useWeb {

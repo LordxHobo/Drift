@@ -79,14 +79,13 @@ final class AppSettings {
         didSet {
             defaults.set(eqEnabled, forKey: "eqEnabled")
             EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
-            Task { @MainActor in YTWebPlayer.soundSettingsChanged() }
+            Task { @MainActor in Player.shared.equalizerChanged() }
         }
     }
     var eqGains: [Double] {
         didSet {
             defaults.set(eqGains, forKey: "eqGains")
             EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
-            Task { @MainActor in YTWebPlayer.soundSettingsChanged() }
         }
     }
     var lyricsLiveActivity: Bool { didSet { defaults.set(lyricsLiveActivity, forKey: "lyricsLiveActivity") } }

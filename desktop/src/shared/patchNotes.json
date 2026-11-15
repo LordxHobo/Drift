@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 69,
+      "date": "2026-11-15",
+      "title": "Equalizer and instant starts",
+      "notes": [
+        {
+          "text": "Songs start instantly in YouTube's player while the equalizer is off. With the equalizer on, they play in Drift's own player so the equalizer (and skipping silence at the end) works. Turning it on during a song switches right away, from the same spot.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "The first song after opening Drift no longer starts over.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "If your phone can't run the equalizer in YouTube's player, songs play in Drift's own player while the equalizer is on (from the next song list you play).",
+          "platforms": ["android"]
+        }
+      ]
+    },
+    {
       "id": 68,
       "date": "2026-11-15",
       "title": "Faster song changes again",

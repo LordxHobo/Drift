@@ -57,8 +57,8 @@ object YTWeb {
     var playingMusic = false
         private set
     /** The page's sound processing went quiet once on this phone: not tried again (remembered, so a song never starts over for it again). */
-    private var processingBroken = false
-        set(value) {
+    var processingBroken = false
+        private set(value) {
             field = value
             if (::app.isInitialized) app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE).edit().putBoolean("ytSoundProcessingBroken", value).apply()
         }

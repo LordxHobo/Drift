@@ -159,7 +159,9 @@ final class YTWebPlayer {
     /// Drift's equalizer and silence meter, in the page (songs only).
     private func sendSound() {
         let s = AppSettings.shared
-        let wanted = music && (s.eqEnabled || s.skipSilence)
+        // iOS doesn't pass YouTube's player's sound to the page's audio processing (the equalizer did
+        // nothing there), so it isn't tried on iPhone: songs move to Drift's own player when the equalizer is on.
+        let wanted = false
         let gains = s.eqGains.map { String(format: "%.2f", $0) }.joined(separator: ",")
         run("__drift.fx(\(wanted), \(s.eqEnabled), [\(gains)])")
     }
