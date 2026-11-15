@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 70,
+      "date": "2026-11-15",
+      "title": "Instant starts with the equalizer",
+      "notes": [
+        {
+          "text": "With the equalizer on, songs now start instantly in YouTube's player too, and Drift's own player takes over a few seconds in, at the same moment of the song, so the equalizer works from there.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Turning the equalizer on during a song hands it over the same way, without stopping.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
       "id": 69,
       "date": "2026-11-15",
       "title": "Equalizer and instant starts",

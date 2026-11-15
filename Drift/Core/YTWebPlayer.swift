@@ -148,6 +148,13 @@ final class YTWebPlayer {
         run("__drift.quality('\(Self.label(h))')")
     }
 
+    @ObservationIgnored private var timeAt = Date()
+
+    /// Where it is right now (s), moving on between the page's reports.
+    func position() -> Double {
+        playing ? time + Date().timeIntervalSince(timeAt) * Double(rate) : time
+    }
+
     /// Made yet (it's only made for the first video or song played in it).
     private static var made = false
 
@@ -236,7 +243,10 @@ final class YTWebPlayer {
         ad = isAd
         let t = m["t"] as? Double ?? 0
         let d = m["d"] as? Double ?? 0
-        if !isAd, t >= 0 { time = t }
+        if !isAd, t >= 0 {
+            time = t
+            timeAt = Date()
+        }
         if !isAd, d > 0 {
             duration = d
             if !ready { ready = true }

@@ -102,12 +102,16 @@ final class Player {
         timeObserver = av.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main
         ) { [weak self] time in
-            MainActor.assumeIsolated { self?.tick(time.seconds) }
+            MainActor.assumeIsolated {
+                // (YouTube's player gives the time while it plays; Drift's may be getting a song ready meanwhile.)
+                guard let self, !self.webActive else { return }
+                self.tick(time.seconds)
+            }
         }
         playerObservers.append(av.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             let status = player.timeControlStatus
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, !self.webActive else { return }
                 self.isPlaying = status != .paused
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
                 if status == .playing {
@@ -452,6 +456,8 @@ final class Player {
                                ("Version", chosen == track.id ? "As listed" : "Album version (\(chosen))")]
             web.load(chosen, at: at, autoplay: autoplay, music: true)
             web.setRate(self.effectiveRate)
+            // The equalizer doesn't reach YouTube's player: Drift's own player takes over once it's ready.
+            if AppSettings.shared.eqEnabled { self.handOver(track, chosen) }
             Task.detached(priority: .utility) { _ = await AudioVersion.shared.preferred(track) }
             let segs = await SponsorBlock.segments(for: chosen, categories: SponsorBlock.musicCategories)
             guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -464,12 +470,74 @@ final class Player {
     @ObservationIgnored private var samePlayAgain = false
 
     /// The equalizer was turned on: a song in YouTube's player moves to Drift's own player (where the
-    /// equalizer works), from where it is.
+    /// equalizer works), without stopping.
     func equalizerChanged() {
         guard AppSettings.shared.eqEnabled, webActive, let t = current, t.watch != true else { return }
-        pendingResume = (t.id, currentTime)
-        samePlayAgain = true
-        load(autoplay: isPlaying || isBuffering)
+        handOver(t, playID ?? t.id)
+    }
+
+    // MARK: Handing a song over from YouTube's player to Drift's own (the equalizer)
+
+    @ObservationIgnored private var handover: Task<Void, Never>?
+
+    /// The song starts at once in YouTube's player; meanwhile Drift's own player gets it ready, and then
+    /// takes over at the same moment of the song, so the equalizer (and skipping silence) work from there.
+    /// Nothing changes if Drift's player can't get it: the song just plays on in YouTube's player.
+    private func handOver(_ track: Track, _ id: String) {
+        handover?.cancel()
+        handover = Task { [weak self] in
+            let low = AppSettings.shared.dataSaver
+            guard let s = try? await withTimeout(25, { try await StreamResolver.shared.resolve(id, dataSaver: low) }) else { return }
+            guard let self, !Task.isCancelled, self.webActive, self.current?.id == track.id else { return }
+            let web = YTWebPlayer.shared
+            // Loaded a little ahead of where YouTube's player is, so it's buffered there.
+            self.start(s.url, autoplay: false, at: web.position() + 3)
+            var tries = 0
+            while !Task.isCancelled, self.webActive, self.current?.id == track.id, AppSettings.shared.eqEnabled, tries < 40 {
+                tries += 1
+                try? await Task.sleep(for: .milliseconds(250))
+                // Only while YouTube's player is playing (paused: wait), and once Drift's has the song.
+                guard web.playing, !web.ad, let item = self.av.currentItem, item.status == .readyToPlay else { continue }
+                let seeks = self.jamSeeks
+                // Where the switch happens: a moment from now.
+                let lead = 0.8
+                let target = web.position() + lead * Double(self.effectiveRate)
+                if web.duration > 0, target > web.duration - 5 { return }
+                guard await self.av.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) else { continue }
+                guard !Task.isCancelled, self.webActive, self.current?.id == track.id, self.jamSeeks == seeks, web.playing else { continue }
+                _ = await self.av.preroll(atRate: self.effectiveRate)
+                guard !Task.isCancelled, self.webActive, self.current?.id == track.id, self.jamSeeks == seeks, web.playing else { continue }
+                // How long until YouTube's player reaches the target (if it's already there: again).
+                let wait = (target - web.position()) / Double(self.effectiveRate)
+                guard wait > 0.1 else { continue }
+                self.switchToOwn(at: target, in: wait, label: s.label)
+                return
+            }
+        }
+    }
+
+    /// Starts Drift's player at `time` exactly `wait` seconds from now, and stops YouTube's player then.
+    private func switchToOwn(at time: Double, in wait: Double, label: String) {
+        let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(seconds: wait, preferredTimescale: 1_000_000))
+        av.automaticallyWaitsToMinimizeStalling = false
+        av.setRate(effectiveRate, time: CMTime(seconds: time, preferredTimescale: 600), atHostTime: host)
+        // YouTube's player stops a hair early (its pause takes a moment to arrive).
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, wait - 0.03)) { [weak self] in
+            guard let self else { return }
+            YTWebPlayer.shared.pause()
+            self.webActive = false
+            self.isPlaying = true
+            self.isBuffering = false
+            self.qualityLabel = label
+            self.streamInfo.append(("Equalizer", "Drift's own player took over \(formatTime(time)) in"))
+            self.av.automaticallyWaitsToMinimizeStalling = true
+            self.updateNowPlaying()
+            EpisodeVideo.shared.update()
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                if !self.webActive { YTWebPlayer.stopIfUsed() }
+            }
+        }
     }
 
     /// YouTube's player has the song or video playing now loaded.
@@ -602,6 +670,7 @@ final class Player {
     private func load(autoplay: Bool = true) {
         guard let track = current else { return }
         loadTask?.cancel()
+        handover?.cancel()
         detachItem()
         errorMessage = nil
         currentTime = 0
@@ -641,8 +710,8 @@ final class Player {
 
         // The YouTube viewer, and songs that stream (unless turned off): YouTube's own player plays them (like
         // ProTube), with Drift's controls on top. Downloaded songs and podcasts: Drift's own player.
-        // (Not while the equalizer is on: iOS doesn't let it reach YouTube's player, so Drift's own player then.)
-        let streamedSong = AppSettings.shared.musicInYouTubePlayer && !AppSettings.shared.eqEnabled && !track.isEpisode && track.audioURL == nil
+        // (With the equalizer on, Drift's own player takes over a few seconds in: see `handOver`.)
+        let streamedSong = AppSettings.shared.musicInYouTubePlayer && !track.isEpisode && track.audioURL == nil
         let useWeb = (track.watch == true || streamedSong) && !Library.shared.isDownloaded(track.id) && !webFailed.contains(track.id)
         if useWeb != webActive { webActive = useWeb }
         if useWeb {
