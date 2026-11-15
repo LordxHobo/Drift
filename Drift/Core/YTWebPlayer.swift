@@ -79,7 +79,11 @@ final class YTWebPlayer {
 
     // MARK: Playing
 
-    func load(_ id: String, at: Double, autoplay: Bool, music: Bool = false) {
+    /// A YouTube page with its player is loaded (the next video can switch in it, without a new page).
+    @ObservationIgnored private var pageReady = false
+
+    /// `fresh`: a new page even if the one loaded could switch (after its sound processing went quiet).
+    func load(_ id: String, at: Double, autoplay: Bool, music: Bool = false, fresh: Bool = false) {
         videoID = id
         self.music = music
         soundProcessing = false
@@ -96,11 +100,28 @@ final class YTWebPlayer {
         errorReported = false
         qualitySet = false
         loadedAt = Date()
-        var hash = "drift-at=\(Int(at))"
-        if !autoplay { hash += "&drift-paused" }
-        if processingBroken { hash += "&drift-nofx" }
-        guard let url = URL(string: "https://m.youtube.com/watch?v=\(id)#\(hash)") else { return }
-        web.load(URLRequest(url: url))
+        // The quality is set before it starts (changing it while playing makes YouTube's player start over).
+        let h = music ? 144 : AppSettings.shared.dataSaver ? 360 : min(AppSettings.shared.videoQuality, 2160)
+        height = h
+        let full = { [weak self] in
+            guard let self, self.videoID == id else { return }
+            self.pageReady = false
+            var hash = "drift-at=\(Int(at))&drift-q=\(h)"
+            if !autoplay { hash += "&drift-paused" }
+            if self.processingBroken { hash += "&drift-nofx" }
+            guard let url = URL(string: "https://m.youtube.com/watch?v=\(id)#\(hash)") else { return }
+            // The one playing stops now, not when the new page is in.
+            self.run("__drift.pause()")
+            self.web.load(URLRequest(url: url))
+        }
+        if pageReady && !fresh {
+            // Switch videos in the page already loaded: almost instant.
+            web.evaluateJavaScript("window.__drift ? __drift.load('\(id)', \(at), \(autoplay), \(h)) : false") { result, _ in
+                if (result as? Bool) != true { full() }
+            }
+        } else {
+            full()
+        }
         YTWebHost.ensureParked()
         // Nothing playing 15 s in (page didn't load, or YouTube's player gave up): let the player fall back.
         stallCheck?.cancel()
@@ -165,6 +186,7 @@ final class YTWebPlayer {
         playing = false
         ready = false
         stallCheck?.cancel()
+        pageReady = false
         web.load(URLRequest(url: URL(string: "about:blank")!))
     }
 
@@ -192,7 +214,7 @@ final class YTWebPlayer {
         // The page's sound processing isn't getting the sound: the song again without it.
         if (m["k"] as? String) == "fxdead", let id = videoID, (m["v"] as? String) == id {
             processingBroken = true
-            load(id, at: m["t"] as? Double ?? time, autoplay: true, music: music)
+            load(id, at: m["t"] as? Double ?? time, autoplay: true, music: music, fresh: true)
             return
         }
         guard (m["k"] as? String) == "state", let id = videoID else { return }
@@ -206,9 +228,11 @@ final class YTWebPlayer {
         }
         // YouTube went on to another video by itself: Drift picks what's next.
         if let v = m["v"] as? String, !v.isEmpty, v != id {
-            run("__drift.pause()")
+            // (Not right after asking for another one: the page is still switching.)
+            if Date().timeIntervalSince(loadedAt) > 4 { run("__drift.pause()") }
             return
         }
+        pageReady = true
         let isAd = m["ad"] as? Bool ?? false
         ad = isAd
         let t = m["t"] as? Double ?? 0
@@ -223,10 +247,6 @@ final class YTWebPlayer {
         buffering = m["buffering"] as? Bool ?? false
         if playing, !qualitySet {
             qualitySet = true
-            // Songs: the smallest picture (only the sound is heard).
-            let h = music ? 144 : AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality
-            height = min(h, 2160)
-            run("__drift.quality('\(Self.label(h))')")
             if rate != 1 { setRate(rate) }
             readQualities()
         }
@@ -300,7 +320,22 @@ final class YTWebPlayer {
   };
   const hash = location.hash || '';
   const startMatch = hash.match(/drift-at=([0-9.]+)/);
-  const startAt = startMatch ? parseFloat(startMatch[1]) : 0;
+  let startAt = startMatch ? parseFloat(startMatch[1]) : 0;
+  let loadedAt = Date.now();
+  // Right after switching videos in the page: the element still has the old one for a moment.
+  let oldSrc = null;
+
+  // The quality, picked before YouTube's player starts (switching it while playing makes it start over).
+  const preferQuality = (q) => {
+    try {
+      const now = Date.now();
+      localStorage.setItem('yt-player-quality', JSON.stringify({
+        data: JSON.stringify({ quality: q, previousQuality: q }), expiration: now + 30 * 86400000, creation: now,
+      }));
+    } catch (e) {}
+  };
+  const qualityMatch = hash.match(/drift-q=([0-9]+)/);
+  if (qualityMatch) preferQuality(parseInt(qualityMatch[1], 10));
   let want = hash.indexOf('drift-paused') < 0;
   let rate = 1;
   let started = false;
@@ -362,9 +397,34 @@ final class YTWebPlayer {
 
   const video = () => document.querySelector('#player-container-id video, .html5-video-player video, video');
   const api = () => document.getElementById('movie_player') || document.querySelector('.html5-video-player');
-  const id = () => { try { return new URL(location.href).searchParams.get('v') || '' } catch (e) { return '' } };
+  const id = () => {
+    try { const p = api(); const d = p && p.getVideoData && p.getVideoData(); if (d && d.video_id) return d.video_id } catch (e) {}
+    try { return new URL(location.href).searchParams.get('v') || '' } catch (e) { return '' }
+  };
 
   // Commands from Drift.
+  // Another video in this same page (no new page to load: the switch is almost instant). false: not possible.
+  D.load = (vid, start, autoplay, q) => {
+    const p = api();
+    if (!p || !p.loadVideoById || !p.cueVideoById) return false;
+    try {
+      if (q) {
+        preferQuality(q);
+        const names = { 144: 'tiny', 240: 'small', 360: 'medium', 480: 'large', 720: 'hd720', 1080: 'hd1080', 1440: 'hd1440', 2160: 'hd2160' };
+        const name = names[q];
+        if (name && p.setPlaybackQualityRange) p.setPlaybackQualityRange(name, name);
+      }
+      want = autoplay;
+      startAt = start;
+      started = start <= 1;
+      loadedAt = Date.now();
+      const v = video();
+      oldSrc = v ? v.currentSrc : null;
+      if (autoplay) p.loadVideoById({ videoId: vid, startSeconds: start });
+      else p.cueVideoById({ videoId: vid, startSeconds: start });
+      return true;
+    } catch (e) { return false }
+  };
   D.play = () => { want = true; const v = video(); if (v) v.play().catch(() => {}) };
   D.pause = () => { want = false; const v = video(); if (v) v.pause() };
   D.seek = (t) => { const v = video(); if (v) v.currentTime = t; started = true };
@@ -478,7 +538,7 @@ final class YTWebPlayer {
     if (!ad) {
       if (v.muted) v.muted = false;
       if (v.playbackRate !== rate) v.playbackRate = rate;
-      if (!started && v.readyState >= 1) {
+      if (!started && oldSrc === null && v.readyState >= 1) {
         if (startAt > 1 && v.currentTime < startAt - 2) v.currentTime = startAt;
         started = true;
       }
@@ -487,13 +547,18 @@ final class YTWebPlayer {
       if (!want && !v.paused) v.pause();
     }
     const err = document.querySelector('.ytp-error, ytm-player-error-message-renderer');
+    if (oldSrc !== null && (v.currentSrc !== oldSrc || Date.now() - loadedAt > 3000)) oldSrc = null;
+    if (oldSrc !== null) {
+      post({ k: 'state', v: id(), t: -1, d: 0, playing: false, buffering: true, ended: false, ad: ad, error: '', level: -1, fx: false });
+      return;
+    }
     post({
       k: 'state', v: id(),
       t: ad ? -1 : v.currentTime,
       d: ad ? 0 : (isFinite(v.duration) ? v.duration : 0),
       playing: !v.paused && !ad,
       buffering: ad || (!v.paused && v.readyState < 3),
-      ended: !ad && v.ended,
+      ended: !ad && v.ended && Date.now() - loadedAt > 1500,
       ad: ad,
       error: err ? (err.innerText || 'error').trim().slice(0, 200) : '',
       level: loudest,

@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 67,
+      "date": "2026-11-15",
+      "title": "Smoother song starts",
+      "notes": [
+        {
+          "text": "Songs no longer start, play for a second and then start over: the quality is picked before a song starts instead of switching while it plays.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Going to the next song is almost instant, and the previous song stops right away instead of playing on for a moment.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 66,
       "date": "2026-11-15",
       "title": "Songs that start instantly",

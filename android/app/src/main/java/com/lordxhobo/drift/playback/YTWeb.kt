@@ -127,8 +127,14 @@ object YTWeb {
 
     // MARK: Playing
 
-    fun load(id: String, atMs: Long, autoplay: Boolean, music: Boolean = false) {
+    /** A YouTube page with its player is loaded (the next video can switch in it, without a new page). */
+    private var pageReady = false
+    private var loadedAt = 0L
+
+    /** [fresh]: a new page even if the one loaded could switch (after its sound processing went quiet). */
+    fun load(id: String, atMs: Long, autoplay: Boolean, music: Boolean = false, fresh: Boolean = false) {
         videoId = id
+        loadedAt = System.currentTimeMillis()
         playingMusic = music
         soundSent = false
         timeMs = atMs
@@ -142,8 +148,26 @@ object YTWeb {
         endedReported = false
         errorReported = false
         qualitySet = false
-        val hash = "drift-at=" + atMs / 1000 + (if (autoplay) "" else "&drift-paused") + (if (processingBroken) "&drift-nofx" else "")
-        view.loadUrl("https://m.youtube.com/watch?v=" + id + "#" + hash)
+        // The quality is set before it starts (changing it while playing makes YouTube's player start over).
+        val h = if (music) 144 else EpisodeVideo.quality.coerceAtMost(2160)
+        height = h
+        val full = {
+            if (videoId == id) {
+                pageReady = false
+                val hash = "drift-at=" + atMs / 1000 + "&drift-q=" + h + (if (autoplay) "" else "&drift-paused") + (if (processingBroken) "&drift-nofx" else "")
+                // The one playing stops now, not when the new page is in.
+                run("__drift.pause()")
+                view.loadUrl("https://m.youtube.com/watch?v=" + id + "#" + hash)
+            }
+        }
+        if (pageReady && !fresh) {
+            // Switch videos in the page already loaded: almost instant.
+            view.evaluateJavascript("window.__drift ? __drift.load('" + id + "', " + atMs / 1000.0 + ", " + autoplay + ", " + h + ") : false") { result ->
+                if (result != "true") full()
+            }
+        } else {
+            full()
+        }
         if (view.parent == null) parking?.let { move(it) }
         // Nothing playing 15 s in (page didn't load, or YouTube's player gave up): the player moves on.
         main.removeCallbacks(stallCheck)
@@ -181,6 +205,7 @@ object YTWeb {
         playing = false
         ready = false
         main.removeCallbacks(stallCheck)
+        pageReady = false
         web?.loadUrl("about:blank")
     }
 
@@ -200,7 +225,7 @@ object YTWeb {
         // The page's sound processing isn't getting the sound: the song again without it.
         if (m.optString("k") == "fxdead" && m.optString("v") == id) {
             processingBroken = true
-            load(id, (m.optDouble("t", timeMs / 1000.0) * 1000).toLong(), true, playingMusic)
+            load(id, (m.optDouble("t", timeMs / 1000.0) * 1000).toLong(), true, playingMusic, fresh = true)
             return
         }
         if (m.optString("k") != "state") return
@@ -213,9 +238,11 @@ object YTWeb {
         // YouTube went on to another video by itself: Drift picks what's next.
         val v = m.optString("v")
         if (v.isNotEmpty() && v != id) {
-            run("__drift.pause()")
+            // (Not right after asking for another one: the page is still switching.)
+            if (System.currentTimeMillis() - loadedAt > 4000) run("__drift.pause()")
             return
         }
+        pageReady = true
         val isAd = m.optBoolean("ad")
         if (ad != isAd) ad = isAd
         val t = m.optDouble("t", 0.0)
@@ -233,10 +260,6 @@ object YTWeb {
         buffering = m.optBoolean("buffering")
         if (playing && !qualitySet) {
             qualitySet = true
-            // Songs: the smallest picture (only the sound is heard).
-            val h = if (playingMusic) 144 else EpisodeVideo.quality.coerceAtMost(2160)
-            height = h
-            run("__drift.quality('" + label(h) + "')")
             if (rate != 1f) rate(rate)
             web?.evaluateJavascript("window.__drift ? __drift.qualities() : []") { result ->
                 val labels = runCatching { org.json.JSONArray(result) }.getOrNull()
@@ -348,6 +371,7 @@ object YTWeb {
                 (view.parent as? ViewGroup)?.removeView(view)
                 view.destroy()
                 web = null
+                pageReady = false
                 if (videoId != null) fail("The video stopped")
                 return true
             }
@@ -386,7 +410,22 @@ object YTWeb {
   };
   const hash = location.hash || '';
   const startMatch = hash.match(/drift-at=([0-9.]+)/);
-  const startAt = startMatch ? parseFloat(startMatch[1]) : 0;
+  let startAt = startMatch ? parseFloat(startMatch[1]) : 0;
+  let loadedAt = Date.now();
+  // Right after switching videos in the page: the element still has the old one for a moment.
+  let oldSrc = null;
+
+  // The quality, picked before YouTube's player starts (switching it while playing makes it start over).
+  const preferQuality = (q) => {
+    try {
+      const now = Date.now();
+      localStorage.setItem('yt-player-quality', JSON.stringify({
+        data: JSON.stringify({ quality: q, previousQuality: q }), expiration: now + 30 * 86400000, creation: now,
+      }));
+    } catch (e) {}
+  };
+  const qualityMatch = hash.match(/drift-q=([0-9]+)/);
+  if (qualityMatch) preferQuality(parseInt(qualityMatch[1], 10));
   let want = hash.indexOf('drift-paused') < 0;
   let rate = 1;
   let started = false;
@@ -448,9 +487,34 @@ object YTWeb {
 
   const video = () => document.querySelector('#player-container-id video, .html5-video-player video, video');
   const api = () => document.getElementById('movie_player') || document.querySelector('.html5-video-player');
-  const id = () => { try { return new URL(location.href).searchParams.get('v') || '' } catch (e) { return '' } };
+  const id = () => {
+    try { const p = api(); const d = p && p.getVideoData && p.getVideoData(); if (d && d.video_id) return d.video_id } catch (e) {}
+    try { return new URL(location.href).searchParams.get('v') || '' } catch (e) { return '' }
+  };
 
   // Commands from Drift.
+  // Another video in this same page (no new page to load: the switch is almost instant). false: not possible.
+  D.load = (vid, start, autoplay, q) => {
+    const p = api();
+    if (!p || !p.loadVideoById || !p.cueVideoById) return false;
+    try {
+      if (q) {
+        preferQuality(q);
+        const names = { 144: 'tiny', 240: 'small', 360: 'medium', 480: 'large', 720: 'hd720', 1080: 'hd1080', 1440: 'hd1440', 2160: 'hd2160' };
+        const name = names[q];
+        if (name && p.setPlaybackQualityRange) p.setPlaybackQualityRange(name, name);
+      }
+      want = autoplay;
+      startAt = start;
+      started = start <= 1;
+      loadedAt = Date.now();
+      const v = video();
+      oldSrc = v ? v.currentSrc : null;
+      if (autoplay) p.loadVideoById({ videoId: vid, startSeconds: start });
+      else p.cueVideoById({ videoId: vid, startSeconds: start });
+      return true;
+    } catch (e) { return false }
+  };
   D.play = () => { want = true; const v = video(); if (v) v.play().catch(() => {}) };
   D.pause = () => { want = false; const v = video(); if (v) v.pause() };
   D.seek = (t) => { const v = video(); if (v) v.currentTime = t; started = true };
@@ -564,7 +628,7 @@ object YTWeb {
     if (!ad) {
       if (v.muted) v.muted = false;
       if (v.playbackRate !== rate) v.playbackRate = rate;
-      if (!started && v.readyState >= 1) {
+      if (!started && oldSrc === null && v.readyState >= 1) {
         if (startAt > 1 && v.currentTime < startAt - 2) v.currentTime = startAt;
         started = true;
       }
@@ -573,13 +637,18 @@ object YTWeb {
       if (!want && !v.paused) v.pause();
     }
     const err = document.querySelector('.ytp-error, ytm-player-error-message-renderer');
+    if (oldSrc !== null && (v.currentSrc !== oldSrc || Date.now() - loadedAt > 3000)) oldSrc = null;
+    if (oldSrc !== null) {
+      post({ k: 'state', v: id(), t: -1, d: 0, playing: false, buffering: true, ended: false, ad: ad, error: '', level: -1, fx: false });
+      return;
+    }
     post({
       k: 'state', v: id(),
       t: ad ? -1 : v.currentTime,
       d: ad ? 0 : (isFinite(v.duration) ? v.duration : 0),
       playing: !v.paused && !ad,
       buffering: ad || (!v.paused && v.readyState < 3),
-      ended: !ad && v.ended,
+      ended: !ad && v.ended && Date.now() - loadedAt > 1500,
       ad: ad,
       error: err ? (err.innerText || 'error').trim().slice(0, 200) : '',
       level: loudest,
