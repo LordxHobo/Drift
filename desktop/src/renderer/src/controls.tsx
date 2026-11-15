@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { Icon } from './icons'
-import { cycleRepeat, next, previous, seek, setShuffle, setVolume, toggle, toggleMute, usePlayer, usePosition } from './player'
+import { cycleRepeat, next, previous, seek, setShuffle, setVolume, toggle, toggleMute, usePlayer, usePosition, useSegments } from './player'
 import { formatTime } from './util'
 import { Spinner } from './ui'
 import { chapterMask, useChapterMarks } from './chapters'
 
 /** A draggable bar (song position or volume). */
-export function Slider({ value, max, onChange, onCommit, label, className, mask }: {
+export function Slider({ value, max, onChange, onCommit, label, className, mask, marks }: {
   value: number; max: number; onChange?: (v: number) => void; onCommit: (v: number) => void; label: string; className?: string
   /** CSS mask for the bar (chapter gaps). */
   mask?: string
+  /** Marked parts (SponsorBlock), drawn on the bar like the browser extension does. */
+  marks?: { start: number; end: number; color: string; label: string }[]
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
@@ -59,6 +61,15 @@ export function Slider({ value, max, onChange, onCommit, label, className, mask 
     >
       <div className="slider-track" style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}>
         <div className="slider-fill" style={{ width: `${pct}%` }} />
+        {max > 0 &&
+          marks?.map((m) => (
+            <div
+              key={`${m.start}-${m.end}`}
+              className="slider-mark"
+              title={m.label}
+              style={{ left: `${(m.start / max) * 100}%`, width: `${(Math.min(m.end, max) - m.start) / max * 100}%`, background: m.color }}
+            />
+          ))}
       </div>
       <div className="slider-knob" style={{ left: `${pct}%` }} />
     </div>
@@ -70,6 +81,7 @@ export function Progress({ showTimes = true, className }: { showTimes?: boolean;
   const position = usePosition()
   const [preview, setPreview] = useState<number | null>(null)
   const marks = useChapterMarks()
+  const segments = useSegments()
   return (
     <div className={`progress ${className ?? ''}`}>
       {showTimes && <span className="time">{formatTime(preview ?? position)}</span>}
@@ -78,6 +90,7 @@ export function Progress({ showTimes = true, className }: { showTimes?: boolean;
         max={p.duration}
         label={p.current?.podcast ? 'Episode position' : 'Song position'}
         mask={chapterMask(marks, p.duration)}
+        marks={segments.map((s) => ({ start: s.start, end: s.end, color: segmentColor(s.category), label: segmentName(s.category) }))}
         onChange={setPreview}
         onCommit={(v) => {
           setPreview(null)
@@ -86,6 +99,33 @@ export function Progress({ showTimes = true, className }: { showTimes?: boolean;
       />
       {showTimes && <span className="time">{formatTime(p.duration)}</span>}
     </div>
+  )
+}
+
+/** The SponsorBlock extension's colors, so the parts look the same. */
+export function segmentColor(category: string): string {
+  switch (category) {
+    case 'sponsor':
+      return '#00d400'
+    case 'selfpromo':
+      return '#ffff00'
+    case 'interaction':
+      return '#cc00ff'
+    case 'intro':
+      return '#00ffff'
+    case 'outro':
+      return '#0202ed'
+    case 'preview':
+      return '#008fd6'
+    default:
+      return '#ff9900'
+  }
+}
+
+export function segmentName(category: string): string {
+  return (
+    { sponsor: 'Sponsor', selfpromo: 'Self-promotion', interaction: 'Subscribe reminder', intro: 'Intro', outro: 'Outro', preview: 'Preview' }[category] ??
+    'Non-music part'
   )
 }
 

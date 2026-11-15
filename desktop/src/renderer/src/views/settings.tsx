@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { setSponsorBlock } from '../player'
+import { YouTubeAccountSetting } from './youtube'
 import type { JSX } from 'react'
 import { Icon, Logo } from '../icons'
 import { accountStore, connectionsStore, dialogStore, downloadsStore, drift, go, meStore, pairingStore, platformStore, readLocal, setSettings, settingsStore, Store, updateStore, useStore, writeLocal } from '../state'
@@ -121,8 +123,11 @@ export function SettingsPage(): JSX.Element {
                 </div>
               </Row>
             )}
-            <Row title="Skip sponsors in podcasts" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked.">
-              <Toggle on={s.skipSponsors} onChange={(v) => setSettings({ skipSponsors: v })} label="Skip sponsors in podcasts" />
+            <Row title="SponsorBlock for podcasts and videos" detail="Skips sponsor reads, self-promotion and “like and subscribe” reminders the SponsorBlock community has marked, and shows them on the progress bar.">
+              <Toggle on={s.skipSponsors} onChange={(v) => setSponsorBlock(v)} label="SponsorBlock for podcasts and videos" />
+            </Row>
+            <Row title="YouTube account" detail="The account the YouTube viewer uses on this computer (the switch next to Drift at the top). Signing out switches back to music.">
+              <YouTubeAccountSetting />
             </Row>
           </section>
         )}

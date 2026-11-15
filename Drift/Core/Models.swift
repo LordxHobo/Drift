@@ -27,6 +27,8 @@ struct Track: Codable, Hashable, Identifiable {
     var audioURL: URL?
     /// …and the feed it's from (to open its show).
     var feedURL: URL?
+    /// A video from the YouTube viewer: always shows its picture, and stays out of Podcasts.
+    var watch: Bool?
 
     var isEpisode: Bool { podcast == true }
     /// From a show's feed (an audio file) rather than YouTube.

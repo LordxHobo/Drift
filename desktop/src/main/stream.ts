@@ -10,6 +10,7 @@ import type { Types } from 'youtubei.js'
 import type { StreamInfo, Track } from '@shared/types'
 import { albumVersion, explicitVersion } from './ytmusic'
 import { getSettings } from './store'
+import { playbackCookie } from './ytviewer'
 
 // YouTube scrambles part of each audio link; the code that unscrambles it comes from YouTube's own
 // player. It runs in a separate context with only a few web basics (no require, process or files).
@@ -256,10 +257,20 @@ function parseKey(key: string): { id: string; want: Want } {
 // MARK: Full extraction (fallback)
 
 let yt: Promise<Innertube> | undefined
+/** The YouTube account's cookies the current session was made with ('' = not signed in). */
+let ytCookie = ''
 
-function innertube(): Promise<Innertube> {
+async function innertube(): Promise<Innertube> {
+  // Signed in to YouTube (the YouTube viewer): the fallback clients ask as that account, which YouTube
+  // checks far less than an anonymous app.
+  const cookie = await playbackCookie().catch(() => '')
+  if (cookie !== ytCookie) {
+    ytCookie = cookie
+    yt = undefined
+  }
   // A real visitor ID from YouTube (not one made up locally, which YouTube flags as a bot).
   yt ??= Innertube.create({
+    ...(cookie ? { cookie } : {}),
     retrieve_player: true,
     visitor_data: visitorData,
     // The same way as the quick path (see transports).
@@ -677,6 +688,8 @@ async function fetchPiece(id: string, start: number, end: number): Promise<Respo
   throw new Error('YouTube refused the audio')
 }
 
+const freshTokens = new Set<string>()
+
 export async function handleStream(request: Request): Promise<Response> {
   const u = new URL(request.url)
   const videoId = u.pathname.replace(/^\/+/, '')
@@ -685,6 +698,12 @@ export async function handleStream(request: Request): Promise<Response> {
   // ?v=720: the video picture (podcasts with video on), up to that height.
   const height = Number(u.searchParams.get('v'))
   const id = height > 0 ? `${videoId}#v${Math.min(2160, Math.max(144, height))}` : videoId
+  // &fresh=<token>: the picture didn't load, so get a new link (once per token; the player asks many times).
+  const fresh = u.searchParams.get('fresh')
+  if (fresh && !freshTokens.has(fresh)) {
+    freshTokens.add(fresh)
+    resolved.delete(id)
+  }
   const local = height > 0 ? undefined : localLookup(videoId)
   if (local) return serveFile(local, request.headers.get('range'))
   const feed = feedAudio.get(videoId)

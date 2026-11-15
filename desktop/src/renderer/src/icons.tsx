@@ -2,6 +2,9 @@ import type { JSX } from 'react'
 
 const paths: Record<string, JSX.Element> = {
   home: <path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z" />,
+  youtube: <g><rect x="2" y="5" width="20" height="14" rx="4" /><path d="m10 9 5 3-5 3z" fill="var(--yt-play, #fff)" /></g>,
+  subscriptions: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="3" y="8" width="18" height="13" rx="2" /><path d="M6 5h12M8 2h8" strokeLinecap="round" /><path d="m10.5 11.5 4 3-4 3z" fill="currentColor" /></g>,
+  thumbUp: <path d="M2 10h4v11H2zM8 21h9.5a2 2 0 0 0 2-1.6l1.4-7A2 2 0 0 0 19 10h-5.5l.8-3.9A1.9 1.9 0 0 0 12.4 4L8 10z" />,
   homeLine: <path d="M3 10.5 12 3l9 7.5V21h-6.5v-6h-5v6H3z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />,
   search: <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /></g>,
   library: <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 3v18M9 3v18" /><path d="m14 3.5 6 17" /></g>,

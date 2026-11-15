@@ -1,11 +1,14 @@
 // Where the episode video shows: a full page (Drift style), the full-screen player (Apple Music
 // style) and a small floating window while you browse.
 import { useEffect, useRef, useState } from 'react'
-import type { JSX } from 'react'
+import type { JSX, MouseEvent as ReactMouseEvent } from 'react'
 import { Icon } from './icons'
 import { back, drift, fullPlayerStore, go, panelStore, setSettings, settingsStore, useRoute, useStore } from './state'
 import { usePlayer } from './player'
-import { bestQuality, useVideoReady, videoEl } from './video'
+import { bestQuality, retryVideo, useVideoFailed, useVideoReady, videoEl } from './video'
+import { Progress } from './controls'
+import { seek, toggle, usePosition } from './player'
+import { formatTime } from './util'
 import { IconButton, Spinner, TrackArt } from './ui'
 import { ChapterList, CurrentChapter, useChapters } from './chapters'
 
@@ -89,26 +92,70 @@ function QualityPicker(): JSX.Element | null {
   )
 }
 
+/**
+ * Where the one video element is shown. It can be in several places at once (the watch page and the
+ * full player on top, say): the newest one gets it, and when that one closes, it goes back to the one
+ * before, so the video never goes blank.
+ */
+const surfaces: HTMLDivElement[] = []
+
+function claim(): void {
+  const top = surfaces[surfaces.length - 1]
+  if (top && videoEl.parentElement !== top) top.prepend(videoEl)
+}
+
 /** Shows the one video element here (it moves between places without reloading). */
-export function VideoSurface({ className, onExpand }: { className?: string; onExpand?: () => void }): JSX.Element {
+export function VideoSurface({ className, onExpand, controls, theater, onTheater }: {
+  className?: string
+  onExpand?: () => void
+  /** YouTube-style controls on the video (and a click pauses, like YouTube). */
+  controls?: boolean
+  theater?: boolean
+  onTheater?: () => void
+}): JSX.Element {
+  const clickTimer = useRef<number | undefined>(undefined)
   const box = useRef<HTMLDivElement>(null)
   const ready = useVideoReady()
+  const failed = useVideoFailed()
   const p = usePlayer()
   useEffect(() => {
-    box.current?.appendChild(videoEl)
+    const el = box.current
+    if (!el) return
+    surfaces.push(el)
+    claim()
+    return () => {
+      const i = surfaces.indexOf(el)
+      if (i >= 0) surfaces.splice(i, 1)
+      claim()
+    }
   }, [])
   const fullscreen = (): void => {
+    window.clearTimeout(clickTimer.current)
     if (document.fullscreenElement) void document.exitFullscreen()
     else void box.current?.requestFullscreen()
   }
+  // A click pauses or plays; a double click goes full screen instead (so the click waits a moment).
+  const click = (e: ReactMouseEvent): void => {
+    if (!controls || (e.target as HTMLElement).closest('button, .video-controls, .quality')) return
+    window.clearTimeout(clickTimer.current)
+    clickTimer.current = window.setTimeout(toggle, 220)
+  }
   return (
-    <div className={`video-surface ${className ?? ''}`} ref={box} onDoubleClick={fullscreen}>
+    <div className={`video-surface ${className ?? ''} ${controls ? 'with-controls' : ''}`} ref={box} onClick={click} onDoubleClick={fullscreen}>
       {!ready && p.current && (
         <div className="video-waiting">
           <TrackArt track={p.current} px={640} className="video-poster" radius={0} />
-          <Spinner size={22} />
+          {failed ? (
+            <div className="video-failed">
+              The picture didn’t load (the sound keeps playing).
+              <button className="btn" onClick={(e) => { e.stopPropagation(); retryVideo() }}>Try again</button>
+            </div>
+          ) : (
+            <Spinner size={22} />
+          )}
         </div>
       )}
+      {controls && <VideoControls onFullscreen={fullscreen} theater={theater} onTheater={onTheater} />}
       <div className="video-tools">
         <QualityPicker />
         {onExpand && <IconButton icon="expand" label="Bigger" size={16} onClick={onExpand} />}
@@ -118,11 +165,37 @@ export function VideoSurface({ className, onExpand }: { className?: string; onEx
   )
 }
 
+/** On the video, like YouTube's: play/pause, back and ahead 10 s, the time and the timeline (with SponsorBlock parts). */
+function VideoControls({ onFullscreen, theater, onTheater }: { onFullscreen: () => void; theater?: boolean; onTheater?: () => void }): JSX.Element {
+  const p = usePlayer()
+  const position = usePosition()
+  return (
+    <div className="video-controls" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <Progress showTimes={false} className="video-timeline" />
+      <div className="video-controls-row">
+        <IconButton icon={p.playing ? 'pause' : 'play'} label={p.playing ? 'Pause' : 'Play'} size={20} onClick={toggle} />
+        <button className="video-skip" aria-label="Back 10 seconds" onClick={() => seek(Math.max(0, position - 10))}>−10</button>
+        <button className="video-skip" aria-label="Ahead 10 seconds" onClick={() => seek(Math.min(p.duration || position + 10, position + 10))}>+10</button>
+        <span className="video-time">
+          {formatTime(position)} / {formatTime(p.duration)}
+        </span>
+        <span className="spacer" />
+        {onTheater && (
+          <button className={`video-theater ${theater ? 'on' : ''}`} aria-label={theater ? 'Default view (T)' : 'Theater mode (T)'} title={theater ? 'Default view (T)' : 'Theater mode (T)'} onClick={onTheater}>
+            <span aria-hidden="true" />
+          </button>
+        )}
+        <IconButton icon="fullscreen" label="Full screen (F)" size={18} onClick={onFullscreen} />
+      </div>
+    </div>
+  )
+}
+
 /** True when the current episode should show its video. */
 export function useVideoOn(): boolean {
   const p = usePlayer()
   const s = useStore(settingsStore)
-  return !!p.current?.podcast && !p.current.audioURL && s.podcastVideo
+  return !!p.current?.podcast && !p.current.audioURL && (s.podcastVideo || !!p.current.watch)
 }
 
 /** Drift style: the video filling the main area. */
@@ -183,10 +256,14 @@ export function MiniVideo(): JSX.Element | null {
   const music = useStore(settingsStore).style === 'music'
   const p = usePlayer()
   const [hiddenFor, setHiddenFor] = useState<string | null>(null)
-  if (!on || route.name === 'video' || full || hiddenFor === p.current?.id) return null
+  if (!on || route.name === 'video' || route.name === 'yt-watch' || full || hiddenFor === p.current?.id) return null
   return (
     <div className={`mini-video ${music ? 'music' : ''}`}>
-      <VideoSurface onExpand={() => (music ? fullPlayerStore.set(true) : go({ name: 'video' }))} />
+      <VideoSurface
+        onExpand={() =>
+          p.current?.watch ? go({ name: 'yt-watch', id: p.current.id }) : music ? fullPlayerStore.set(true) : go({ name: 'video' })
+        }
+      />
       <button className="mini-video-close" aria-label="Hide video" title="Hide (keeps playing)" onClick={() => setHiddenFor(p.current?.id ?? null)}>
         <Icon name="close" size={14} />
       </button>
@@ -200,7 +277,8 @@ export function VideoButton(): JSX.Element | null {
   const s = useStore(settingsStore)
   const route = useRoute()
   // Episodes from a show's feed are audio only.
-  if (!p.current?.podcast || p.current.audioURL) return null
+  // Episodes from a show's feed are audio only; videos from the YouTube viewer always show.
+  if (!p.current?.podcast || p.current.audioURL || p.current.watch) return null
   return (
     <IconButton
       icon="video"

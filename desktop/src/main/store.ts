@@ -58,6 +58,7 @@ const defaultSettings: Settings = {
   closeToTray: true,
   podcastVideo: false,
   videoQuality: 720,
+  viewerMode: 'music',
   eqEnabled: false,
   eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }

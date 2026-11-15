@@ -29,6 +29,7 @@ import { EditProfileDialog } from './views/editProfile'
 import { FriendsPage, SharedPlaylistPage, UserPage } from './views/social'
 import { ChannelPage, PodcastsPage } from './views/podcasts'
 import { MiniVideo, VideoPage } from './videoView'
+import { ModeSwitch, YouTubeChannel, YouTubeChannels, YouTubeFeed, YouTubeHome, YouTubeSearch, YouTubeSidebar, YouTubeSignIn, YouTubeWatch } from './views/youtube'
 
 function useDark(): boolean {
   const appearance = useStore(settingsStore).appearance
@@ -78,6 +79,18 @@ function Page({ route }: { route: Route }): JSX.Element {
       return <UserPage key={route.id} id={route.id} hint={route.hint} />
     case 'shared':
       return <SharedPlaylistPage key={`${route.playlist.ownerId}-${route.playlist.id}`} playlist={route.playlist} />
+    case 'yt-home':
+      return <YouTubeHome />
+    case 'yt-feed':
+      return <YouTubeFeed key={route.feed} feed={route.feed} />
+    case 'yt-channels':
+      return <YouTubeChannels />
+    case 'yt-channel':
+      return <YouTubeChannel key={route.id} id={route.id} />
+    case 'yt-search':
+      return <YouTubeSearch key={route.q} q={route.q} />
+    case 'yt-watch':
+      return <YouTubeWatch key={route.id} id={route.id} />
   }
 }
 
@@ -131,6 +144,7 @@ export function App(): JSX.Element {
   const route = useRoute()
   const remoteTarget = useStore(remoteStore).target
   const full = useStore(fullPlayerStore)
+  const youtube = settings.viewerMode === 'youtube'
   useShortcuts()
 
   useEffect(() => {
@@ -138,17 +152,20 @@ export function App(): JSX.Element {
     root.dataset.style = settings.style
     root.dataset.theme = dark ? 'dark' : 'light'
     root.dataset.platform = platform
+    root.dataset.viewer = settings.viewerMode
     const accent = settings.style === 'music' ? musicRed : (accents[settings.accent] ?? accents[0])[dark ? 'dark' : 'light']
     root.style.setProperty('--accent', accent)
     root.style.setProperty('--accent-bright', settings.style === 'music' ? musicRed : (accents[settings.accent] ?? accents[0]).dark)
-  }, [settings.style, settings.accent, dark, platform])
+  }, [settings.style, settings.accent, dark, platform, settings.viewerMode])
 
   if (settings.style === 'music') {
     return (
       <div className={`app music ${full ? 'full-open' : ''}`}>
-        <div className="titlebar" />
+        <div className="titlebar">
+          <ModeSwitch />
+        </div>
         <div className="m-body">
-          <MusicSidebar />
+          {youtube ? <YouTubeSidebar /> : <MusicSidebar />}
           <div className="m-main">
             {remoteTarget ? <RemoteBar music /> : <MusicTopPlayer />}
             <div className="m-content">
@@ -170,6 +187,7 @@ export function App(): JSX.Element {
         <JamDialog />
         <InviteDialog />
         <SendDialog />
+        <YouTubeSignIn />
         <ShareDialog />
         <IncomingInvite />
         <PatchNotes />
@@ -182,9 +200,11 @@ export function App(): JSX.Element {
 
   return (
     <div className="app drift">
-      <div className="titlebar" />
+      <div className="titlebar">
+          <ModeSwitch />
+        </div>
       <div className="d-body">
-        <DriftSidebar />
+        {youtube ? <YouTubeSidebar /> : <DriftSidebar />}
         <main className={`panel main ${route.name === 'lyrics' || route.name === 'video' ? 'lyrics-mode' : ''}`}>
           {route.name !== 'lyrics' && route.name !== 'video' && <TopBar>{route.name === 'search' ? <SearchBox q={route.q ?? ''} /> : null}</TopBar>}
           <div className="main-scroll">
@@ -204,6 +224,7 @@ export function App(): JSX.Element {
       <JamDialog />
       <InviteDialog />
       <SendDialog />
+      <YouTubeSignIn />
       <ShareDialog />
       <IncomingInvite />
       <PatchNotes />

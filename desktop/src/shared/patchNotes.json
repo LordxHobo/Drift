@@ -2,6 +2,224 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 65,
+      "date": "2026-11-12",
+      "title": "Better video controls",
+      "notes": [
+        {
+          "text": "Double-tap the right or left side of a video to jump 10 seconds ahead or back, and keep tapping that side to go further (20, 30, 40 seconds…), with a bubble showing how far.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Full screen now has the same controls as the watch page: back and ahead 10 seconds, play/pause, the timeline with SponsorBlock's parts, quality, and X at the top right.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Tap a video to show its controls and timeline; all of them (quality and full screen too) hide again after a few seconds of playing.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "date": "2026-11-12",
+      "title": "Videos play like ProTube",
+      "notes": [
+        {
+          "text": "Videos in the YouTube viewer now play in YouTube's own player, signed in as you, like ProTube: they start right away and pick their quality by themselves. Drift's controls, timeline, SponsorBlock, queue and floating video all stay.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Ad blocking: ads are taken out before the player sees them, ad servers are blocked, and any ad that still shows is skipped (you'll see \"Skipping ad\").",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The quality menu on a video lists what YouTube offers for it, and remembers your pick.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "If YouTube's player can't play a video, Drift plays it its own way instead.",
+          "platforms": ["ios"]
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "date": "2026-11-12",
+      "title": "Videos start faster",
+      "notes": [
+        {
+          "text": "Videos start much sooner: the first few in a list are made ready before you tap them, and a video starts small and sharpens a few seconds in, like YouTube.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "Videos start much sooner: the first few in a list are made ready before you tap them, and playback begins after a second of video instead of waiting longer.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "The floating video and the watch page no longer load the video again when you move between them, and show its thumbnail instead of a black box until the picture is there.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "date": "2026-11-12",
+      "title": "Videos that start, and float",
+      "notes": [
+        {
+          "text": "Videos in the YouTube viewer now play like YouTube's own app: picture and sound come together in one stream, so they start right away instead of getting stuck.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Swipe down on a video to keep browsing: it floats over the app. Drag it anywhere, pinch it or drag its corner to resize it (down to half the screen), tap it to go back, or X to stop it.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The bar showing what's playing is gone in the YouTube viewer (the floating video takes its place).",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "When a video ends and the next one starts, its page follows along.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "date": "2026-11-12",
+      "title": "The YouTube viewer, on your phone",
+      "notes": [
+        {
+          "text": "The YouTube viewer is on iPhone: turn it on in the drawer (tap your picture), sign in, and Drift swaps to Home, Subscriptions, Library and Search for videos.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "The YouTube viewer is on Android: turn it on at the top of Settings, sign in, and Drift swaps to Home, Subscriptions, Library and Search for videos.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Watching a video: tap it for the controls, double-tap a side to jump 10 seconds, and drag the timeline, with SponsorBlock's parts marked in their colors. SponsorBlock can be turned on or off right under the video.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Under the video: like, Watch later, download, subscribe, the description, comments (top or newest, and you can post your own) and Up next, which plays after it.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Library has your channel, history, Watch later and liked videos, and channels open with their videos.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "date": "2026-11-12",
+      "title": "Watching, improved",
+      "notes": [
+        {
+          "text": "Videos have their own controls now: a timeline (with SponsorBlock's parts on it), play/pause, back and ahead 10 seconds and the time, right on the video.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Click the video to pause it, double-click or press F for full screen, T for theater mode (the video across the whole width), K to play or pause, J and L to jump 10 seconds, M to mute.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Comments under every video: top or newest, more as you scroll, and you can write your own.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Your channel is in the menu under You.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Fixed: clicking the video's picture at the top no longer leaves the video blank, and a video that gets stuck loading tries again (then at a lower quality) instead of spinning forever while the sound plays.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "date": "2026-11-12",
+      "title": "Signing in to YouTube",
+      "notes": [
+        {
+          "text": "Google no longer says \"This browser or app may not be secure\" when you sign in to the YouTube viewer.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "date": "2026-11-12",
+      "title": "Signing in to YouTube, fixed",
+      "notes": [
+        {
+          "text": "The YouTube sign-in window no longer stays blank: Google's page opens right away and goes straight to your email and password.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "date": "2026-11-12",
+      "title": "Signing in to YouTube",
+      "notes": [
+        {
+          "text": "Signing in to the YouTube viewer no longer asks for a security key right away: Google's page now goes straight to your email and password (2-step verification still works as usual).",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "date": "2026-11-12",
+      "title": "The YouTube viewer",
+      "notes": [
+        {
+          "text": "New: a switch next to Drift at the top turns Drift into a YouTube viewer. Sign in with your YouTube account the first time (Google's own page opens; use an account you don't mind Drift using), and flip it back to return to your music.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Home shows new videos from your subscriptions, plus History, Watch later, Liked videos, your channels and search. Watching: like, subscribe, save to Watch later, download or send a video to a friend; the next videos play after it, like on YouTube.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "No ads, and SponsorBlock skips sponsors, self-promotion and subscribe reminders in videos too. The parts it skips show on the progress bar in SponsorBlock's colors, and you can turn it on or off right on the video (or in Settings → Playback).",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "text": "Signed in, Drift also asks YouTube for songs as your account when YouTube is being strict, so \"confirm you're not a bot\" should come up a lot less.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
+    {
       "id": 55,
       "date": "2026-11-11",
       "title": "Plays when YouTube blocks your address",

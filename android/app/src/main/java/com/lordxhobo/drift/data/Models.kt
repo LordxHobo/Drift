@@ -36,6 +36,8 @@ data class Track(
     val audioURL: String? = null,
     /** …and the feed it's from. */
     val feedURL: String? = null,
+    /** A video from the YouTube viewer: always shows its picture. */
+    val watch: Boolean? = null,
 ) {
     val isEpisode: Boolean get() = podcast == true
 

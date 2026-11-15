@@ -26,40 +26,93 @@ final class EpisodeVideo {
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var seeking = false
+    /// The views showing a video, so they can let go of it in the background (iOS stops a player that's
+    /// still on a view there, and the sound should go on).
+    @ObservationIgnored private let layers = NSHashTable<AVPlayerLayer>.weakObjects()
+    @ObservationIgnored private var inBackground = false
 
     private init() {
         av.isMuted = true
         av.allowsExternalPlayback = false
         _ = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.stop() }
+            MainActor.assumeIsolated {
+                self?.inBackground = true
+                self?.refreshLayers()
+                self?.stop()
+            }
         }
         _ = NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.update() }
+            MainActor.assumeIsolated {
+                self?.inBackground = false
+                self?.update()
+            }
         }
     }
 
     /// The highest height to use: the setting, or 360p with Data saver on.
-    private var maxHeight: Int {
-        AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality
+    private var maxHeight: Int { Player.pictureHeight }
+
+    /// The player the views show: the music player itself when its stream has the picture, else the silent copy.
+    var shownPlayer: AVPlayer? {
+        if inBackground { return nil }
+        return Player.shared.picturePlayer ?? av
+    }
+
+    func register(_ layer: AVPlayerLayer) {
+        layers.add(layer)
+        layer.player = shownPlayer
+    }
+
+    private func refreshLayers() {
+        let p = shownPlayer
+        for l in layers.allObjects where l.player !== p { l.player = p }
     }
 
     /// A video view appeared or went away.
     func attach() {
         viewers += 1
+        lingering?.cancel()
         update()
     }
 
     func detach() {
         viewers = max(0, viewers - 1)
-        if viewers == 0 { stop() }
+        guard viewers == 0 else { return }
+        // Moving between views (the watch page and the floating video): keep it going for a moment,
+        // so the next view shows it at once instead of loading it again.
+        lingering?.cancel()
+        lingering = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, !Task.isCancelled, self.viewers == 0 else { return }
+            self.stop()
+        }
     }
+
+    @ObservationIgnored private var lingering: Task<Void, Never>?
 
     /// Loads the right video (or none) for what's playing and the settings.
     func update() {
-        guard viewers > 0, AppSettings.shared.podcastVideo,
-              let t = Player.shared.current, t.isEpisode, !t.isFeedEpisode,
+        refreshLayers()
+        // YouTube's own player shows it (YTWebVideo): nothing to load here.
+        if Player.shared.webActive {
+            stop()
+            return
+        }
+        // The player's own stream has the picture (the YouTube viewer): nothing more to load.
+        if Player.shared.showsPicture {
+            stop()
+            let hs = Player.shared.pictureHeights
+            heights = hs
+            height = hs.last(where: { $0 <= maxHeight }) ?? hs.first
+            unavailable = false
+            ready = true
+            return
+        }
+        // Episodes: when video is on. Videos from the YouTube viewer: always.
+        guard viewers > 0, let t = Player.shared.current, AppSettings.shared.podcastVideo || t.watch == true,
+              t.isEpisode, !t.isFeedEpisode,
               UIApplication.shared.applicationState != .background else {
             stop()
             return
@@ -121,6 +174,8 @@ final class EpisodeVideo {
     /// Pick a quality (the highest choice means "always the sharpest").
     func choose(_ h: Int) {
         AppSettings.shared.videoQuality = h == heights.last ? 4320 : h
+        Player.shared.pictureQualityChanged()
+        if Player.shared.showsPicture { height = h }
         update()
     }
 
@@ -133,7 +188,7 @@ final class EpisodeVideo {
 
     /// Keeps the picture in step with the sound.
     private func sync(force: Bool = false) {
-        guard ready, Player.shared.current?.isEpisode == true else { return }
+        guard ready, !Player.shared.showsPicture, Player.shared.current?.isEpisode == true else { return }
         let clock = Player.shared.audioClock
         let videoTime = av.currentTime().seconds
         if !seeking, force || !videoTime.isFinite || abs(videoTime - clock.time) > 0.35 {
@@ -160,7 +215,7 @@ struct EpisodeVideoLayer: UIViewRepresentable {
 
     func makeUIView(context: Context) -> LayerView {
         let v = LayerView()
-        v.playerLayer.player = EpisodeVideo.shared.av
+        EpisodeVideo.shared.register(v.playerLayer)
         v.playerLayer.videoGravity = .resizeAspect
         v.backgroundColor = .black
         return v
@@ -175,18 +230,34 @@ struct EpisodeVideoView: View {
     var width: CGFloat
     var fullScreen = false
     var onFullScreen: (() -> Void)?
+    /// Its own quality and full-screen buttons (off when the YouTube viewer's controls draw them).
+    var buttons = true
     private var video: EpisodeVideo { .shared }
+    private var web: YTWebPlayer { .shared }
+    /// Played by YouTube's own player (the YouTube viewer).
+    private var onWeb: Bool { Player.shared.webActive && Player.shared.current?.id == track.id }
+    private var ready: Bool { onWeb ? web.ready && !web.ad : video.ready }
 
     var body: some View {
         ZStack {
             Color.black
-            if fullScreen || video.ready {
+            if onWeb {
+                YTWebVideo()
+            } else if fullScreen || video.ready {
                 EpisodeVideoLayer()
             }
-            if !video.ready {
+            if onWeb && web.ad {
                 EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 800), width: width, corner: 0)
                     .opacity(0.55)
-                if video.unavailable {
+                Label("Skipping ad", systemImage: "forward.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.6), in: Capsule())
+            } else if !ready {
+                EpisodeArtwork(url: track.artworkURL ?? track.artwork(size: 800), width: width, corner: 0)
+                    .opacity(0.55)
+                if video.unavailable && !onWeb {
                     Text("No video for this episode")
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 10)
@@ -200,8 +271,9 @@ struct EpisodeVideoView: View {
         .frame(width: width, height: width * 9 / 16)
         .clipShape(RoundedRectangle(cornerRadius: fullScreen ? 0 : 8, style: .continuous))
         .overlay(alignment: .topTrailing) {
+            if buttons {
             HStack(spacing: 6) {
-                qualityMenu
+                VideoQualityMenu(track: track)
                 if let onFullScreen {
                     Button(action: onFullScreen) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -214,10 +286,27 @@ struct EpisodeVideoView: View {
             }
             .foregroundStyle(.white)
             .padding(8)
+            }
         }
         .onAppear { video.attach() }
         .onDisappear { video.detach() }
         .onChange(of: track.id) { _, _ in video.update() }
+    }
+
+    static func label(_ h: Int) -> String {
+        h >= 2160 ? "4K" : "\(h)p"
+    }
+}
+
+/// The quality menu for a video (Drift's own picture, or YouTube's player's qualities).
+struct VideoQualityMenu: View {
+    let track: Track
+    private var video: EpisodeVideo { .shared }
+    private var web: YTWebPlayer { .shared }
+    private var onWeb: Bool { Player.shared.webActive && Player.shared.current?.id == track.id }
+
+    var body: some View {
+        if onWeb { webQualityMenu } else { qualityMenu }
     }
 
     private var qualityMenu: some View {
@@ -228,9 +317,9 @@ struct EpisodeVideoView: View {
                         video.choose(h)
                     } label: {
                         if h == video.height {
-                            Label(Self.label(h), systemImage: "checkmark")
+                            Label(EpisodeVideoView.label(h), systemImage: "checkmark")
                         } else {
-                            Text(Self.label(h))
+                            Text(EpisodeVideoView.label(h))
                         }
                     }
                 }
@@ -240,7 +329,7 @@ struct EpisodeVideoView: View {
             }
         } label: {
             HStack(spacing: 3) {
-                Text(video.height.map(Self.label) ?? "Video")
+                Text(video.height.map(EpisodeVideoView.label) ?? "Video")
                     .font(.system(size: 12, weight: .bold))
                 if let h = video.height, h >= 720 {
                     Text("HD")
@@ -255,11 +344,30 @@ struct EpisodeVideoView: View {
             .frame(height: 32)
             .background(.black.opacity(0.55), in: Capsule())
         }
-        .accessibilityLabel("Video quality \(video.height.map(Self.label) ?? "")")
+        .accessibilityLabel("Video quality \(video.height.map(EpisodeVideoView.label) ?? "")")
     }
 
-    static func label(_ h: Int) -> String {
-        h >= 2160 ? "4K" : "\(h)p"
+    /// YouTube's player: the qualities it offers (Auto picks for the connection).
+    private var webQualityMenu: some View {
+        let offered = web.heights.isEmpty ? [1080, 720, 480, 360] : web.heights
+        return Menu {
+            Section("Quality") {
+                ForEach(offered.reversed(), id: \.self) { h in
+                    Button {
+                        web.choose(h)
+                    } label: {
+                        if h == web.height { Label(EpisodeVideoView.label(h), systemImage: "checkmark") } else { Text(EpisodeVideoView.label(h)) }
+                    }
+                }
+            }
+        } label: {
+            Text(web.height.map(EpisodeVideoView.label) ?? "Auto")
+                .font(.system(size: 12, weight: .bold))
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(.black.opacity(0.55), in: Capsule())
+        }
+        .accessibilityLabel("Video quality")
     }
 }
 

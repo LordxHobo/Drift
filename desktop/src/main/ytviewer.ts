@@ -1,0 +1,423 @@
+// The YouTube viewer: signing in to YouTube (Google's own page in a Drift window, kept in its own
+// session on this computer only), and reading the signed-in account's feeds: new videos from
+// subscriptions, history, Watch later, liked videos, subscribed channels, search and a video's details.
+// Videos themselves play through the normal player (as episodes with their picture).
+import { app, BrowserWindow, session } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { Session } from 'electron'
+import { Innertube } from 'youtubei.js'
+import type { YTAccount, YTChannel, YTComment, YTFeedName, YTVideo, YTVideoDetails } from '@shared/types'
+import type { YT } from 'youtubei.js'
+type Comments = YT.Comments
+import { emit } from './store'
+
+const PARTITION = 'persist:youtube'
+/** Google refuses sign-in in windows that say they're an app; this is a normal browser's. */
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
+/** What the sign-in window says it is: Firefox (Google accepts it; it doesn't accept app windows). */
+const SIGNIN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0'
+
+const ytSession = (): Session => session.fromPartition(PARTITION)
+
+let tube: Promise<Innertube> | undefined
+let tubeCookie = ''
+let account: YTAccount | null | undefined
+
+/** The account's cookies for youtube.com ('' when signed out). */
+async function cookieHeader(): Promise<string> {
+  const list = await ytSession().cookies.get({ url: 'https://www.youtube.com' })
+  if (!list.some((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID')) return ''
+  return list.map((c) => `${c.name}=${c.value}`).join('; ')
+}
+
+/** For playback (stream.ts): the account's cookies, '' when not signed in. */
+export const playbackCookie = (): Promise<string> => cookieHeader()
+
+async function signedInTube(): Promise<Innertube> {
+  const cookie = await cookieHeader()
+  if (!cookie) throw new Error('Sign in to YouTube first.')
+  if (!tube || cookie !== tubeCookie) {
+    tubeCookie = cookie
+    tube = Innertube.create({ cookie, retrieve_player: false, user_agent: BROWSER_UA }).catch((e) => {
+      tube = undefined
+      throw e
+    })
+  }
+  return tube
+}
+
+async function raw(endpoint: string, args: Record<string, unknown>): Promise<any> {
+  const t = await signedInTube()
+  const res = await t.actions.execute(endpoint, { ...args, parse: false })
+  return res.data
+}
+
+// MARK: Signing in
+
+/** Opens Google's sign-in page; resolves true once signed in to YouTube, false if the window was closed. */
+export function signIn(parent?: BrowserWindow): Promise<boolean> {
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      parent,
+      modal: !!parent,
+      width: 480,
+      height: 720,
+      title: 'Sign in to YouTube',
+      autoHideMenuBar: true,
+      // contextIsolation off (only here, only Google's pages): so the passkey blocker runs in the page itself.
+      webPreferences: { partition: PARTITION, contextIsolation: false, nodeIntegration: false, sandbox: true, preload: passkeyBlocker() }
+    })
+    // Google refuses sign-in in windows it recognises as an app built on Chromium. Signing in as Firefox
+    // (with the Chromium-only hints hidden, here and in the page) gets the normal sign-in.
+    win.webContents.setUserAgent(SIGNIN_UA)
+    ytSession().webRequest.onBeforeSendHeaders({ urls: ['https://*.google.com/*', 'https://*.youtube.com/*', 'https://*.gstatic.com/*'] }, (details, callback) => {
+      const headers: Record<string, string> = { ...details.requestHeaders, 'User-Agent': SIGNIN_UA }
+      for (const k of Object.keys(headers)) if (/^sec-ch-ua/i.test(k)) delete headers[k]
+      callback({ requestHeaders: headers })
+    })
+    let done = false
+    const finish = (ok: boolean): void => {
+      if (done) return
+      done = true
+      account = undefined
+      if (ok) emit('youtube')
+      resolve(ok)
+      if (!win.isDestroyed()) win.close()
+    }
+    const check = async (): Promise<void> => {
+      const url = win.webContents.getURL()
+      if (!/^https:\/\/(www|m)\.youtube\.com\//.test(url)) return
+      if (await cookieHeader()) finish(true)
+    }
+    win.webContents.on('did-navigate', () => void check())
+    win.webContents.on('did-navigate-in-page', () => void check())
+    win.on('closed', () => {
+      void cookieHeader().then((c) => finish(!!c))
+    })
+    void win.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=' + encodeURIComponent('https://www.youtube.com/'))
+  })
+}
+
+/**
+ * Google's sign-in page asks for a passkey the moment it opens, and with no passkey screen of its own
+ * the window would get Windows' "insert your security key" box. A tiny script, run in the page before
+ * Google's own, hides passkey support so Google goes straight to email and password (2-step
+ * verification still works as usual). Written next to Drift's settings so it needs no packaging.
+ */
+function passkeyBlocker(): string | undefined {
+  try {
+    const file = join(app.getPath('userData'), 'youtube-signin-preload.js')
+    const source = `(() => {
+  // Firefox has none of Chromium's hints.
+  try { Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true }) } catch (e) {}
+  try { Object.defineProperty(window, 'chrome', { value: undefined, configurable: true }) } catch (e) {}
+  try { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }) } catch (e) {}
+  try {
+    const refuse = () => Promise.reject(new DOMException('Not supported here', 'NotSupportedError'))
+    if (navigator.credentials) {
+      Object.defineProperty(navigator.credentials, 'get', { value: refuse, configurable: true })
+      Object.defineProperty(navigator.credentials, 'create', { value: refuse, configurable: true })
+    }
+  } catch (e) {}
+})()
+`
+    writeFileSync(file, source)
+    return file
+  } catch {
+    return undefined
+  }
+}
+
+export async function signOut(): Promise<void> {
+  await ytSession().clearStorageData()
+  tube = undefined
+  tubeCookie = ''
+  account = null
+  emit('youtube')
+}
+
+/** Who's signed in (null when nobody). */
+export async function ytAccount(): Promise<YTAccount | null> {
+  if (!(await cookieHeader())) return (account = null)
+  if (account) return account
+  try {
+    const data = await raw('/account/account_menu', {})
+    const header = find(data, 'activeAccountHeaderRenderer')
+    const handle = text(header?.channelHandle) || ''
+    account = {
+      name: text(header?.accountName) || 'YouTube',
+      handle,
+      avatar: lastThumb(header?.accountPhoto) || null,
+      channelId: handle ? await channelFromHandle(handle) : null
+    }
+  } catch {
+    account = { name: 'YouTube', handle: '', avatar: null, channelId: null }
+  }
+  return account
+}
+
+/** "@name" → the channel's id. */
+async function channelFromHandle(handle: string): Promise<string | null> {
+  try {
+    const data = await raw('/navigation/resolve_url', { url: `https://www.youtube.com/${handle.startsWith('@') ? handle : '@' + handle}` })
+    const id = find(data, 'browseEndpoint')?.browseId
+    return typeof id === 'string' && id.startsWith('UC') ? id : null
+  } catch {
+    return null
+  }
+}
+
+// MARK: Reading YouTube's answers
+
+/** The first object under `key` anywhere in `node`. */
+function find(node: any, key: string): any {
+  if (!node || typeof node !== 'object') return undefined
+  if (key in node) return node[key]
+  for (const v of Object.values(node)) {
+    const f = find(v, key)
+    if (f !== undefined) return f
+  }
+  return undefined
+}
+
+function text(t: any): string {
+  if (!t) return ''
+  if (typeof t === 'string') return t
+  if (typeof t.simpleText === 'string') return t.simpleText
+  if (typeof t.content === 'string') return t.content
+  if (Array.isArray(t.runs)) return t.runs.map((r: any) => r.text ?? '').join('')
+  return ''
+}
+
+function lastThumb(t: any): string | undefined {
+  const list = t?.thumbnails ?? t?.sources ?? t?.image?.sources
+  if (!Array.isArray(list) || !list.length) return undefined
+  const url: string = list[list.length - 1].url
+  return url?.startsWith('//') ? `https:${url}` : url
+}
+
+/** "12:34" or "1:02:03" → seconds. */
+function seconds(s: string): number | undefined {
+  if (!/^\d+(:\d+)+$/.test(s.trim())) return undefined
+  return s.trim().split(':').reduce((a, p) => a * 60 + Number(p), 0)
+}
+
+function browseIdOf(node: any): string | undefined {
+  return find(node, 'browseEndpoint')?.browseId
+}
+
+/** One video from any of the shapes YouTube uses (older renderers and the newer "lockup" view models). */
+function videoFrom(key: string, v: any): YTVideo | null {
+  if (key === 'lockupViewModel') {
+    if (v.contentType && v.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return null
+    const id: string = v.contentId
+    const meta = v.metadata?.lockupMetadataViewModel
+    if (!id || !meta) return null
+    const rows: any[] = meta.metadata?.contentMetadataViewModel?.metadataRows ?? []
+    const parts = rows.map((r) => (r.metadataParts ?? []).map((p: any) => text(p.text)).filter(Boolean))
+    const badges: string[] = []
+    for (const o of (find(v.contentImage, 'overlays') ?? []) as any[]) {
+      for (const b of find(o, 'thumbnailBadges') ?? []) badges.push(text(b?.thumbnailBadgeViewModel?.text))
+    }
+    const len = badges.find((b) => seconds(b) !== undefined)
+    const live = badges.some((b) => /live/i.test(b))
+    return {
+      id,
+      title: text(meta.title),
+      channel: parts[0]?.[0] ?? '',
+      channelId: browseIdOf(meta.image) ?? browseIdOf(rows[0]) ?? null,
+      thumbnail: lastThumb(find(v.contentImage, 'image')) ?? `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      duration: len ? seconds(len) ?? null : null,
+      views: parts[1]?.[0] ?? '',
+      published: parts[1]?.[1] ?? '',
+      live
+    }
+  }
+  const id: string = v.videoId
+  if (!id) return null
+  const owner = v.ownerText ?? v.shortBylineText ?? v.longBylineText
+  const lenText = text(v.lengthText) || text(find(v.thumbnailOverlays, 'thumbnailOverlayTimeStatusRenderer')?.text)
+  const live = !!find(v.badges, 'label')?.toString().match(/live/i) || /live/i.test(find(v.thumbnailOverlays, 'style') ?? '')
+  return {
+    id,
+    title: text(v.title) || text(v.headline),
+    channel: text(owner),
+    channelId: browseIdOf(owner) ?? null,
+    thumbnail: lastThumb(v.thumbnail) ?? `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+    duration: seconds(lenText) ?? null,
+    views: text(v.shortViewCountText) || text(v.viewCountText),
+    published: text(v.publishedTimeText),
+    live
+  }
+}
+
+const videoKeys = new Set(['videoRenderer', 'gridVideoRenderer', 'compactVideoRenderer', 'playlistVideoRenderer', 'lockupViewModel'])
+
+/** Every video in an answer, in order, once each (Shorts left out). */
+function videos(node: any, out: YTVideo[] = [], seen = new Set<string>()): YTVideo[] {
+  if (!node || typeof node !== 'object') return out
+  if (Array.isArray(node)) {
+    for (const n of node) videos(n, out, seen)
+    return out
+  }
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'reelShelfRenderer' || k === 'shortsLockupViewModel' || k === 'reelItemRenderer') continue
+    if (videoKeys.has(k) && v && typeof v === 'object') {
+      const video = videoFrom(k, v)
+      if (video && video.title && !seen.has(video.id)) {
+        seen.add(video.id)
+        out.push(video)
+      }
+      continue
+    }
+    videos(v, out, seen)
+  }
+  return out
+}
+
+// MARK: Feeds
+
+export async function ytFeed(feed: YTFeedName): Promise<YTVideo[]> {
+  const browseId = { subscriptions: 'FEsubscriptions', history: 'FEhistory', watchLater: 'VLWL', liked: 'VLLL' }[feed]
+  return videos(await raw('/browse', { browseId }))
+}
+
+/** The channels the account is subscribed to (from YouTube's side menu), with "new videos" marks. */
+export async function ytChannels(): Promise<YTChannel[]> {
+  const data = await raw('/guide', {})
+  const out: YTChannel[] = []
+  const walk = (n: any): void => {
+    if (!n || typeof n !== 'object') return
+    if (Array.isArray(n)) return n.forEach(walk)
+    const e = n.guideEntryRenderer
+    const id: string | undefined = e?.navigationEndpoint?.browseEndpoint?.browseId
+    if (e && id?.startsWith('UC') && !out.some((c) => c.id === id)) {
+      out.push({ id, name: text(e.formattedTitle), avatar: lastThumb(e.thumbnail) ?? null, fresh: e.presentationStyle === 'GUIDE_ENTRY_PRESENTATION_STYLE_NEW_CONTENT' })
+      return
+    }
+    Object.values(n).forEach(walk)
+  }
+  walk(find(data, 'guideSubscriptionsSectionRenderer') ?? {})
+  return out
+}
+
+export async function ytSearch(query: string): Promise<YTVideo[]> {
+  // "EgIQAQ==": videos only.
+  return videos(await raw('/search', { query, params: 'EgIQAQ%3D%3D' }))
+}
+
+export async function ytChannelVideos(id: string): Promise<{ channel: YTChannel; videos: YTVideo[] }> {
+  // "EgZ2aWRlb3PyBgQKAjoA": the channel's Videos tab.
+  const data = await raw('/browse', { browseId: id, params: 'EgZ2aWRlb3PyBgQKAjoA' })
+  const header = find(data, 'pageHeaderViewModel') ?? find(data, 'c4TabbedHeaderRenderer')
+  const meta = find(data, 'channelMetadataRenderer')
+  const list = videos(data).map((v) => ({ ...v, channel: v.channel || meta?.title || '', channelId: v.channelId ?? id }))
+  return {
+    channel: {
+      id,
+      name: meta?.title || text(header?.title) || '',
+      avatar: lastThumb(meta?.avatar) ?? lastThumb(find(header, 'avatar')) ?? null,
+      fresh: false
+    },
+    videos: list
+  }
+}
+
+export async function ytVideo(id: string): Promise<YTVideoDetails> {
+  const data = await raw('/next', { videoId: id })
+  const primary = find(data, 'videoPrimaryInfoRenderer')
+  const secondary = find(data, 'videoSecondaryInfoRenderer')
+  const owner = find(secondary, 'videoOwnerRenderer')
+  const subscribe = find(secondary, 'subscribeButtonRenderer')
+  const related = videos(find(data, 'secondaryResults') ?? {}).filter((v) => v.id !== id && !v.live)
+  return {
+    id,
+    title: text(primary?.title),
+    views: text(find(primary?.viewCount, 'viewCount')) || text(find(primary, 'shortViewCount')),
+    published: text(primary?.relativeDateText) || text(primary?.dateText),
+    description: text(secondary?.attributedDescription) || text(secondary?.description),
+    channel: {
+      id: owner?.navigationEndpoint?.browseEndpoint?.browseId ?? '',
+      name: text(owner?.title),
+      avatar: lastThumb(owner?.thumbnail) ?? null,
+      fresh: false
+    },
+    subscribers: text(owner?.subscriberCountText),
+    subscribed: subscribe?.subscribed === true,
+    related
+  }
+}
+
+// MARK: Doing things
+
+export async function ytSubscribe(channelId: string, on: boolean): Promise<void> {
+  const t = await signedInTube()
+  await (on ? t.interact.subscribe(channelId) : t.interact.unsubscribe(channelId))
+}
+
+export async function ytLike(videoId: string): Promise<void> {
+  const t = await signedInTube()
+  await t.interact.like(videoId)
+}
+
+export async function ytWatchLater(videoId: string): Promise<void> {
+  const t = await signedInTube()
+  await t.playlist.addVideos('WL', [videoId])
+}
+
+// MARK: Comments
+
+/** Pages still to load, by token (YouTube's next page needs the page before it). */
+const commentPages = new Map<string, Comments>()
+
+function commentsFrom(page: Comments): YTComment[] {
+  const out: YTComment[] = []
+  for (const thread of page.contents ?? []) {
+    const c = thread.comment
+    if (!c) continue
+    out.push({
+      id: c.comment_id,
+      author: c.author?.name ?? '',
+      authorAvatar: c.author?.thumbnails?.[0]?.url ?? c.author?.avatar_thumbnail_url ?? null,
+      authorChannelId: c.author?.id ?? null,
+      text: c.content?.toString() ?? '',
+      published: c.published_time ?? '',
+      likes: c.like_count ?? '',
+      replies: Number(String(c.reply_count ?? '0').replace(/[^\d]/g, '')) || 0,
+      pinned: !!c.is_pinned,
+      byCreator: !!c.author_is_channel_owner
+    })
+  }
+  return out
+}
+
+function keep(page: Comments): string | null {
+  if (!page.has_continuation) return null
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  commentPages.set(token, page)
+  // Only the latest few are kept around.
+  if (commentPages.size > 20) commentPages.delete(commentPages.keys().next().value as string)
+  return token
+}
+
+export async function ytComments(videoId: string, sort: 'top' | 'newest', more?: string): Promise<{ comments: YTComment[]; more: string | null }> {
+  let page: Comments
+  if (more && commentPages.has(more)) {
+    page = await commentPages.get(more)!.getContinuation()
+    commentPages.delete(more)
+  } else {
+    const t = await signedInTube()
+    page = await t.getComments(videoId, sort === 'newest' ? 'NEWEST_FIRST' : 'TOP_COMMENTS')
+  }
+  return { comments: commentsFrom(page), more: keep(page) }
+}
+
+/** Posts a comment as the signed-in account. */
+export async function ytPostComment(videoId: string, text: string): Promise<void> {
+  const t = await signedInTube()
+  const page = await t.getComments(videoId)
+  await page.createComment(text)
+}

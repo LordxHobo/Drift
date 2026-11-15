@@ -36,9 +36,18 @@ sealed interface Screen {
     data object NotificationSettings : Screen
     data class User(val id: String) : Screen
     data class SharedList(val ownerId: String, val id: String, val name: String, val ownerName: String) : Screen
+    // The YouTube viewer
+    data object YTSignIn : Screen
+    data object YTHome : Screen
+    data object YTSubscriptions : Screen
+    data object YTLibrary : Screen
+    data object YTSearch : Screen
+    data class YTFeed(val feed: com.lordxhobo.drift.youtube.YTViewer.Feed) : Screen
+    data class YTChannel(val id: String) : Screen
+    data class YTWatch(val id: String) : Screen
 }
 
-enum class Tab { HOME, SEARCH, PODCASTS, LIBRARY }
+enum class Tab { HOME, SEARCH, PODCASTS, LIBRARY, YT_HOME, YT_SUBS, YT_LIBRARY, YT_SEARCH }
 
 object Nav {
     var tab by mutableStateOf(Tab.HOME)
@@ -47,7 +56,14 @@ object Nav {
         Tab.SEARCH to mutableStateListOf<Screen>(Screen.Search),
         Tab.PODCASTS to mutableStateListOf<Screen>(Screen.Podcasts),
         Tab.LIBRARY to mutableStateListOf<Screen>(Screen.Library),
+        Tab.YT_HOME to mutableStateListOf<Screen>(Screen.YTHome),
+        Tab.YT_SUBS to mutableStateListOf<Screen>(Screen.YTSubscriptions),
+        Tab.YT_LIBRARY to mutableStateListOf<Screen>(Screen.YTLibrary),
+        Tab.YT_SEARCH to mutableStateListOf<Screen>(Screen.YTSearch),
     )
+
+    /** The first tab: Home, or the YouTube viewer's Home. */
+    val homeTab: Tab get() = if (com.lordxhobo.drift.youtube.YTViewer.on) Tab.YT_HOME else Tab.HOME
 
     val stack get() = stacks.getValue(tab)
     val top: Screen get() = stack.last()

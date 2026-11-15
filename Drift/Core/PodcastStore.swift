@@ -179,7 +179,8 @@ final class PodcastStore {
     }
 
     func update(_ t: Track, position: Double, duration: Double, force: Bool = false) {
-        guard position.isFinite, duration.isFinite, duration > 0 else { return }
+        // Videos from the YouTube viewer aren't episodes: no place kept in Podcasts.
+        guard t.watch != true, position.isFinite, duration.isFinite, duration > 0 else { return }
         let finished = duration - position < 30
         progress[t.id] = EpisodeProgress(track: t, position: position, duration: duration,
                                          updated: Date(), finished: finished)

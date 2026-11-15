@@ -23,6 +23,10 @@ enum Route: Hashable {
     case artist(ArtistRef)
     case album(AlbumRef, artist: String)
     case discography(title: String, ref: BrowseRef?, albums: [AlbumRef], artist: String)
+    // The YouTube viewer
+    case ytChannel(String)
+    case ytWatch(String)
+    case ytFeed(YTFeed)
 }
 
 extension View {
@@ -53,6 +57,9 @@ extension View {
             case .album(let a, let artist): AlbumView(album: a, artist: artist)
             case .discography(let title, let ref, let albums, let artist):
                 DiscographyView(title: title, ref: ref, initial: albums, artist: artist)
+            case .ytChannel(let id): YTChannelView(id: id)
+            case .ytWatch(let id): YTWatchView(id: id)
+            case .ytFeed(let f): YTFeedView(feed: f)
             }
             }
             .modifier(BottomBarSpace())

@@ -63,6 +63,19 @@ final class Player {
     @ObservationIgnored private var playerObservers: [NSKeyValueObservation] = []
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var segments: [SkipSegment] = []
+    /// What's playing now: its SponsorBlock parts (drawn on the YouTube viewer's timeline).
+    private(set) var shownSegments: [SkipSegment] = []
+    /// The stream playing has the picture too (a video from the YouTube viewer, played like YouTube's
+    /// own app): the video views show this player instead of loading a silent copy beside it.
+    private(set) var showsPicture = false
+    /// The heights that stream comes in.
+    private(set) var pictureHeights: [Int] = []
+    /// The video is played by YouTube's own player (a web view, see YTWebPlayer), not Drift's.
+    private(set) var webActive = false
+    @ObservationIgnored private var webFailed: Set<String> = []
+
+    /// The player the video views show while `showsPicture`.
+    var picturePlayer: AVPlayer? { showsPicture ? av : nil }
     @ObservationIgnored private var lastProgressReport: Double = -10
     @ObservationIgnored private var lastChapterIndex: Int?
     @ObservationIgnored private var watchdog: Task<Void, Never>?
@@ -97,7 +110,10 @@ final class Player {
                 guard let self else { return }
                 self.isPlaying = status != .paused
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
-                if status == .playing { self.watchdog?.cancel() }
+                if status == .playing {
+                    self.watchdog?.cancel()
+                    self.liftPictureCap()
+                }
                 self.updateNowPlaying()
                 LyricsActivity.shared.playingChanged(self.isPlaying)
                 SocialStore.shared.playerChanged()
@@ -272,12 +288,18 @@ final class Player {
 
     func resume() {
         guard current != nil else { return }
+        if webActive, YTWebPlayer.shared.videoID == current?.id {
+            configureAudioSession()
+            YTWebPlayer.shared.play()
+            return
+        }
         if av.currentItem == nil { load(); return }
         configureAudioSession()
         av.play()
     }
 
     func pause() {
+        if webActive { YTWebPlayer.shared.pause() }
         av.pause()
     }
 
@@ -369,7 +391,110 @@ final class Player {
         return (t.isFinite ? t : 0, av.rate)
     }
 
+    /// Stops and forgets what was playing (the floating video's X).
+    func close() {
+        loadTask?.cancel()
+        detachItem()
+        queue = []
+        originalQueue = []
+        index = 0
+        isPlaying = false
+        isBuffering = false
+        isLoading = false
+        showsPicture = false
+        pictureHeights = []
+        YTWebPlayer.stopIfUsed()
+        webActive = false
+        currentTime = 0
+        duration = 0
+        segments = []
+        shownSegments = []
+        chapters = []
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        try? FileManager.default.removeItem(at: Self.sessionURL)
+        EpisodeVideo.shared.update()
+        SocialStore.shared.playerChanged()
+    }
+
+    // MARK: YouTube's own player (the YouTube viewer)
+
+    private func startWeb(_ track: Track, at: Double, autoplay: Bool) {
+        let web = YTWebPlayer.shared
+        web.onState = { [weak self] in self?.webChanged() }
+        web.onEnded = { [weak self] in self?.advance(auto: true) }
+        web.onError = { [weak self] _ in self?.webCouldNotPlay(track) }
+        knownDuration = nil
+        qualityLabel = "YouTube"
+        streamInfo = [("Video", track.id), ("Playing", "YouTube's own player (like ProTube)")]
+        if autoplay { configureAudioSession() } else { isBuffering = false }
+        web.load(track.id, at: at, autoplay: autoplay)
+        web.setRate(effectiveRate)
+        EpisodeVideo.shared.update()
+        updateCommands()
+        loadTask = Task { [weak self] in
+            let segs = await SponsorBlock.segments(for: track.id, categories: SponsorBlock.podcastCategories)
+            guard let self, !Task.isCancelled, self.current?.id == track.id else { return }
+            self.segments = segs.filter { $0.range.upperBound > at + 0.5 }
+            self.shownSegments = segs
+        }
+    }
+
+    /// YouTube's player says something changed (a few times a second while playing).
+    private func webChanged() {
+        let w = YTWebPlayer.shared
+        guard webActive, let t = current, t.id == w.videoID else { return }
+        if w.ready, isLoading { isLoading = false }
+        let was = isPlaying
+        isPlaying = w.playing
+        isBuffering = w.buffering
+        if w.ready, errorMessage != nil { errorMessage = nil }
+        if w.duration > 0, abs(w.duration - duration) > 0.5 {
+            duration = w.duration
+            updateNowPlaying()
+        }
+        if was != isPlaying {
+            updateNowPlaying()
+            SocialStore.shared.playerChanged()
+            if !isPlaying { savePosition() }
+        }
+        if !w.ad { tick(w.time) }
+    }
+
+    /// YouTube's player couldn't play it: Drift's own way instead (sound and picture found by Drift).
+    private func webCouldNotPlay(_ track: Track) {
+        guard webActive, current?.id == track.id else { return }
+        webFailed.insert(track.id)
+        pendingResume = (track.id, YTWebPlayer.shared.time)
+        YTWebPlayer.shared.stop()
+        load(autoplay: true)
+    }
+
+    /// The highest height for videos: the setting, or 360p with Data saver on.
+    static var pictureHeight: Int { AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality }
+    static func pictureSize(_ h: Int) -> CGSize { CGSize(width: h * 16 / 9, height: h) }
+
+    /// A new quality for the stream with the picture (switches without stopping).
+    func pictureQualityChanged() {
+        guard showsPicture else { return }
+        pictureStartedSmall = false
+        av.currentItem?.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+    }
+
+    /// The video started at its quick-start size: lift that once it's been playing a few seconds.
+    @ObservationIgnored private var pictureStartedSmall = false
+
+    private func liftPictureCap() {
+        guard pictureStartedSmall, showsPicture, let item = av.currentItem else { return }
+        pictureStartedSmall = false
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, item === self.av.currentItem else { return }
+            item.preferredMaximumResolution = Self.pictureSize(Self.pictureHeight)
+        }
+    }
+
     private func applyRate() {
+        if webActive { YTWebPlayer.shared.setRate(effectiveRate) }
         av.defaultRate = effectiveRate
         if av.timeControlStatus != .paused { av.rate = effectiveRate }
     }
@@ -391,6 +516,12 @@ final class Player {
         jamSeeks += 1
         let target = max(0, duration > 0 ? min(t, duration - 0.5) : t)
         currentTime = target
+        if webActive, YTWebPlayer.shared.videoID == current?.id {
+            YTWebPlayer.shared.seek(to: target)
+            updateNowPlaying()
+            RemoteControl.shared.localChanged()
+            return
+        }
         // Restored song that isn't loaded yet: remember where to start.
         if av.currentItem == nil, let p = pendingResume {
             pendingResume = (p.id, target)
@@ -412,7 +543,7 @@ final class Player {
         if auto, let t = current, !t.isEpisode { Task.detached(priority: .utility) { await PlayCache.shared.fillGaps(key: t.id) } }
         if auto && repeatMode == .one {
             seek(to: 0)
-            av.play()
+            if webActive { YTWebPlayer.shared.play() } else { av.play() }
             return
         }
         if index + 1 < queue.count {
@@ -443,6 +574,9 @@ final class Player {
         playID = nil
         streamInfo = [("Song", track.id)]
         segments = []
+        shownSegments = []
+        showsPicture = false
+        pictureHeights = []
         retried = false
         isBuffering = true
         isLoading = true
@@ -462,6 +596,15 @@ final class Player {
         currentTime = resumeAt
         tailSilentSince = nil
         saveSession()
+
+        // The YouTube viewer: YouTube's own player plays it (like ProTube), with Drift's controls on top.
+        let useWeb = track.watch == true && !Library.shared.isDownloaded(track.id) && !webFailed.contains(track.id)
+        if useWeb != webActive { webActive = useWeb }
+        if useWeb {
+            startWeb(track, at: resumeAt, autoplay: autoplay)
+            return
+        }
+        YTWebPlayer.stopIfUsed()
 
         loadTask = Task { [weak self] in
             guard let self else { return }
@@ -528,6 +671,23 @@ final class Player {
                         ("File", audio.absoluteString),
                         ("Listed length", track.duration.map { formatTime($0) } ?? "–"),
                     ]
+                } else if track.watch == true, let w = await StreamResolver.shared.watchStream(track.id) {
+                    // The YouTube viewer: one stream with picture and sound, like YouTube's own app.
+                    url = w.url
+                    self.pictureHeights = w.heights
+                    self.qualityLabel = "Video"
+                    if let d = w.duration, d > 0 {
+                        self.knownDuration = d
+                        self.durationIsExact = true
+                        self.duration = d
+                    }
+                    self.streamInfo = [("Video", track.id), ("Playing", "Picture and sound in one stream (like YouTube's app)")]
+                    Task { [weak self] in
+                        let hs = await StreamResolver.shared.watchHeights(track.id)
+                        guard let self, self.current?.id == track.id, !hs.isEmpty else { return }
+                        self.pictureHeights = hs
+                        EpisodeVideo.shared.update()
+                    }
                 } else {
                     let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
                         try await StreamResolver.shared.resolve(playID, dataSaver: low)
@@ -555,7 +715,7 @@ final class Player {
                 // Episode opening with an ad: start right after it instead of playing it and jumping.
                 var startAt = resumeAt
                 var skippedEarly: SkipSegment?
-                if track.isEpisode, AppSettings.shared.skipSponsors,
+                if track.isEpisode, track.watch != true, AppSettings.shared.skipSponsors,
                    let early = try? await withTimeout(1.5, { await segsTask.value }),
                    let seg = early.first(where: { $0.range.lowerBound <= startAt + 2 && $0.range.upperBound > startAt + 1 }) {
                     startAt = seg.range.upperBound
@@ -581,6 +741,7 @@ final class Player {
                 let segs = await segsTask.value
                 if self.current?.id == track.id {
                     self.segments = segs.filter { $0 != skippedEarly && $0.range.upperBound > startAt + 0.5 }
+                    self.shownSegments = segs
                 }
             } catch {
                 guard !Task.isCancelled, self.current?.id == track.id else { return }
@@ -619,7 +780,14 @@ final class Player {
             // Downloaded file, or an HLS stream (AVPlayer streams those itself).
             loader = nil
             item = AVPlayerItem(url: url)
-            if !url.isFileURL { item.preferredPeakBitRate = 1_000_000 }
+            if current?.watch == true && !url.isFileURL {
+                // Picture too. Starts small so it's on screen at once (like YouTube), then goes as sharp
+                // as the setting allows a few seconds in (AVPlayer adapts below that by itself).
+                item.preferredMaximumResolution = Self.pictureSize(min(Self.pictureHeight, 360))
+                pictureStartedSmall = true
+            } else if !url.isFileURL {
+                item.preferredPeakBitRate = 1_000_000
+            }
         } else {
             // Songs are kept in the song cache as they stream (not episodes or videos).
             let key = current.flatMap { $0.isEpisode ? nil : $0.id }
@@ -627,8 +795,13 @@ final class Player {
             loader = l
             item = AVPlayerItem(asset: l.asset)
         }
-        item.preferredForwardBufferDuration = 30
+        // Videos: AVPlayer decides (starts as soon as it can); everything else keeps 30 s ahead.
+        item.preferredForwardBufferDuration = current?.watch == true ? 0 : 30
         item.audioTimePitchAlgorithm = .spectral
+        // Its own stream has the picture: show it (the silent copy beside it isn't needed).
+        let picture = current?.watch == true && !url.isFileURL && (url.absoluteString.contains(".m3u8") || url.path.contains("/hls"))
+        if picture != showsPicture { showsPicture = picture }
+        EpisodeVideo.shared.update()
         itemObservers.append(item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             Task { @MainActor in self?.itemStatusChanged(item, status: status) }
@@ -653,6 +826,11 @@ final class Player {
         silentSince = nil
         startGeneration += 1
         let generation = startGeneration
+        // Videos: no tap (nothing to trim, and waiting for it only delays the start).
+        if picture {
+            begin(item, autoplay: autoplay, at: time)
+            return
+        }
         Task { [weak self] in
             let tracks = Task { try? await item.asset.loadTracks(withMediaType: .audio).first }
             // Never hold a song back long for it: without the tap it just plays plainly.
@@ -750,6 +928,15 @@ final class Player {
         loadTask = Task { [weak self] in
             guard let self else { return }
             let playID = self.playID ?? track.id
+            if track.watch == true {
+                await StreamResolver.shared.invalidateWatch(track.id)
+                if let w = await StreamResolver.shared.watchStream(track.id) {
+                    guard !Task.isCancelled, self.current?.id == track.id else { return }
+                    self.pictureHeights = w.heights
+                    self.start(w.url, autoplay: wasPlaying, at: resumeAt)
+                    return
+                }
+            }
             await StreamResolver.shared.invalidate(playID)
             do {
                 let s = try await withTimeout(20) { [low = AppSettings.shared.dataSaver] in
@@ -776,6 +963,7 @@ final class Player {
         isLoading = false
         watchdog?.cancel()
         av.pause()
+        if webActive { YTWebPlayer.shared.pause() }
         errorMessage = error.map { StreamResolver.describe($0, episode: track.isEpisode) }
             ?? (track.isEpisode ? "Couldn't load this episode." : "Couldn't load this song.")
         guard !track.isEpisode else { return }
@@ -808,6 +996,8 @@ final class Player {
             Task.detached(priority: .utility) {
                 // Already in the song cache: nothing to get ready.
                 if await PlayCache.shared.file(for: track.id) != nil { return }
+                // Videos: YouTube's own player loads them (nothing to get ready here).
+                if track.watch == true { return }
                 let playID = await AudioVersion.shared.preferred(track)
                 if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)
@@ -881,7 +1071,7 @@ final class Player {
     // MARK: Time & skipping
 
     private func tick(_ t: Double) {
-        guard t.isFinite, av.currentItem != nil else { return }
+        guard t.isFinite, av.currentItem != nil || webActive else { return }
         currentTime = t
         LyricsActivity.shared.tick(t)
         PlayHistory.shared.tick(playing: isPlaying && !isBuffering)

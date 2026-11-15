@@ -92,7 +92,8 @@ object Playback {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) naturalEndAt = System.currentTimeMillis()
-            mediaItem?.let { trackOf(it) }?.let { Library.addRecent(it) }
+            // Videos from the YouTube viewer stay out of the music's Recently played.
+            mediaItem?.let { trackOf(it) }?.takeIf { it.watch != true }?.let { Library.addRecent(it) }
         }
     }
 
@@ -101,6 +102,37 @@ object Playback {
         private set
     var naturalEndAt = 0L
         private set
+
+    /** The view showing the player's own picture (YouTube viewer videos), or none. */
+    private var pictureView: android.view.TextureView? = null
+
+    fun showPicture(view: android.view.TextureView?) {
+        val old = pictureView
+        if (old === view) return
+        pictureView = view
+        withController { c -> if (view != null) c.setVideoTextureView(view) else if (old != null) c.clearVideoTextureView(old) }
+    }
+
+    /** Stops and forgets what was playing (the floating video's X). */
+    fun close() {
+        withController { c ->
+            c.stop()
+            c.clearMediaItems()
+            choosePlayer(null)
+        }
+        original = emptyList()
+    }
+
+    /** A new quality for the video playing: its picture again at that height, from where it is. */
+    fun reloadPicture() {
+        val c = controller ?: return
+        val t = current ?: return
+        if (!PlaybackService.showsPicture(t)) return
+        val at = c.currentPosition
+        val i = c.currentMediaItemIndex
+        c.replaceMediaItem(i, itemOf(t))
+        c.seekTo(i, at)
+    }
 
     /** Where the song is right now (ms), not just as of the last read. */
     fun exactPosition(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: position
@@ -172,10 +204,17 @@ object Playback {
         queue = list
         index = at
         withController { c ->
+            choosePlayer(list[at])
             c.setMediaItems(list.map { itemOf(it) }, at, 0)
             c.prepare()
             c.play()
         }
+    }
+
+    /** Videos from the YouTube viewer play in YouTube's own player (like ProTube); everything else in ExoPlayer. */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun choosePlayer(first: Track?) {
+        PlaybackService.instance?.use(first != null && PlaybackService.showsPicture(first))
     }
 
     fun playNext(t: Track) {
@@ -305,6 +344,7 @@ object Playback {
         this.queue = original
         index = 0
         withController { c ->
+            choosePlayer(track)
             c.setMediaItems(original.map { itemOf(it) }, 0, (positionSeconds * 1000).toLong().coerceAtLeast(0))
             c.prepare()
             if (playing) c.play() else c.pause()
