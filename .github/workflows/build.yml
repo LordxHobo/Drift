@@ -2,7 +2,8 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    # main publishes (SideStore, the in-app update); test only builds, for trying a version first.
+    branches: [main, test]
     # The desktop app has its own workflow (desktop.yml).
     paths-ignore:
       - 'desktop/**'
