@@ -26,8 +26,11 @@ final class YTWebPlayer {
     private(set) var soundProcessing = false
     /// The loudest moment since the last check (nil: not measured).
     @ObservationIgnored private var loudest: Float?
-    /// The page's sound processing went quiet once: not used again until Drift restarts.
-    @ObservationIgnored private var processingBroken = false
+    /// The page's sound processing went quiet once on this phone: not tried again (remembered, so a song
+    /// never starts over for it again).
+    @ObservationIgnored private var processingBroken = UserDefaults.standard.bool(forKey: "ytSoundProcessingBroken") {
+        didSet { UserDefaults.standard.set(processingBroken, forKey: "ytSoundProcessingBroken") }
+    }
     @ObservationIgnored private var soundSent = false
 
     /// The qualities YouTube offers for it (heights), and the one asked for.
@@ -114,14 +117,8 @@ final class YTWebPlayer {
             self.run("__drift.pause()")
             self.web.load(URLRequest(url: url))
         }
-        if pageReady && !fresh {
-            // Switch videos in the page already loaded: almost instant.
-            web.evaluateJavaScript("window.__drift ? __drift.load('\(id)', \(at), \(autoplay), \(h)) : false") { result, _ in
-                if (result as? Bool) != true { full() }
-            }
-        } else {
-            full()
-        }
+        // (Switching videos inside the page already loaded turned out slower on YouTube's real page: a fresh one.)
+        full()
         YTWebHost.ensureParked()
         // Nothing playing 15 s in (page didn't load, or YouTube's player gave up): let the player fall back.
         stallCheck?.cancel()

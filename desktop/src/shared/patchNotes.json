@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 68,
+      "date": "2026-11-15",
+      "title": "Faster song changes again",
+      "notes": [
+        {
+          "text": "Going to the next song is quick again (it took several seconds in the last update), and the previous song still stops right away.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "When the equalizer can't work in YouTube's player on your phone, Drift now remembers that, so the first song after opening Drift no longer starts over.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 67,
       "date": "2026-11-15",
       "title": "Smoother song starts",

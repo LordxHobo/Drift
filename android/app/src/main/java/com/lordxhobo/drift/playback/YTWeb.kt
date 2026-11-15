@@ -56,8 +56,12 @@ object YTWeb {
     /** Playing a song (sound only matters: the smallest picture, Drift's equalizer and silence meter in the page). */
     var playingMusic = false
         private set
-    /** The page's sound processing went quiet once: not used again until Drift restarts. */
+    /** The page's sound processing went quiet once on this phone: not tried again (remembered, so a song never starts over for it again). */
     private var processingBroken = false
+        set(value) {
+            field = value
+            if (::app.isInitialized) app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE).edit().putBoolean("ytSoundProcessingBroken", value).apply()
+        }
     private var soundSent = false
 
     var videoId: String? = null
@@ -91,7 +95,9 @@ object YTWeb {
     fun init(context: Context) {
         if (::app.isInitialized) return
         app = context.applicationContext
-        music = app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE).getBoolean("musicInYouTubePlayer", true)
+        val prefs = app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE)
+        music = prefs.getBoolean("musicInYouTubePlayer", true)
+        processingBroken = prefs.getBoolean("ytSoundProcessingBroken", false)
     }
 
     fun changeMusic(on: Boolean) {
@@ -160,14 +166,8 @@ object YTWeb {
                 view.loadUrl("https://m.youtube.com/watch?v=" + id + "#" + hash)
             }
         }
-        if (pageReady && !fresh) {
-            // Switch videos in the page already loaded: almost instant.
-            view.evaluateJavascript("window.__drift ? __drift.load('" + id + "', " + atMs / 1000.0 + ", " + autoplay + ", " + h + ") : false") { result ->
-                if (result != "true") full()
-            }
-        } else {
-            full()
-        }
+        // (Switching videos inside the page already loaded turned out slower on YouTube's real page: a fresh one.)
+        full()
         if (view.parent == null) parking?.let { move(it) }
         // Nothing playing 15 s in (page didn't load, or YouTube's player gave up): the player moves on.
         main.removeCallbacks(stallCheck)
