@@ -4,3 +4,4 @@ build/
 Payload/
 *.ipa
 xcuserdata/
+patches/
