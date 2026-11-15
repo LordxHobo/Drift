@@ -72,17 +72,21 @@ final class AppSettings {
     /// Current lyric line as a Live Activity (lock screen, Dynamic Island, CarPlay on iOS 26).
     /// Move on when a song ends in a long stretch of silence.
     var skipSilence: Bool { didSet { defaults.set(skipSilence, forKey: "skipSilence") } }
+    /// Songs that stream play in YouTube's own player (instant starts); off: Drift's own player.
+    var musicInYouTubePlayer: Bool { didSet { defaults.set(musicInYouTubePlayer, forKey: "musicInYouTubePlayer") } }
     /// The equalizer (this phone only): on or off, and the gain of each band in dB.
     var eqEnabled: Bool {
         didSet {
             defaults.set(eqEnabled, forKey: "eqEnabled")
             EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
+            YTWebPlayer.soundSettingsChanged()
         }
     }
     var eqGains: [Double] {
         didSet {
             defaults.set(eqGains, forKey: "eqGains")
             EqualizerState.shared.set(enabled: eqEnabled, gains: eqGains)
+            YTWebPlayer.soundSettingsChanged()
         }
     }
     var lyricsLiveActivity: Bool { didSet { defaults.set(lyricsLiveActivity, forKey: "lyricsLiveActivity") } }
@@ -129,6 +133,7 @@ final class AppSettings {
         dataSaver = d.bool(forKey: "dataSaver")
         skipNonMusic = d.object(forKey: "skipNonMusic") as? Bool ?? true
         skipSilence = d.object(forKey: "skipSilence") as? Bool ?? true
+        musicInYouTubePlayer = d.object(forKey: "musicInYouTubePlayer") as? Bool ?? true
         preferOfficialAudio = d.object(forKey: "preferOfficialAudio") as? Bool ?? true
         preferExplicit = d.object(forKey: "preferExplicit") as? Bool ?? true
         downloadOverCellular = d.bool(forKey: "downloadOverCellular")

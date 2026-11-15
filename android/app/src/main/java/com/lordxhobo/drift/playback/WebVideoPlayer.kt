@@ -82,7 +82,11 @@ class WebVideoPlayer : SimpleBasePlayer(Looper.getMainLooper()) {
         loaded = uid
         ended = false
         error = null
-        YTWeb.load(items[index].mediaId, startMs, playWhenReady)
+        // Songs: sound only (videos from the YouTube viewer are marked "watch").
+        val track = runCatching {
+            items[index].mediaMetadata.extras?.getString(Playback.TRACK_KEY)?.let { com.lordxhobo.drift.data.Library.json.decodeFromString(com.lordxhobo.drift.data.Track.serializer(), it) }
+        }.getOrNull()
+        YTWeb.load(items[index].mediaId, startMs, playWhenReady, music = track?.watch != true)
         YTWeb.rate(params.speed)
     }
 

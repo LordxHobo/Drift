@@ -2,6 +2,25 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 66,
+      "date": "2026-11-15",
+      "title": "Songs that start instantly",
+      "notes": [
+        {
+          "text": "Songs that stream now play in YouTube's own player, the way videos do, so they start right away. Ads are blocked, and only the smallest picture is loaded to save data.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The equalizer, silence skipping and non-music skipping keep working for these songs. Downloaded songs and podcasts still play in Drift's own player.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "This is new, so it can be turned off: Settings, Play songs in YouTube's player.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 65,
       "date": "2026-11-12",
       "title": "Better video controls",

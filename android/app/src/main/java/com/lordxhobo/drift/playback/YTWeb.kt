@@ -50,6 +50,16 @@ object YTWeb {
     var height by mutableStateOf<Int?>(null)
         private set
 
+    /** Songs that stream play here too (instant starts); off: ExoPlayer. A setting. */
+    var music by mutableStateOf(true)
+        private set
+    /** Playing a song (sound only matters: the smallest picture, Drift's equalizer and silence meter in the page). */
+    var playingMusic = false
+        private set
+    /** The page's sound processing went quiet once: not used again until Drift restarts. */
+    private var processingBroken = false
+    private var soundSent = false
+
     var videoId: String? = null
         private set
     var durationMs = 0L
@@ -79,7 +89,34 @@ object YTWeb {
     private var startScript = false
 
     fun init(context: Context) {
+        if (::app.isInitialized) return
         app = context.applicationContext
+        music = app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE).getBoolean("musicInYouTubePlayer", true)
+    }
+
+    fun changeMusic(on: Boolean) {
+        music = on
+        app.getSharedPreferences("drift.settings", Context.MODE_PRIVATE).edit().putBoolean("musicInYouTubePlayer", on).apply()
+    }
+
+    /** Connected to the internet (YouTube's player can't play anything without it). */
+    fun online(): Boolean {
+        if (!::app.isInitialized) return false
+        val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /** The equalizer or silence skipping changed in Settings. */
+    fun soundSettingsChanged() {
+        if (videoId != null) sendSound()
+    }
+
+    /** Drift's equalizer and silence meter, in the page (songs only). */
+    private fun sendSound() {
+        val wanted = playingMusic && (Equalizer.enabled || Skipping.silence)
+        val gains = Equalizer.gains.joinToString(",") { String.format(java.util.Locale.US, "%.2f", it) }
+        run("__drift.fx(" + wanted + ", " + Equalizer.enabled + ", [" + gains + "])")
     }
 
     /** Where it is now (ms), moving on between the page's reports. */
@@ -90,8 +127,10 @@ object YTWeb {
 
     // MARK: Playing
 
-    fun load(id: String, atMs: Long, autoplay: Boolean) {
+    fun load(id: String, atMs: Long, autoplay: Boolean, music: Boolean = false) {
         videoId = id
+        playingMusic = music
+        soundSent = false
         timeMs = atMs
         timeAt = System.currentTimeMillis()
         durationMs = 0
@@ -103,7 +142,7 @@ object YTWeb {
         endedReported = false
         errorReported = false
         qualitySet = false
-        val hash = "drift-at=" + atMs / 1000 + if (autoplay) "" else "&drift-paused"
+        val hash = "drift-at=" + atMs / 1000 + (if (autoplay) "" else "&drift-paused") + (if (processingBroken) "&drift-nofx" else "")
         view.loadUrl("https://m.youtube.com/watch?v=" + id + "#" + hash)
         if (view.parent == null) parking?.let { move(it) }
         // Nothing playing 15 s in (page didn't load, or YouTube's player gave up): the player moves on.
@@ -158,7 +197,19 @@ object YTWeb {
     private fun received(json: String) {
         val m = runCatching { JSONObject(json) }.getOrNull() ?: return
         val id = videoId ?: return
+        // The page's sound processing isn't getting the sound: the song again without it.
+        if (m.optString("k") == "fxdead" && m.optString("v") == id) {
+            processingBroken = true
+            load(id, (m.optDouble("t", timeMs / 1000.0) * 1000).toLong(), true, playingMusic)
+            return
+        }
         if (m.optString("k") != "state") return
+        if (!soundSent) {
+            soundSent = true
+            sendSound()
+        }
+        val level = m.optDouble("level", -1.0)
+        if (level >= 0) Level.record(level.toFloat())
         // YouTube went on to another video by itself: Drift picks what's next.
         val v = m.optString("v")
         if (v.isNotEmpty() && v != id) {
@@ -182,7 +233,8 @@ object YTWeb {
         buffering = m.optBoolean("buffering")
         if (playing && !qualitySet) {
             qualitySet = true
-            val h = EpisodeVideo.quality.coerceAtMost(2160)
+            // Songs: the smallest picture (only the sound is heard).
+            val h = if (playingMusic) 144 else EpisodeVideo.quality.coerceAtMost(2160)
             height = h
             run("__drift.quality('" + label(h) + "')")
             if (rate != 1f) rate(rate)
@@ -410,6 +462,66 @@ object YTWeb {
       if (p && p.setPlaybackQuality) p.setPlaybackQuality(q);
     } catch (e) {}
   };
+  // Sound: Drift's equaliser and its silence meter, done with the browser's own audio processing. The sound
+  // only goes through it once that's running (so it can never leave the song silent), and not at all when
+  // Drift asks for no processing (#drift-nofx, after it went quiet once).
+  const BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  const noFx = hash.indexOf('drift-nofx') >= 0;
+  let fxWanted = false, fxGains = null, fxOn = false;
+  let ctx = null, src = null, pre = null, filters = [], meter = null, graphVideo = null, buf = null;
+  let loudest = -1, zeroSince = 0, heard = false;
+  const applyFx = () => {
+    if (!pre) return;
+    const g = fxOn && fxGains ? fxGains : BANDS.map(() => 0);
+    filters.forEach((f, i) => { f.gain.value = g[i] || 0 });
+    const top = Math.max(0, ...g);
+    pre.gain.value = Math.pow(10, (-top * 0.8) / 20);
+  };
+  const graph = () => {
+    if (noFx || !fxWanted) return;
+    const v = video();
+    if (!v) return;
+    if (graphVideo === v) {
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+      return;
+    }
+    if (graphVideo) return;
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+      src = ctx.createMediaElementSource(v);
+      graphVideo = v;
+      pre = ctx.createGain();
+      filters = BANDS.map((f, i) => {
+        const b = ctx.createBiquadFilter();
+        b.type = i === 0 ? 'lowshelf' : i === BANDS.length - 1 ? 'highshelf' : 'peaking';
+        b.frequency.value = f;
+        b.Q.value = 1.41;
+        b.gain.value = 0;
+        return b;
+      });
+      meter = ctx.createAnalyser();
+      meter.fftSize = 2048;
+      buf = new Float32Array(meter.fftSize);
+      let node = src;
+      node.connect(pre); node = pre;
+      for (const f of filters) { node.connect(f); node = f }
+      node.connect(meter);
+      meter.connect(ctx.destination);
+      applyFx();
+    } catch (e) { fxWanted = false }
+  };
+  D.fx = (wanted, on, gains) => { fxWanted = wanted; fxOn = on; fxGains = gains; graph(); applyFx() };
+  // The loudest moment since the last report (-1: not measured).
+  const measure = () => {
+    if (!meter || !ctx || ctx.state !== 'running') return;
+    meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) { const a = Math.abs(buf[i]); if (a > peak) peak = a }
+    if (peak > loudest) loudest = peak;
+    return peak;
+  };
+
   D.qualities = () => { try { const p = api(); return (p && p.getAvailableQualityLevels && p.getAvailableQualityLevels()) || [] } catch (e) { return [] } };
 
   // Ads, step 2: any that still play are skipped (sped through, muted, skip button pressed).
@@ -420,10 +532,21 @@ object YTWeb {
   };
   const skipButtons = '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button, .ytp-ad-overlay-close-button';
 
+  let lastT = -1;
   const tick = () => {
     addStyle();
     const v = video();
     const ad = isAd();
+    graph();
+    const peak = measure();
+    // Playing, moving on, and yet nothing at all comes out of the processing: it isn't getting the sound.
+    // (Only before anything was heard: songs can have real silence in them.)
+    if (peak > 0) heard = true;
+    if (v && graphVideo && !heard && !ad && !v.paused && v.currentTime !== lastT && peak === 0) {
+      if (!zeroSince) zeroSince = Date.now();
+      else if (Date.now() - zeroSince > 4000) { zeroSince = 0; heard = true; post({ k: 'fxdead', v: id(), t: v.currentTime }) }
+    }
+    if (v) lastT = v.currentTime;
     if (ad) {
       document.querySelectorAll(skipButtons).forEach((b) => { try { b.click() } catch (e) {} });
       if (v) {
@@ -459,7 +582,10 @@ object YTWeb {
       ended: !ad && v.ended,
       ad: ad,
       error: err ? (err.innerText || 'error').trim().slice(0, 200) : '',
+      level: loudest,
+      fx: !!graphVideo && !!ctx && ctx.state === 'running',
     });
+    loudest = -1;
   };
   setInterval(tick, 250);
   document.addEventListener('ended', (e) => { if (e.target && e.target.tagName === 'VIDEO' && !isAd()) { want = false; tick() } }, true);

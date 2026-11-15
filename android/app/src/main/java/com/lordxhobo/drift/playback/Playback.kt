@@ -214,7 +214,10 @@ object Playback {
     /** Videos from the YouTube viewer play in YouTube's own player (like ProTube); everything else in ExoPlayer. */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun choosePlayer(first: Track?) {
-        PlaybackService.instance?.use(first != null && PlaybackService.showsPicture(first))
+        // Songs that stream too, unless turned off (needs the internet; downloaded songs and podcasts: ExoPlayer).
+        val song = first != null && YTWeb.music && !first.isEpisode && first.audioURL == null && first.watch != true &&
+            Downloads.file(first.id) == null && YTWeb.online()
+        PlaybackService.instance?.use(first != null && (PlaybackService.showsPicture(first) || song))
     }
 
     fun playNext(t: Track) {

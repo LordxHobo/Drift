@@ -334,6 +334,11 @@ fun PlaybackSettingsScreen() {
                     Skipping.nonMusic,
                 ) { Skipping.changeNonMusic(it) }
                 ToggleRow(
+                    "Play songs in YouTube's player",
+                    "Songs that stream start instantly and play in YouTube's own player (with ad blocking, the equalizer and silence skipping). Off: Drift's own player. Downloaded songs and podcasts always use Drift's own player.",
+                    com.lordxhobo.drift.playback.YTWeb.music,
+                ) { com.lordxhobo.drift.playback.YTWeb.changeMusic(it) }
+                ToggleRow(
                     "Skip silence at the end",
                     "Moves to the next song when a song ends in 15 seconds or more of dead air (hidden tracks, minutes of silence).",
                     Skipping.silence,

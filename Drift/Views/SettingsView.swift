@@ -247,6 +247,9 @@ struct SettingsView: View {
             toggle("Skip non-music segments",
                    "Jumps past intros, outros and talking in music videos using community-marked timestamps (SponsorBlock).",
                    $settings.skipNonMusic)
+            toggle("Play songs in YouTube's player",
+                   "Songs that stream start instantly and play in YouTube's own player (with ad blocking, the equalizer and silence skipping). Off: Drift's own player. Downloaded songs and podcasts always use Drift's own player.",
+                   $settings.musicInYouTubePlayer)
             toggle("Skip silence at the end",
                    "Moves to the next song when a song ends in 15 seconds or more of dead air (hidden tracks, minutes of silence).",
                    $settings.skipSilence)

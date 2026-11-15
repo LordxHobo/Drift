@@ -85,6 +85,7 @@ object Skipping {
     fun changeSilence(on: Boolean) {
         silence = on
         prefs.edit().putBoolean("skipSilence", on).apply()
+        YTWeb.soundSettingsChanged()
     }
 
     /** A video's skippable parts: not music in a song, sponsors and the like in an episode (none when SponsorBlock has nothing, or can't be reached). */

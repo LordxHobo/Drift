@@ -288,7 +288,7 @@ final class Player {
 
     func resume() {
         guard current != nil else { return }
-        if webActive, YTWebPlayer.shared.videoID == current?.id {
+        if webLoaded {
             configureAudioSession()
             YTWebPlayer.shared.play()
             return
@@ -425,24 +425,50 @@ final class Player {
         web.onError = { [weak self] _ in self?.webCouldNotPlay(track) }
         knownDuration = nil
         qualityLabel = "YouTube"
-        streamInfo = [("Video", track.id), ("Playing", "YouTube's own player (like ProTube)")]
         if autoplay { configureAudioSession() } else { isBuffering = false }
-        web.load(track.id, at: at, autoplay: autoplay)
-        web.setRate(effectiveRate)
         EpisodeVideo.shared.update()
         updateCommands()
+        if track.watch == true {
+            playID = track.id
+            streamInfo = [("Video", track.id), ("Playing", "YouTube's own player (like ProTube)")]
+            web.load(track.id, at: at, autoplay: autoplay)
+            web.setRate(effectiveRate)
+            loadTask = Task { [weak self] in
+                let segs = await SponsorBlock.segments(for: track.id, categories: SponsorBlock.podcastCategories)
+                guard let self, !Task.isCancelled, self.current?.id == track.id else { return }
+                self.segments = segs.filter { $0.range.upperBound > at + 0.5 }
+                self.shownSegments = segs
+            }
+            return
+        }
+        // A song: its album version when that's already known (looking it up would delay the start; it's
+        // looked up for next time while this plays).
         loadTask = Task { [weak self] in
-            let segs = await SponsorBlock.segments(for: track.id, categories: SponsorBlock.podcastCategories)
+            let chosen = await AudioVersion.shared.remembered(track) ?? track.id
             guard let self, !Task.isCancelled, self.current?.id == track.id else { return }
+            self.playID = chosen
+            SongSources.remember(track.id, chosen)
+            self.streamInfo = [("Song", track.id), ("Playing", "YouTube's own player (instant start)"),
+                               ("Version", chosen == track.id ? "As listed" : "Album version (\(chosen))")]
+            web.load(chosen, at: at, autoplay: autoplay, music: true)
+            web.setRate(self.effectiveRate)
+            Task.detached(priority: .utility) { _ = await AudioVersion.shared.preferred(track) }
+            let segs = await SponsorBlock.segments(for: chosen, categories: SponsorBlock.musicCategories)
+            guard !Task.isCancelled, self.current?.id == track.id else { return }
             self.segments = segs.filter { $0.range.upperBound > at + 0.5 }
             self.shownSegments = segs
         }
     }
 
+    /// YouTube's player has the song or video playing now loaded.
+    private var webLoaded: Bool {
+        webActive && YTWebPlayer.shared.videoID != nil && YTWebPlayer.shared.videoID == (playID ?? current?.id)
+    }
+
     /// YouTube's player says something changed (a few times a second while playing).
     private func webChanged() {
         let w = YTWebPlayer.shared
-        guard webActive, let t = current, t.id == w.videoID else { return }
+        guard webActive, current != nil, webLoaded else { return }
         if w.ready, isLoading { isLoading = false }
         let was = isPlaying
         isPlaying = w.playing
@@ -516,7 +542,7 @@ final class Player {
         jamSeeks += 1
         let target = max(0, duration > 0 ? min(t, duration - 0.5) : t)
         currentTime = target
-        if webActive, YTWebPlayer.shared.videoID == current?.id {
+        if webLoaded {
             YTWebPlayer.shared.seek(to: target)
             updateNowPlaying()
             RemoteControl.shared.localChanged()
@@ -597,8 +623,10 @@ final class Player {
         tailSilentSince = nil
         saveSession()
 
-        // The YouTube viewer: YouTube's own player plays it (like ProTube), with Drift's controls on top.
-        let useWeb = track.watch == true && !Library.shared.isDownloaded(track.id) && !webFailed.contains(track.id)
+        // The YouTube viewer, and songs that stream (unless turned off): YouTube's own player plays them (like
+        // ProTube), with Drift's controls on top. Downloaded songs and podcasts: Drift's own player.
+        let streamedSong = AppSettings.shared.musicInYouTubePlayer && !track.isEpisode && track.audioURL == nil
+        let useWeb = (track.watch == true || streamedSong) && !Library.shared.isDownloaded(track.id) && !webFailed.contains(track.id)
         if useWeb != webActive { webActive = useWeb }
         if useWeb {
             startWeb(track, at: resumeAt, autoplay: autoplay)
@@ -996,8 +1024,9 @@ final class Player {
             Task.detached(priority: .utility) {
                 // Already in the song cache: nothing to get ready.
                 if await PlayCache.shared.file(for: track.id) != nil { return }
-                // Videos: YouTube's own player loads them (nothing to get ready here).
+                // Videos, and songs played in YouTube's own player: it loads them (nothing to get ready here).
                 if track.watch == true { return }
+                if await MainActor.run(body: { AppSettings.shared.musicInYouTubePlayer }), !track.isEpisode, track.audioURL == nil { return }
                 let playID = await AudioVersion.shared.preferred(track)
                 if let s = try? await StreamResolver.shared.resolve(playID, dataSaver: low) {
                     await StreamCache.shared.warm(s.url)
@@ -1135,8 +1164,9 @@ final class Player {
     /// sound since the last check counts (not only the latest moment), and audio not reaching the meter
     /// mid-song is not taken as silence (the song-end check above handles files iOS misreads as longer).
     private func checkSilence(at t: Double) -> Bool {
-        let loudest = meter?.takeLoudest()
-        guard meter != nil, AppSettings.shared.skipSilence, !isEpisode, isPlaying, !isBuffering,
+        let loudest = webActive ? YTWebPlayer.shared.takeLoudest() : meter?.takeLoudest()
+        let measuring = webActive ? YTWebPlayer.shared.soundProcessing : meter != nil
+        guard measuring, AppSettings.shared.skipSilence, !isEpisode, isPlaying, !isBuffering,
               duration > 60, t > duration * 0.4, duration - t > 8 else {
             silentSince = nil
             return false

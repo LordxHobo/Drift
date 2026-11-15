@@ -70,6 +70,7 @@ object Equalizer {
     private fun publish() {
         snapshot = Snapshot(enabled, gains, snapshot.version + 1)
         if (::prefs.isInitialized) prefs.edit().putBoolean("eqEnabled", enabled).putString("eqGains", gains.joinToString(",")).apply()
+        YTWeb.soundSettingsChanged()
     }
 
     fun turn(on: Boolean) {

@@ -20,6 +20,16 @@ final class YTWebPlayer {
     private(set) var ready = false
     /// An ad is being skipped.
     private(set) var ad = false
+    /// A song (sound only matters: the smallest picture, and Drift's equalizer and silence meter in the page).
+    private(set) var music = false
+    /// The page's sound processing is running (the equalizer and silence meter work).
+    private(set) var soundProcessing = false
+    /// The loudest moment since the last check (nil: not measured).
+    @ObservationIgnored private var loudest: Float?
+    /// The page's sound processing went quiet once: not used again until Drift restarts.
+    @ObservationIgnored private var processingBroken = false
+    @ObservationIgnored private var soundSent = false
+
     /// The qualities YouTube offers for it (heights), and the one asked for.
     private(set) var heights: [Int] = []
     private(set) var height: Int?
@@ -69,8 +79,12 @@ final class YTWebPlayer {
 
     // MARK: Playing
 
-    func load(_ id: String, at: Double, autoplay: Bool) {
+    func load(_ id: String, at: Double, autoplay: Bool, music: Bool = false) {
         videoID = id
+        self.music = music
+        soundProcessing = false
+        soundSent = false
+        loudest = nil
         time = at
         duration = 0
         playing = false
@@ -84,6 +98,7 @@ final class YTWebPlayer {
         loadedAt = Date()
         var hash = "drift-at=\(Int(at))"
         if !autoplay { hash += "&drift-paused" }
+        if processingBroken { hash += "&drift-nofx" }
         guard let url = URL(string: "https://m.youtube.com/watch?v=\(id)#\(hash)") else { return }
         web.load(URLRequest(url: url))
         YTWebHost.ensureParked()
@@ -115,8 +130,28 @@ final class YTWebPlayer {
         run("__drift.quality('\(Self.label(h))')")
     }
 
-    /// Made yet (it's only made for the first video, not for music).
+    /// Made yet (it's only made for the first video or song played in it).
     private static var made = false
+
+    /// The equalizer or silence skipping changed in Settings.
+    static func soundSettingsChanged() {
+        if made { shared.sendSound() }
+    }
+
+    /// Drift's equalizer and silence meter, in the page (songs only).
+    private func sendSound() {
+        let s = AppSettings.shared
+        let wanted = music && (s.eqEnabled || s.skipSilence)
+        let gains = s.eqGains.map { String(format: "%.2f", $0) }.joined(separator: ",")
+        run("__drift.fx(\(wanted), \(s.eqEnabled), [\(gains)])")
+    }
+
+    /// The loudest moment since the last call (0 = silence), then starts over. nil = not measured.
+    func takeLoudest() -> Float? {
+        let l = loudest
+        loudest = nil
+        return l
+    }
 
     /// Unloads it, if it was ever used.
     static func stopIfUsed() {
@@ -154,7 +189,21 @@ final class YTWebPlayer {
     }
 
     fileprivate func received(_ m: [String: Any]) {
+        // The page's sound processing isn't getting the sound: the song again without it.
+        if (m["k"] as? String) == "fxdead", let id = videoID, (m["v"] as? String) == id {
+            processingBroken = true
+            load(id, at: m["t"] as? Double ?? time, autoplay: true, music: music)
+            return
+        }
         guard (m["k"] as? String) == "state", let id = videoID else { return }
+        if !soundSent {
+            soundSent = true
+            sendSound()
+        }
+        soundProcessing = m["fx"] as? Bool ?? false
+        if let level = m["level"] as? Double, level >= 0 {
+            loudest = max(loudest ?? 0, Float(level))
+        }
         // YouTube went on to another video by itself: Drift picks what's next.
         if let v = m["v"] as? String, !v.isEmpty, v != id {
             run("__drift.pause()")
@@ -174,7 +223,8 @@ final class YTWebPlayer {
         buffering = m["buffering"] as? Bool ?? false
         if playing, !qualitySet {
             qualitySet = true
-            let h = AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality
+            // Songs: the smallest picture (only the sound is heard).
+            let h = music ? 144 : AppSettings.shared.dataSaver ? 360 : AppSettings.shared.videoQuality
             height = min(h, 2160)
             run("__drift.quality('\(Self.label(h))')")
             if rate != 1 { setRate(rate) }
@@ -326,6 +376,66 @@ final class YTWebPlayer {
       if (p && p.setPlaybackQuality) p.setPlaybackQuality(q);
     } catch (e) {}
   };
+  // Sound: Drift's equaliser and its silence meter, done with the browser's own audio processing. The sound
+  // only goes through it once that's running (so it can never leave the song silent), and not at all when
+  // Drift asks for no processing (#drift-nofx, after it went quiet once).
+  const BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  const noFx = hash.indexOf('drift-nofx') >= 0;
+  let fxWanted = false, fxGains = null, fxOn = false;
+  let ctx = null, src = null, pre = null, filters = [], meter = null, graphVideo = null, buf = null;
+  let loudest = -1, zeroSince = 0, heard = false;
+  const applyFx = () => {
+    if (!pre) return;
+    const g = fxOn && fxGains ? fxGains : BANDS.map(() => 0);
+    filters.forEach((f, i) => { f.gain.value = g[i] || 0 });
+    const top = Math.max(0, ...g);
+    pre.gain.value = Math.pow(10, (-top * 0.8) / 20);
+  };
+  const graph = () => {
+    if (noFx || !fxWanted) return;
+    const v = video();
+    if (!v) return;
+    if (graphVideo === v) {
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+      return;
+    }
+    if (graphVideo) return;
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+      src = ctx.createMediaElementSource(v);
+      graphVideo = v;
+      pre = ctx.createGain();
+      filters = BANDS.map((f, i) => {
+        const b = ctx.createBiquadFilter();
+        b.type = i === 0 ? 'lowshelf' : i === BANDS.length - 1 ? 'highshelf' : 'peaking';
+        b.frequency.value = f;
+        b.Q.value = 1.41;
+        b.gain.value = 0;
+        return b;
+      });
+      meter = ctx.createAnalyser();
+      meter.fftSize = 2048;
+      buf = new Float32Array(meter.fftSize);
+      let node = src;
+      node.connect(pre); node = pre;
+      for (const f of filters) { node.connect(f); node = f }
+      node.connect(meter);
+      meter.connect(ctx.destination);
+      applyFx();
+    } catch (e) { fxWanted = false }
+  };
+  D.fx = (wanted, on, gains) => { fxWanted = wanted; fxOn = on; fxGains = gains; graph(); applyFx() };
+  // The loudest moment since the last report (-1: not measured).
+  const measure = () => {
+    if (!meter || !ctx || ctx.state !== 'running') return;
+    meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) { const a = Math.abs(buf[i]); if (a > peak) peak = a }
+    if (peak > loudest) loudest = peak;
+    return peak;
+  };
+
   D.qualities = () => { try { const p = api(); return (p && p.getAvailableQualityLevels && p.getAvailableQualityLevels()) || [] } catch (e) { return [] } };
 
   // Ads, step 2: any that still play are skipped (sped through, muted, skip button pressed).
@@ -336,10 +446,21 @@ final class YTWebPlayer {
   };
   const skipButtons = '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button, .ytp-ad-overlay-close-button';
 
+  let lastT = -1;
   const tick = () => {
     addStyle();
     const v = video();
     const ad = isAd();
+    graph();
+    const peak = measure();
+    // Playing, moving on, and yet nothing at all comes out of the processing: it isn't getting the sound.
+    // (Only before anything was heard: songs can have real silence in them.)
+    if (peak > 0) heard = true;
+    if (v && graphVideo && !heard && !ad && !v.paused && v.currentTime !== lastT && peak === 0) {
+      if (!zeroSince) zeroSince = Date.now();
+      else if (Date.now() - zeroSince > 4000) { zeroSince = 0; heard = true; post({ k: 'fxdead', v: id(), t: v.currentTime }) }
+    }
+    if (v) lastT = v.currentTime;
     if (ad) {
       document.querySelectorAll(skipButtons).forEach((b) => { try { b.click() } catch (e) {} });
       if (v) {
@@ -375,7 +496,10 @@ final class YTWebPlayer {
       ended: !ad && v.ended,
       ad: ad,
       error: err ? (err.innerText || 'error').trim().slice(0, 200) : '',
+      level: loudest,
+      fx: !!graphVideo && !!ctx && ctx.state === 'running',
     });
+    loudest = -1;
   };
   setInterval(tick, 250);
   document.addEventListener('ended', (e) => { if (e.target && e.target.tagName === 'VIDEO' && !isAd()) { want = false; tick() } }, true);
