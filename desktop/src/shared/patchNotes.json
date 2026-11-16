@@ -2,6 +2,29 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 71,
+      "date": "2026-11-16",
+      "title": "The iPod theme",
+      "notes": [
+        {
+          "text": "New: the iPod theme. Pick it in Settings, Style. Browse your playlists, albums and artists in Cover Flow and scroll with a click wheel: Menu at the top goes back, the centre button selects, and play/pause and skipping sit on the ring.",
+          "platforms": ["ios"]
+        },
+        {
+          "text": "New: the iPod theme. Pick it in Settings, Theme. Browse your playlists, albums and artists in Cover Flow and scroll with a click wheel: Menu at the top (or the back gesture) goes back, the centre button selects, and play/pause and skipping sit on the ring.",
+          "platforms": ["android"]
+        },
+        {
+          "text": "Now playing in the iPod theme: the wheel sets the volume, and the centre button switches it to seeking through the song.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "The wheel ticks under your thumb as it turns, and can click too (Haptics and Click sound in its settings). More iPod styles are coming.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 69,
       "date": "2026-11-15",
       "title": "Equalizer and instant starts",

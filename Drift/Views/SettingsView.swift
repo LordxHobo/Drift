@@ -421,9 +421,42 @@ struct SettingsView: View {
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(settings.uiStyle == .music
                  ? "Looks like Apple Music: white or black pages, red accents, big titles."
+                 : settings.uiStyle == .ipod
+                 ? "Browse with one thumb, like an iPod: Cover Flow and a click wheel. Settings is in its main menu."
                  : "Drift's own look, like Spotify.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.muted)
+        }
+
+        if settings.uiStyle == .ipod {
+            section("iPod style") {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    ForEach(IPodStyle.allCases, id: \.self) { st in
+                        Button { if st.available { settings.ipodStyle = st } } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(st.title).font(.system(size: 14, weight: .bold))
+                                Text(st.available ? st.detail : "Coming soon")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.muted)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+                            .padding(12)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(settings.ipodStyle == st ? settings.accent : .clear, lineWidth: 2))
+                            .opacity(st.available ? 1 : 0.5)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!st.available)
+                    }
+                }
+                Toggle("Haptics", isOn: $settings.ipodHaptics).tint(settings.accent)
+                Toggle("Click sound", isOn: $settings.ipodClicks).tint(settings.accent)
+                Text("Click sound follows your iPhone's silent switch.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+            }
         }
 
         if settings.uiStyle == .music {

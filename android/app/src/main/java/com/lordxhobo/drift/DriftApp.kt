@@ -38,6 +38,7 @@ class DriftApp : Application(), ImageLoaderFactory {
         com.lordxhobo.drift.playback.EpisodeVideo.init(this)
         com.lordxhobo.drift.youtube.YTViewer.init(this)
         com.lordxhobo.drift.playback.YTWeb.init(this)
+        com.lordxhobo.drift.ui.IPod.init(this)
         // Opened in the YouTube viewer last time: start there.
         if (com.lordxhobo.drift.youtube.YTViewer.on) com.lordxhobo.drift.ui.Nav.tab = com.lordxhobo.drift.ui.Tab.YT_HOME
         Equalizer.init(this)

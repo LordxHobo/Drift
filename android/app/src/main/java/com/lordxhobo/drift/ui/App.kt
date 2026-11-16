@@ -70,6 +70,9 @@ fun DriftRoot() {
         }
         YTWebParking()
         YTPictureInPicture()
+        // The iPod theme: its own screen over everything (Settings and Search open Drift's pages for a moment).
+        if (IPod.on && !IPod.away) IPodRoot()
+        if (IPod.on && IPod.away) IPodReturn(Modifier.align(Alignment.TopEnd))
         AnimatedVisibility(
             visible = UiState.showPlayer,
             enter = slideInVertically { it },

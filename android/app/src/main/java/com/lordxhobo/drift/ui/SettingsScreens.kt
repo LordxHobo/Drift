@@ -199,6 +199,8 @@ fun SettingsScreen() {
         item { PageTitle("Settings") }
         // The switch between music and the YouTube viewer.
         item { YTViewerSwitch() }
+        // Drift's own look or the iPod theme.
+        item { IPodThemeSettings() }
         // Your profile on top, like on the iPhone; it opens Profile & devices.
         item {
             Row(

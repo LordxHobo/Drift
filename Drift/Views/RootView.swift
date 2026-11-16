@@ -90,6 +90,12 @@ struct RootView: View {
             .fullScreenCover(isPresented: $social.showOnboarding) {
                 OnboardingView()
             }
+        // The iPod theme: its own screen over everything (Settings is in its main menu).
+        .overlay {
+            if AppSettings.shared.uiStyle == .ipod {
+                IPodRoot().transition(.opacity)
+            }
+        }
         .overlay { pictureInPicture }
         .overlay {
             ProfileDrawer(isOpen: $ui.showDrawer, open: openFromDrawer)

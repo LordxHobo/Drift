@@ -16,14 +16,40 @@ enum MusicIcon: String, CaseIterable {
 }
 
 enum UIStyle: String, CaseIterable {
-    case spotify, music
+    case spotify, music, ipod
 
     var title: String {
         switch self {
         case .spotify: "Spotify"
         case .music: "Apple Music"
+        case .ipod: "iPod"
         }
     }
+}
+
+/// The iPod theme's ways of browsing (only the click wheel so far).
+enum IPodStyle: String, CaseIterable {
+    case wheel, summoned, crate, arc
+
+    var title: String {
+        switch self {
+        case .wheel: "Click wheel"
+        case .summoned: "Summoned wheel"
+        case .crate: "Record crate"
+        case .arc: "Thumb arc"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .wheel: "Cover Flow and a full click wheel."
+        case .summoned: "All covers; hold anywhere for a wheel."
+        case .crate: "Flip through sleeves; play on a turntable."
+        case .arc: "A dial along the bottom edge."
+        }
+    }
+
+    var available: Bool { self == .wheel }
 }
 
 enum Appearance: String, CaseIterable {
@@ -118,6 +144,10 @@ final class AppSettings {
             Task { @MainActor in AppIconSwitcher.match() }
         }
     }
+    /// The iPod theme: its style, and whether the wheel ticks (haptics) and clicks (sound).
+    var ipodStyle: IPodStyle { didSet { defaults.set(ipodStyle.rawValue, forKey: "ipodStyle") } }
+    var ipodHaptics: Bool { didSet { defaults.set(ipodHaptics, forKey: "ipodHaptics") } }
+    var ipodClicks: Bool { didSet { defaults.set(ipodClicks, forKey: "ipodClicks") } }
     /// Dark (default), light, or follow the iPhone's setting.
     var appearance: Appearance {
         didSet {
@@ -151,6 +181,9 @@ final class AppSettings {
         glassEffects = d.bool(forKey: "glassEffects")
         lyricsInNowPlaying = d.object(forKey: "lyricsInNowPlaying") as? Bool ?? false
         uiStyle = d.string(forKey: "uiStyle").flatMap(UIStyle.init(rawValue:)) ?? .spotify
+        ipodStyle = d.string(forKey: "ipodStyle").flatMap(IPodStyle.init(rawValue:)) ?? .wheel
+        ipodHaptics = d.object(forKey: "ipodHaptics") as? Bool ?? true
+        ipodClicks = d.bool(forKey: "ipodClicks")
         musicIcon = d.string(forKey: "musicIcon").flatMap(MusicIcon.init(rawValue:)) ?? .pink
         appearance = d.string(forKey: "appearance").flatMap(Appearance.init(rawValue:)) ?? .dark
     }
