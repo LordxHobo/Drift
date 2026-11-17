@@ -389,6 +389,12 @@ fun IPodRoot() {
         IPodScreen.NowPlaying -> "Now playing"
     }
 
+    // The summoned wheel's lists: a tap on a row opens that row.
+    fun tapped(i: Int) {
+        picks[picks.lastIndex] = i
+        select()
+    }
+
     val style = IPod.style
     val back = style != "wheel" && stack.size > 1
     val header: @Composable () -> Unit = {
@@ -418,7 +424,10 @@ fun IPodRoot() {
     val content: @Composable (Modifier) -> Unit = { m ->
         Box(m, contentAlignment = Alignment.Center) {
             when (val s = screen) {
-                IPodScreen.Menu -> IPodList(menuItems.map { Triple(it.title, null, null) }, pick)
+                IPodScreen.Menu -> {
+                    val rows = menuItems.map { Triple(it.title, null, null) }
+                    if (style == "summoned") IPodTapList(rows, pick, onTap = { tapped(it) }, onTurn = { turn(it) }) else IPodList(rows, pick)
+                }
                 is IPodScreen.Covers -> {
                     val items = covers(s.shelf)
                     if (items.isEmpty()) Text(if (s.shelf == "Albums") "Albums you save show up here." else "Nothing here yet.", color = DriftColors.muted)
@@ -427,7 +436,11 @@ fun IPodRoot() {
                 }
                 is IPodScreen.Songs ->
                     if (s.tracks.isEmpty()) Text("No songs.", color = DriftColors.muted)
-                    else IPodList(s.tracks.map { Triple(it.title, it.artist, it.durationText.ifEmpty { null }) }, pick.coerceAtMost(s.tracks.size - 1))
+                    else {
+                        val rows = s.tracks.map { Triple(it.title, it.artist, it.durationText.ifEmpty { null }) }
+                        val at = pick.coerceAtMost(s.tracks.size - 1)
+                        if (style == "summoned") IPodTapList(rows, at, onTap = { tapped(it) }, onTurn = { turn(it) }) else IPodList(rows, at)
+                    }
                 IPodScreen.NowPlaying -> IPodNowPlaying(seeking, volume)
             }
         }
@@ -464,7 +477,10 @@ fun IPodRoot() {
                 header()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     content(Modifier.fillMaxSize())
-                    IPodGestures(horizontal = screen is IPodScreen.Covers, summon = true, onTurn = { turn(it) }, onTap = { select() })
+                    // Lists scroll and take taps themselves (IPodTapList); covers and Now playing: swipes.
+                    if (screen !is IPodScreen.Menu && screen !is IPodScreen.Songs) {
+                        IPodGestures(horizontal = screen is IPodScreen.Covers, summon = true, onTurn = { turn(it) }, onTap = { select() })
+                    }
                 }
                 IPodMiniBar(openNow)
             }
@@ -1099,6 +1115,105 @@ private fun IPodArcDial(
             BarIcon(Icons.Filled.SkipPrevious, "Previous") { IPod.pressed(view); onPrevious() }
             Spacer(Modifier.weight(1f))
             BarIcon(Icons.Filled.SkipNext, "Next") { IPod.pressed(view); onNext() }
+        }
+    }
+}
+
+
+// MARK: The summoned wheel's lists
+
+/** A normal list (scroll it, tap a row to open it); touch and hold anywhere for the wheel, which moves the highlight while the list stays put. */
+@Composable
+private fun IPodTapList(rows: List<Triple<String, String?, String?>>, selected: Int, onTap: (Int) -> Unit, onTurn: (Int) -> Unit) {
+    val view = LocalView.current
+    val turn by rememberUpdatedState(onTurn)
+    var wheel by remember { mutableStateOf<Offset?>(null) }
+    var finger by remember { mutableStateOf<Float?>(null) }
+    val state = rememberLazyListState()
+    val density = LocalDensity.current
+    val radius = 105.dp
+    LaunchedEffect(selected) {
+        // The wheel moved the highlight: keep it in view.
+        if (wheel != null) state.animateScrollToItem((selected - 3).coerceAtLeast(0))
+    }
+    Box(
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            val slop = 10.dp.toPx()
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val start = down.position
+                // Held still for a moment: the wheel. Moved or let go first: a normal scroll or tap.
+                var still = true
+                val result = withTimeoutOrNull(280L) {
+                    while (true) {
+                        val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        val ch = ev.changes.firstOrNull() ?: break
+                        if (!ch.pressed || (ch.position - start).getDistance() > slop) {
+                            still = false
+                            break
+                        }
+                    }
+                }
+                if (result != null || !still) return@awaitEachGesture
+                wheel = start
+                IPod.pressed(view)
+                val turns = IPodTurns(22f)
+                while (true) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val ch = ev.changes.firstOrNull() ?: break
+                    ch.consume()
+                    if (!ch.pressed) break
+                    if ((ch.position - start).getDistance() > 20.dp.toPx()) {
+                        val a = angleOf(ch.position, start)
+                        finger = a
+                        val n = turns.feed(a)
+                        if (n != 0) turn(n)
+                    }
+                }
+                wheel = null
+                finger = null
+            }
+        },
+    ) {
+        LazyColumn(state = state, userScrollEnabled = wheel == null, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+            itemsIndexed(rows) { i, row ->
+                val on = i == selected
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(vertical = 1.dp).clip(RoundedCornerShape(10.dp))
+                        .background(if (on) DriftColors.accent else Color.Transparent)
+                        .clickable {
+                            IPod.pressed(view)
+                            onTap(i)
+                        }
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val color = if (on) DriftColors.onAccent else DriftColors.text
+                    Column(Modifier.weight(1f)) {
+                        Text(row.first, color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        row.second?.let { Text(it, color = color.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    when {
+                        row.third != null -> Text(row.third!!, color = color.copy(alpha = 0.7f), fontSize = 13.sp)
+                        row.second == null -> Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = color.copy(alpha = 0.6f))
+                    }
+                }
+            }
+        }
+        wheel?.let { w ->
+            val r = with(density) { radius.toPx() }
+            Box(
+                Modifier.offset { IntOffset((w.x - r).roundToInt(), (w.y - r).roundToInt()) }.size(radius * 2)
+                    .shadow(20.dp, CircleShape).clip(CircleShape).background(DriftColors.surface.copy(alpha = 0.92f))
+                    .border(2.dp, DriftColors.accent, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                finger?.let { a ->
+                    val rad = a * PI.toFloat() / 180f
+                    val dist = radius - 18.dp
+                    Box(Modifier.offset(dist * kotlin.math.cos(rad), dist * kotlin.math.sin(rad)).size(14.dp).clip(CircleShape).background(DriftColors.accent))
+                }
+            }
         }
     }
 }

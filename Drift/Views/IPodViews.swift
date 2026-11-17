@@ -185,7 +185,12 @@ struct IPodRoot: View {
                 header
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(IPodGestures(axis: swipeAxis, summon: true, onTurn: turn, onTap: select))
+                    .overlay {
+                        // Lists scroll and take taps themselves (IPodTapList); covers and Now playing: swipes.
+                        if !screenIsList {
+                            IPodGestures(axis: swipeAxis, summon: true, onTurn: turn, onTap: select)
+                        }
+                    }
                 IPodMiniBar(open: openNowPlaying)
             }
         case .crate:
@@ -213,6 +218,19 @@ struct IPodRoot: View {
                 }
             }
         }
+    }
+
+    private var screenIsList: Bool {
+        switch screen {
+        case .menu, .songs: true
+        default: false
+        }
+    }
+
+    /// The summoned wheel's lists: a tap on a row opens that row.
+    private func tapped(_ i: Int) {
+        picks[picks.count - 1] = i
+        select()
     }
 
     /// Which way swiping flips: sideways through covers, up and down through lists.
@@ -304,7 +322,12 @@ struct IPodRoot: View {
     @ViewBuilder private var content: some View {
         switch screen {
         case .menu:
-            IPodList(rows: menuItems.map { ($0.id, $0.title, String?.none, String?.none) }, selected: pick)
+            let rows = menuItems.map { ($0.id, $0.title, String?.none, String?.none) }
+            if settings.ipodStyle == .summoned {
+                IPodTapList(rows: rows, selected: pick, onTap: tapped, onTurn: turn)
+            } else {
+                IPodList(rows: rows, selected: pick)
+            }
         case .covers(let shelf):
             let items = covers(shelf)
             if items.isEmpty {
@@ -319,8 +342,12 @@ struct IPodRoot: View {
             if tracks.isEmpty {
                 Text("No songs.").foregroundStyle(Theme.muted)
             } else {
-                IPodList(rows: tracks.enumerated().map { i, t in ("\(i)-\(t.id)", t.title, Optional(t.artist), t.duration.map { time($0) }) },
-                         selected: min(pick, tracks.count - 1))
+                let rows = tracks.enumerated().map { i, t in ("\(i)-\(t.id)", t.title, Optional(t.artist), t.duration.map { time($0) }) }
+                if settings.ipodStyle == .summoned {
+                    IPodTapList(rows: rows, selected: min(pick, tracks.count - 1), onTap: tapped, onTurn: turn)
+                } else {
+                    IPodList(rows: rows, selected: min(pick, tracks.count - 1))
+                }
             }
         case .nowPlaying:
             IPodNowPlaying(seeking: seeking)
@@ -1185,7 +1212,7 @@ private struct IPodArcDial: View {
             .accessibilityElement()
             .accessibilityLabel("Dial: turn to scroll, swipe down to go back")
             .accessibilityAdjustableAction { direction in onTurn(direction == .increment ? 1 : -1) }
-            .offset(x: (size.width - d) / 2, y: top)
+            .offset(y: top)
 
             Button {
                 IPodFeel.pressed()
@@ -1228,5 +1255,113 @@ private struct IPodArcDial: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+
+// MARK: The summoned wheel's lists
+
+/// A normal list (scroll it, tap a row to open it); touch and hold anywhere for the wheel, which moves the
+/// highlight while the list stays put.
+private struct IPodTapList: View {
+    let rows: [(String, String, String?, String?)]
+    let selected: Int
+    var onTap: (Int) -> Void
+    var onTurn: (Int) -> Void
+    @State private var wheel: CGPoint?
+    @State private var finger: Double?
+    @State private var turns = IPodTurns(step: 22)
+    private let radius: CGFloat = 105
+    private var accent: Color { AppSettings.shared.accent }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array(rows.enumerated()), id: \.element.0) { i, row in
+                        Button {
+                            IPodFeel.pressed()
+                            onTap(i)
+                        } label: {
+                            let on = i == selected
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.1).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                                    if let sub = row.2 {
+                                        Text(sub).font(.system(size: 12)).lineLimit(1).opacity(0.7)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                if let trailing = row.3 {
+                                    Text(trailing).font(.system(size: 13).monospacedDigit()).opacity(0.7)
+                                } else if row.2 == nil {
+                                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).opacity(0.6)
+                                }
+                            }
+                            .foregroundStyle(on ? Color.black : Theme.text)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 46)
+                            .background(on ? accent : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .id(i)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .scrollDisabled(wheel != nil)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.28, maximumDistance: 10)
+                    .sequenced(before: DragGesture(minimumDistance: 0))
+                    .onChanged { value in
+                        guard case .second(true, let drag?) = value else { return }
+                        if wheel == nil {
+                            turns.reset()
+                            IPodFeel.pressed()
+                            withAnimation(.easeOut(duration: 0.15)) { wheel = drag.startLocation }
+                        }
+                        guard let w = wheel else { return }
+                        let dx = drag.location.x - w.x, dy = drag.location.y - w.y
+                        guard dx * dx + dy * dy > 400 else { return }
+                        let angle = atan2(dy, dx) * 180 / .pi
+                        finger = angle
+                        let n = turns.feed(angle)
+                        if n != 0 { onTurn(n) }
+                    }
+                    .onEnded { _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            wheel = nil
+                            finger = nil
+                        }
+                    }
+            )
+            .overlay {
+                if let w = wheel {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.surface.opacity(0.92))
+                            .overlay(Circle().stroke(accent, lineWidth: 2))
+                            .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
+                        if let finger {
+                            Circle()
+                                .fill(accent)
+                                .frame(width: 14, height: 14)
+                                .offset(y: -(radius - 18))
+                                .rotationEffect(.degrees(finger + 90))
+                        }
+                    }
+                    .frame(width: radius * 2, height: radius * 2)
+                    .position(w)
+                    .allowsHitTesting(false)
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
+            }
+            .onChange(of: selected) { _, new in
+                // The wheel moved the highlight: keep it in view.
+                if wheel != nil { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(new, anchor: .center) } }
+            }
+        }
     }
 }
