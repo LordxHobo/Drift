@@ -36,7 +36,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.GraphicEq
@@ -207,7 +219,7 @@ fun IPodThemeSettings() {
             for (row in IPod.styles.chunked(2)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for ((id, name, detail) in row) {
-                        val available = id == "wheel"
+                        val available = true
                         val picked = IPod.style == id
                         Column(
                             Modifier.weight(1f).heightIn(min = 72.dp).clip(RoundedCornerShape(12.dp)).background(DriftColors.bg)
@@ -377,22 +389,40 @@ fun IPodRoot() {
         IPodScreen.NowPlaying -> "Now playing"
     }
 
-    Column(Modifier.fillMaxSize().background(DriftColors.bg).statusBarsPadding().navigationBarsPadding()) {
-        // Where you are.
+    val style = IPod.style
+    val back = style != "wheel" && stack.size > 1
+    val header: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                Text(if (stack.size < 2) "iPod" else stack.dropLast(1).joinToString(" › ") { titleOf(it) }, color = DriftColors.muted, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (back) {
+                    // The click wheel has Menu on its ring; the other styles go back from here.
+                    Row(
+                        Modifier.weight(1f).heightIn(min = 32.dp).clickable {
+                            IPod.pressed(view)
+                            menu()
+                        }.semantics { contentDescription = "Back" },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = DriftColors.muted, modifier = Modifier.size(18.dp))
+                        Text(titleOf(stack[stack.size - 2]), color = DriftColors.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                } else {
+                    Text(if (stack.size < 2) "iPod" else stack.dropLast(1).joinToString(" › ") { titleOf(it) }, color = DriftColors.muted, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 val n = count(screen)
                 if (n > 0) Text("${pick + 1} of $n", color = DriftColors.muted, fontSize = 13.sp)
             }
-            Text(titleOf(screen), color = DriftColors.text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(titleOf(screen), color = DriftColors.text, fontSize = if (style == "crate") 24.sp else 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    }
+    val content: @Composable (Modifier) -> Unit = { m ->
+        Box(m, contentAlignment = Alignment.Center) {
             when (val s = screen) {
                 IPodScreen.Menu -> IPodList(menuItems.map { Triple(it.title, null, null) }, pick)
                 is IPodScreen.Covers -> {
                     val items = covers(s.shelf)
                     if (items.isEmpty()) Text(if (s.shelf == "Albums") "Albums you save show up here." else "Nothing here yet.", color = DriftColors.muted)
+                    else if (style == "crate") IPodCrate(items, pick.coerceAtMost(items.size - 1))
                     else CoverFlow(items, pick.coerceAtMost(items.size - 1))
                 }
                 is IPodScreen.Songs ->
@@ -401,15 +431,20 @@ fun IPodRoot() {
                 IPodScreen.NowPlaying -> IPodNowPlaying(seeking, volume)
             }
         }
-        // What's playing (opens Now playing).
+    }
+    val openNow = {
+        if (Playback.current != null && screen != IPodScreen.NowPlaying) {
+            IPod.pressed(view)
+            push(IPodScreen.NowPlaying)
+        }
+    }
+    // What's playing (opens Now playing).
+    val chip: @Composable ColumnScope.() -> Unit = {
         val t = Playback.current
         if (t != null && screen != IPodScreen.NowPlaying) {
             Row(
                 Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).clip(RoundedCornerShape(50)).background(DriftColors.surface)
-                    .clickable {
-                        IPod.pressed(view)
-                        push(IPodScreen.NowPlaying)
-                    }.padding(horizontal = 14.dp, vertical = 7.dp).widthIn(max = 320.dp),
+                    .clickable { openNow() }.padding(horizontal = 14.dp, vertical = 7.dp).widthIn(max = 320.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -420,15 +455,57 @@ fun IPodRoot() {
         } else {
             Spacer(Modifier.height(16.dp))
         }
-        ClickWheel(
-            onTurn = { turn(it) },
-            onMenu = { menu() },
-            onSelect = { select() },
-            onPrevious = { Playback.previous() },
-            onNext = { Playback.next() },
-            onPlayPause = { Playback.toggle() },
-            modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp),
-        )
+    }
+
+    Box(Modifier.fillMaxSize().background(DriftColors.bg).statusBarsPadding().navigationBarsPadding()) {
+        when (style) {
+            // Swipe to flip, tap to open; hold anywhere for a wheel under your thumb.
+            "summoned" -> Column(Modifier.fillMaxSize()) {
+                header()
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    content(Modifier.fillMaxSize())
+                    IPodGestures(horizontal = screen is IPodScreen.Covers, summon = true, onTurn = { turn(it) }, onTap = { select() })
+                }
+                IPodMiniBar(openNow)
+            }
+            // A turntable on top (the song playing), the crate (or a list) below.
+            "crate" -> Column(Modifier.fillMaxSize()) {
+                IPodTurntable()
+                header()
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    content(Modifier.fillMaxSize())
+                    IPodGestures(horizontal = false, summon = false, onTurn = { turn(it) }, onTap = { select() })
+                }
+            }
+            // A dial rising from the bottom edge.
+            "arc" -> {
+                Column(Modifier.fillMaxSize()) {
+                    header()
+                    content(Modifier.weight(1f).fillMaxWidth())
+                    chip()
+                    Spacer(Modifier.height(196.dp))
+                }
+                IPodArcDial(
+                    onTurn = { turn(it) }, onBack = { menu() }, onSelect = { select() },
+                    onPrevious = { Playback.previous() }, onNext = { Playback.next() },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+            else -> Column(Modifier.fillMaxSize()) {
+                header()
+                content(Modifier.weight(1f).fillMaxWidth())
+                chip()
+                ClickWheel(
+                    onTurn = { turn(it) },
+                    onMenu = { menu() },
+                    onSelect = { select() },
+                    onPrevious = { Playback.previous() },
+                    onNext = { Playback.next() },
+                    onPlayPause = { Playback.toggle() },
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp),
+                )
+            }
+        }
     }
 }
 
@@ -641,5 +718,387 @@ private fun RingButton(text: String?, icon: androidx.compose.ui.graphics.vector.
     ) {
         if (text != null) Text(text, color = DriftColors.text2, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         else if (icon != null) Icon(icon, null, tint = DriftColors.text2, modifier = Modifier.size(22.dp))
+    }
+}
+
+// MARK: Turning, shared by the styles
+
+/** Turns finger angles into steps (one per [step] degrees; + clockwise). */
+private class IPodTurns(val step: Float) {
+    private var last: Float? = null
+    private var turned = 0f
+
+    fun feed(angle: Float): Int {
+        val l = last
+        last = angle
+        if (l == null) return 0
+        var d = angle - l
+        if (d > 180f) d -= 360f
+        if (d < -180f) d += 360f
+        turned += d
+        var n = 0
+        while (turned >= step) { n++; turned -= step }
+        while (turned <= -step) { n--; turned += step }
+        return n
+    }
+
+    fun reset() {
+        last = null
+        turned = 0f
+    }
+}
+
+private fun angleOf(p: Offset, c: Offset): Float = atan2(p.y - c.y, p.x - c.x) * 180f / PI.toFloat()
+
+// MARK: Summoned wheel (and the crate's flicking)
+
+/**
+ * Swipe to flip (a step every so often, sideways or up and down), tap to select, and with [summon], touch and
+ * hold anywhere for a wheel under your thumb: circle to scroll, let go and it's gone.
+ */
+@Composable
+private fun IPodGestures(horizontal: Boolean, summon: Boolean, onTurn: (Int) -> Unit, onTap: () -> Unit) {
+    val view = LocalView.current
+    val turn by rememberUpdatedState(onTurn)
+    val tap by rememberUpdatedState(onTap)
+    val across by rememberUpdatedState(horizontal)
+    var wheel by remember { mutableStateOf<Offset?>(null) }
+    var finger by remember { mutableStateOf<Float?>(null) }
+    val density = LocalDensity.current
+    val radius = 105.dp
+    Box(
+        Modifier.fillMaxSize()
+            .semantics { contentDescription = "Swipe to scroll, tap to open" }
+            .pointerInput(summon) {
+                val stepH = 54.dp.toPx()
+                val stepV = 38.dp.toPx()
+                val slop = 10.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val start = down.position
+                    val began = System.currentTimeMillis()
+                    var moved = false
+                    var stepped = 0f
+                    val turns = IPodTurns(22f)
+                    while (true) {
+                        val waiting = summon && wheel == null && !moved
+                        val event = if (waiting) {
+                            val left = 280L - (System.currentTimeMillis() - began)
+                            if (left <= 0) null else withTimeoutOrNull(left) { awaitPointerEvent() }
+                        } else awaitPointerEvent()
+                        if (event == null) {
+                            // Held still: the wheel, right under the thumb.
+                            wheel = start
+                            IPod.pressed(view)
+                            continue
+                        }
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            if (wheel != null) {
+                                wheel = null
+                                finger = null
+                            } else if (!moved && System.currentTimeMillis() - began < 300) {
+                                IPod.pressed(view)
+                                tap()
+                            }
+                            break
+                        }
+                        val w = wheel
+                        if (w != null) {
+                            val p = change.position
+                            if ((p - w).getDistance() > 20.dp.toPx()) {
+                                val a = angleOf(p, w)
+                                finger = a
+                                val n = turns.feed(a)
+                                if (n != 0) turn(n)
+                            }
+                            change.consume()
+                            continue
+                        }
+                        val t = change.position - start
+                        if (!moved && (abs(t.x) > slop || abs(t.y) > slop)) moved = true
+                        if (!moved) continue
+                        change.consume()
+                        // Up or left moves on.
+                        val along = if (across) -t.x else -t.y
+                        val size = if (across) stepH else stepV
+                        while (along - stepped >= size) { turn(1); stepped += size }
+                        while (along - stepped <= -size) { turn(-1); stepped -= size }
+                    }
+                }
+            },
+    ) {
+        wheel?.let { w ->
+            val r = with(density) { radius.toPx() }
+            Box(
+                Modifier.offset { IntOffset((w.x - r).roundToInt(), (w.y - r).roundToInt()) }.size(radius * 2)
+                    .shadow(20.dp, CircleShape).clip(CircleShape).background(DriftColors.surface.copy(alpha = 0.92f))
+                    .border(2.dp, DriftColors.accent, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                finger?.let { a ->
+                    val rad = a * PI.toFloat() / 180f
+                    val dist = radius - 18.dp
+                    Box(Modifier.offset(dist * kotlin.math.cos(rad), dist * kotlin.math.sin(rad)).size(14.dp).clip(CircleShape).background(DriftColors.accent))
+                }
+            }
+        }
+    }
+}
+
+/** The summoned wheel's mini player: what's playing (tap for Now playing), previous, play/pause, next. */
+@Composable
+private fun IPodMiniBar(open: () -> Unit) {
+    val view = LocalView.current
+    val t = Playback.current
+    if (t == null) {
+        Text("Touch and hold anywhere for the wheel", color = DriftColors.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        return
+    }
+    Row(
+        Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().height(64.dp).clip(RoundedCornerShape(16.dp)).background(DriftColors.surface).padding(start = 10.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(Modifier.weight(1f).clickable { open() }.semantics { contentDescription = "Now playing: ${t.title}" }, verticalAlignment = Alignment.CenterVertically) {
+            Artwork(t.artwork(120), t.id, 44.dp, RoundedCornerShape(8.dp))
+            Column(Modifier.padding(start = 10.dp)) {
+                Text(t.title, color = DriftColors.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t.artist, color = DriftColors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        BarIcon(Icons.Filled.SkipPrevious, "Previous") { IPod.pressed(view); Playback.previous() }
+        BarIcon(if (Playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (Playback.isPlaying) "Pause" else "Play") { IPod.pressed(view); Playback.toggle() }
+        BarIcon(Icons.Filled.SkipNext, "Next") { IPod.pressed(view); Playback.next() }
+    }
+}
+
+@Composable
+private fun BarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = DriftColors.text, modifier = Modifier.size(24.dp))
+    }
+}
+
+// MARK: Record crate
+
+/** Sleeves standing in a crate, the chosen one in front; the ones behind lean back. */
+@Composable
+private fun IPodCrate(items: List<Cover>, selected: Int) {
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val front = minOf(maxWidth * 0.62f, maxHeight - 80.dp).coerceAtLeast(60.dp)
+        for (k in 3 downTo 0) {
+            val c = items.getOrNull(selected + k) ?: continue
+            val size = front - (k * 18).dp
+            Box(
+                Modifier.align(Alignment.BottomCenter).offset(y = -(70 + k * 26).dp).zIndex(10f - k).size(size)
+                    .graphicsLayer {
+                        rotationX = if (k == 0) 4f else 16f
+                        cameraDistance = 12f * density.density
+                    }
+                    .shadow(10.dp, RoundedCornerShape(6.dp)),
+            ) {
+                if (c.playlist != null) PlaylistCover(c.playlist, size) else Artwork(c.tracks.firstOrNull()?.artwork(600), c.id, size, RoundedCornerShape(6.dp))
+                if (k > 0) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.14f * k)))
+            }
+        }
+        // The crate's front, with what's in front.
+        Column(
+            Modifier.align(Alignment.BottomCenter).zIndex(20f).padding(horizontal = 30.dp).padding(bottom = 12.dp).fillMaxWidth().height(96.dp)
+                .shadow(14.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).background(Color(0xFF3A2C20)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(Modifier.fillMaxWidth().height(3.dp).background(Color(0xFF5A4430)))
+            Spacer(Modifier.weight(1f))
+            items.getOrNull(selected)?.let { c ->
+                Text(c.title, color = Color(0xFFF2E6D8), fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
+                Text(c.subtitle, color = Color(0xFFD9C7B3), fontSize = 12.sp, maxLines = 1)
+            }
+            Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+/** The crate's turntable: the song playing spins on it; drag the record round to seek. */
+@Composable
+private fun IPodTurntable() {
+    val view = LocalView.current
+    val t = Playback.current
+    var spin by remember { mutableStateOf(0f) }
+    var drag by remember { mutableStateOf<Float?>(null) }
+    var scratch by remember { mutableStateOf(0f) }
+    LaunchedEffect(Playback.isPlaying, drag == null) {
+        if (!Playback.isPlaying || drag != null) return@LaunchedEffect
+        var last = withFrameMillis { it }
+        while (true) {
+            val now = withFrameMillis { it }
+            spin = (spin + (now - last) * 0.2f) % 360f
+            last = now
+        }
+    }
+    Row(
+        Modifier.padding(horizontal = 14.dp).padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(DriftColors.surface).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(
+            Modifier.size(150.dp).shadow(10.dp, CircleShape).clip(CircleShape)
+                .semantics { contentDescription = "Record: drag round to seek" }
+                .pointerInput(Unit) {
+                    val c = Offset(size.width / 2f, size.height / 2f)
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val a0 = angleOf(down.position, c)
+                        var lastTick = 0
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull() ?: break
+                            if (!ch.pressed) break
+                            var d = angleOf(ch.position, c) - a0
+                            if (d > 180f) d -= 360f
+                            if (d < -180f) d += 360f
+                            drag = d
+                            // A full turn of the record: 8 seconds of the song.
+                            scratch = d / 360f * 8f
+                            val tick = (scratch / 2f).toInt()
+                            if (tick != lastTick) { IPod.tick(view); lastTick = tick }
+                            ch.consume()
+                        }
+                        if (Playback.current != null && drag != null) {
+                            Playback.seek((Playback.position + (scratch * 1000).toLong()).coerceIn(0L, Playback.duration.coerceAtLeast(0L)))
+                        }
+                        spin = (spin + (drag ?: 0f)) % 360f
+                        drag = null
+                        scratch = 0f
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = spin + (drag ?: 0f) }, contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawCircle(Color(0xFF121212))
+                    for (i in 0 until 9) drawCircle(Color(0xFF222222), radius = size.minDimension / 2 - (8 + i * 6).dp.toPx(), style = Stroke(1.dp.toPx()))
+                }
+                if (t != null) Artwork(t.artwork(200), t.id, 56.dp, CircleShape)
+                else Box(Modifier.size(56.dp).clip(CircleShape).background(DriftColors.surface2))
+                Box(Modifier.size(6.dp).clip(CircleShape).background(DriftColors.bg))
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (t != null) {
+                Text(t.title, color = DriftColors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(t.artist, color = DriftColors.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(time(Playback.position + (scratch * 1000).toLong()) + " / " + time(Playback.duration), color = DriftColors.muted, fontSize = 12.sp)
+            } else {
+                Text("Nothing playing", color = DriftColors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Tap a sleeve to put it on", color = DriftColors.muted, fontSize = 13.sp)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                PillIcon(Icons.Filled.SkipPrevious, "Previous") { IPod.pressed(view); Playback.previous() }
+                PillIcon(if (Playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (Playback.isPlaying) "Pause" else "Play") { IPod.pressed(view); Playback.toggle() }
+                PillIcon(Icons.Filled.SkipNext, "Next") { IPod.pressed(view); Playback.next() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PillIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(width = 44.dp, height = 40.dp).clip(RoundedCornerShape(50)).background(DriftColors.surface2).clickable(onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, null, tint = DriftColors.text, modifier = Modifier.size(20.dp)) }
+}
+
+// MARK: Thumb arc
+
+/** A dial rising from the bottom edge: its ticks turn under your thumb; Select in the notch, previous and next at its ends; swipe down on it to go back. */
+@Composable
+private fun IPodArcDial(
+    onTurn: (Int) -> Unit,
+    onBack: () -> Unit,
+    onSelect: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val view = LocalView.current
+    val turn by rememberUpdatedState(onTurn)
+    val back by rememberUpdatedState(onBack)
+    var rotation by remember { mutableStateOf(0f) }
+    val visible: Dp = 196.dp
+    BoxWithConstraints(modifier.fillMaxWidth().height(visible)) {
+        val w = maxWidth
+        val radiusDp = w * 0.725f
+        Canvas(
+            Modifier.fillMaxSize().clipToBounds()
+                .semantics { contentDescription = "Dial: turn to scroll, swipe down to go back" }
+                .pointerInput(Unit) {
+                    val r = radiusDp.toPx()
+                    val c = Offset(size.width / 2f, r)
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val turns = IPodTurns(12f)
+                        var last: Float? = null
+                        var steps = 0
+                        var end = down.position
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull() ?: break
+                            if (!ch.pressed) break
+                            end = ch.position
+                            val a = angleOf(ch.position, c)
+                            last?.let { l ->
+                                var d = a - l
+                                if (d > 180f) d -= 360f
+                                if (d < -180f) d += 360f
+                                // The ticks follow the thumb.
+                                rotation += d
+                            }
+                            last = a
+                            val n = turns.feed(a)
+                            if (n != 0) { steps += abs(n); turn(n) }
+                            ch.consume()
+                        }
+                        // A swipe down that barely turned it: back.
+                        val dy = end.y - down.position.y
+                        val dx = end.x - down.position.x
+                        if (dy > 60.dp.toPx() && abs(dx) < dy && steps == 0) {
+                            IPod.pressed(view)
+                            back()
+                        }
+                    }
+                },
+        ) {
+            val r = radiusDp.toPx()
+            val c = Offset(size.width / 2f, r)
+            drawCircle(DriftColors.surface, radius = r, center = c)
+            drawCircle(DriftColors.line, radius = r, center = c, style = Stroke(1.dp.toPx()))
+            rotate(rotation, pivot = c) {
+                for (i in 0 until 72) {
+                    val major = i % 3 == 0
+                    rotate(i * 5f, pivot = c) {
+                        drawLine(
+                            if (major) DriftColors.muted.copy(alpha = 0.7f) else DriftColors.line,
+                            start = Offset(c.x, c.y - r + 6.dp.toPx()),
+                            end = Offset(c.x, c.y - r + (if (major) 22 else 15).dp.toPx()),
+                            strokeWidth = 2.dp.toPx(),
+                        )
+                    }
+                }
+            }
+        }
+        Box(
+            Modifier.align(Alignment.TopCenter).offset(y = 58.dp).size(84.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(DriftColors.surface2)
+                .border(1.dp, DriftColors.line, CircleShape).semantics { contentDescription = "Select" }
+                .clickable { IPod.pressed(view); onSelect() },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Filled.Check, null, tint = DriftColors.accent, modifier = Modifier.size(26.dp)) }
+        Row(Modifier.align(Alignment.TopCenter).offset(y = 92.dp).fillMaxWidth().padding(horizontal = 22.dp)) {
+            BarIcon(Icons.Filled.SkipPrevious, "Previous") { IPod.pressed(view); onPrevious() }
+            Spacer(Modifier.weight(1f))
+            BarIcon(Icons.Filled.SkipNext, "Next") { IPod.pressed(view); onNext() }
+        }
     }
 }

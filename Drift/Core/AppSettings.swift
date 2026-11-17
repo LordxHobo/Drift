@@ -49,7 +49,7 @@ enum IPodStyle: String, CaseIterable {
         }
     }
 
-    var available: Bool { self == .wheel }
+    var available: Bool { true }
 }
 
 enum Appearance: String, CaseIterable {

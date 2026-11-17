@@ -2,6 +2,29 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 72,
+      "date": "2026-11-17",
+      "title": "Three more iPod styles",
+      "notes": [
+        {
+          "text": "Summoned wheel: swipe to flip through covers and lists, tap to open, and touch and hold anywhere for a wheel right under your thumb. A mini player sits at the bottom.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Record crate: drag through a crate of sleeves and tap one to play it. The song spins on a turntable on top: drag the record round to seek.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Thumb arc: a dial rises from the bottom edge and turns under your thumb. Select sits in its notch, and swiping down on it goes back.",
+          "platforms": ["ios", "android"]
+        },
+        {
+          "text": "Pick a style under the iPod theme in Settings. The new ones have a back button at the top.",
+          "platforms": ["ios", "android"]
+        }
+      ]
+    },
+    {
       "id": 71,
       "date": "2026-11-16",
       "title": "The iPod theme",
