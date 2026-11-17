@@ -17,7 +17,8 @@ on:
 
 jobs:
   ios:
-    runs-on: macos-15
+    # macOS 26 machines (Xcode 26 built in): macos-15 ones can sit in the queue for a long time now.
+    runs-on: macos-26
     timeout-minutes: 40
     # Publishing the build for SideStore needs to write releases.
     permissions:
