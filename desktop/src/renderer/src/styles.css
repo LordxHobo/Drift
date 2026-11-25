@@ -3397,6 +3397,23 @@ kbd {
 .track-row[draggable='true'] {
   cursor: default;
 }
+/* The label that follows the pointer while dragging a song onto a playlist. */
+.song-drag-ghost {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  max-width: 240px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
 .cover-edit {
   position: relative;
   display: block;

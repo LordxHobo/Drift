@@ -23,7 +23,7 @@ import { SpeedButton } from './views/podcasts'
 import { VideoButton, VideoSurface, useVideoOn } from './videoView'
 import { formatTime, plural, useArtColor, artwork, resized } from './util'
 import { nameOf } from '@shared/types'
-import { folderDropProps, folderMenu, newFolder, openFolder, playlistDragProps, playlistsIn, useOpenFolders } from './views/folders'
+import { folderDropProps, folderMenu, newFolder, openFolder, playlistDragProps, playlistsIn, songDropProps, useOpenFolders } from './views/folders'
 import { DevicesButton } from './views/remote'
 
 const createItems = (): MenuItem[] => [
@@ -69,7 +69,7 @@ export function DriftSidebar(): JSX.Element {
       art={<PlaylistCover p={p} size={44} radius={4} />}
       title={p.name}
       sub={p.isAlbum ? `Album · ${p.albumArtist ?? ''}` : `Playlist · ${plural(p.tracks.length, 'song')}`}
-      extra={playlistDragProps(p)}
+      extra={{ ...playlistDragProps(p), ...songDropProps(p) }}
     />
   )
   const showDownloaded = downloads.done.length > 0 && (filter === 'all' || filter === 'playlists') && match('Downloaded')
@@ -551,6 +551,7 @@ export function MusicSidebar(): JSX.Element {
     <button
       key={p.id}
       {...playlistDragProps(p)}
+      {...songDropProps(p)}
       className={`m-item ${nested ? 'nested' : ''} ${same(route, { name: 'playlist', id: p.id }) ? 'on' : ''}`}
       onClick={() => go({ name: 'playlist', id: p.id })}
       onContextMenu={(e) => openMenu(e, playlistMenu(p))}

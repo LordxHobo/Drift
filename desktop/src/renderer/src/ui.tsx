@@ -9,7 +9,7 @@ import { openCollab } from './views/collab'
 import { openInvite } from './views/invite'
 import { openSend } from './views/inbox'
 import { openShare } from './views/share'
-import { moveToFolderItem } from './views/folders'
+import { moveToFolderItem, startSongDrag } from './views/folders'
 import type { SongPlace } from './views/replace'
 import { addedText } from './sort'
 import type { Sort, SortClick, SortKey } from './sort'
@@ -321,11 +321,12 @@ export function TrackList(props: TrackListProps): JSX.Element {
             onDoubleClick={() => play(i)}
             onKeyDown={(e) => e.key === 'Enter' && play(i)}
             onContextMenu={menu}
-            draggable={reorder}
-            onDragStart={reorder ? (e) => {
-              e.dataTransfer.effectAllowed = 'move'
-              setDrag({ from: i, over: i })
-            } : undefined}
+            draggable
+            onDragStart={(e) => {
+              // Drop it on a playlist in the sidebar to add it there; in your own playlist it also reorders.
+              startSongDrag(e, [t])
+              if (reorder) setDrag({ from: i, over: i })
+            }}
             onDragOver={reorder && drag ? (e) => {
               e.preventDefault()
               const r = e.currentTarget.getBoundingClientRect()

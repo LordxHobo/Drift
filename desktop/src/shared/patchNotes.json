@@ -2,6 +2,21 @@
   "_about": "What's new, shown once after an update on the phone and the computer. Newest first; add an entry with every build. platforms: ios, desktop (leave out for both), android (Android shows only notes marked android).",
   "entries": [
     {
+      "id": 74,
+      "date": "2026-11-25",
+      "title": "Drag songs onto playlists",
+      "notes": [
+        {
+          "text": "Drag any song (from search, an album, an artist, Liked songs or a playlist) onto a playlist in the sidebar to add it there. Songs dragged from another playlist are copied, so both playlists keep them.",
+          "platforms": ["desktop"]
+        },
+        {
+          "text": "Songs a playlist already has aren't added twice: you'll see \"Already in\" with the playlist's name instead.",
+          "platforms": ["desktop"]
+        }
+      ]
+    },
+    {
       "id": 73,
       "date": "2026-11-17",
       "title": "iPod style fixes",

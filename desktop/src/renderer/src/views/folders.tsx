@@ -1,6 +1,6 @@
 // Folders of playlists in Your Library: make, rename and delete them, and move playlists in and out.
 import { useEffect, useState } from 'react'
-import type { Library, Playlist, PlaylistFolder } from '@shared/types'
+import type { Library, Playlist, PlaylistFolder, Track } from '@shared/types'
 import { dialogStore, drift, libraryStore, readLocal, toast, writeLocal } from '../state'
 import type { MenuItem } from '../state'
 
@@ -124,6 +124,56 @@ export function folderDropProps(folder: string | null, setOver: (on: boolean) =>
       const f = lib.folders?.find((x) => x.id === folder)
       toast(f ? `Moved to ${f.name}` : `Took ${p.name} out of its folder`)
       if (folder) openFolder(folder, true)
+    }
+  }
+}
+
+// Dragging songs onto playlists in the sidebar (from search, albums, artists, Liked songs or another playlist).
+const songType = 'application/x-drift-songs'
+
+/** Starts dragging songs: a small label with the song's name follows the pointer. */
+export function startSongDrag(e: React.DragEvent, tracks: Track[]): void {
+  e.dataTransfer.setData(songType, JSON.stringify(tracks))
+  e.dataTransfer.effectAllowed = 'copyMove'
+  const ghost = document.createElement('div')
+  ghost.className = 'song-drag-ghost'
+  ghost.textContent = tracks.length === 1 ? tracks[0].title : `${tracks.length} songs`
+  document.body.appendChild(ghost)
+  e.dataTransfer.setDragImage(ghost, 14, 14)
+  setTimeout(() => ghost.remove(), 0)
+}
+
+/** Props for a sidebar playlist that songs can be dropped on: the song is added (copied, if it came from another playlist). */
+export function songDropProps(p: Playlist): {
+  onDragOver: (e: React.DragEvent) => void; onDragLeave: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void
+} {
+  const off = (el: Element): void => el.classList.remove('drop-over')
+  return {
+    onDragOver: (e) => {
+      if (p.isAlbum || !e.dataTransfer.types.includes(songType)) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'copy'
+      e.currentTarget.classList.add('drop-over')
+    },
+    onDragLeave: (e) => {
+      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) off(e.currentTarget)
+    },
+    onDrop: (e) => {
+      off(e.currentTarget)
+      const raw = e.dataTransfer.getData(songType)
+      if (p.isAlbum || !raw) return
+      e.preventDefault()
+      e.stopPropagation()
+      let tracks: Track[] = []
+      try { tracks = JSON.parse(raw) as Track[] } catch { return }
+      const list = libraryStore.get().playlists.find((x) => x.id === p.id)
+      if (!list) return
+      const existing = new Set(list.tracks.map((t) => t.id))
+      const fresh = tracks.filter((t) => !existing.has(t.id))
+      if (!fresh.length) return toast(`Already in ${list.name}`)
+      void drift.addToPlaylist(list.id, fresh)
+      toast(`Added to ${list.name}`)
     }
   }
 }
